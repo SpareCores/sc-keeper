@@ -22,8 +22,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-@app.get("/server/{server_id}", response_model=Server)
-def read_server(server_id: str):
+@app.get("/server/{server_id}")
+def read_server(server_id: str) -> Server:
     with Session(engine) as session:
         query = select(Server).where(Server.id == server_id)
         server = session.exec(query).first()
@@ -32,8 +32,10 @@ def read_server(server_id: str):
         return server
 
 
-@app.get("/search", response_model=List[Server])
-def search_server(vcpus_min: Optional[int] = None, vcpus_max: Optional[int] = None):
+@app.get("/search")
+def search_server(
+    vcpus_min: Optional[int] = None, vcpus_max: Optional[int] = None
+) -> List[Server]:
     with Session(engine) as session:
         query = select(Server)
         if vcpus_min:
