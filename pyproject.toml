@@ -8,6 +8,7 @@ version = "0.0.1"
 requires-python = ">= 3.7"
 dependencies = [
   "sc-crawler@git+https://github.com/spareCores/sc-crawler",
+  "sc-data@git+https://github.com/spareCores/sc-data",
   "fastapi",
   "fastapi-sa-orm-filter",
 ]
