@@ -9,6 +9,11 @@ from sqlmodel import Session, SQLModel, create_engine, select
 data = Data()
 db = create_engine("sqlite:///" + str(data.db_path), echo=True)
 
+## set one example for Swagger docs
+with Session(db) as session:
+    example_server = session.exec(select(Server).limit(1)).first()
+Server.model_config["json_schema_extra"] = {"examples": [example_server.model_dump()]}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
