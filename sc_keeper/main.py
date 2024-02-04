@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
-from typing import List, Optional
+from typing import List, Optional, Annotated
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from sc_crawler.schemas import Server
 from sc_data import Data
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -39,7 +39,10 @@ def read_server(server_id: str) -> Server:
 
 @app.get("/search")
 def search_server(
-    vcpus_min: Optional[int] = None, vcpus_max: Optional[int] = None
+    vcpus_min: Annotated[int, Query(description="Minimum number of virtual CPUs.")] = 1,
+    vcpus_max: Annotated[
+        Optional[int], Query(description="Maximum number of virtual CPUs.")
+    ] = None,
 ) -> List[Server]:
     with Session(db) as session:
         query = select(Server)
