@@ -11,4 +11,4 @@ uvicorn sc_keeper.main:app --reload
 
 - http://localhost:8000/docs
 - http://localhost:8000/server/p3.8xlarge
-- http://localhost:8000/search?vcpus_min=200&vcpus_max=250
+- http://localhost:8000/search?vcpus_min=200&price_max=50
