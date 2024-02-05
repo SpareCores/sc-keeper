@@ -41,7 +41,7 @@ def read_server(server_id: str) -> Server:
 def search_server(
     vcpus_min: Annotated[int, Query(description="Minimum number of virtual CPUs.")] = 1,
     price_max: Annotated[
-        Optional[int], Query(description="Maximum price (USD/hr).")
+        Optional[float], Query(description="Maximum price (USD/hr).")
     ] = None,
 ) -> List[Price]:
     with Session(db) as session:
