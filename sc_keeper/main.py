@@ -8,7 +8,7 @@ from .database import session
 
 
 def get_db():
-    db = session.sessionmaker()
+    db = session.sessionmaker
     try:
         yield db
     finally:

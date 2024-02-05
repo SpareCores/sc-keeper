@@ -1,10 +1,8 @@
-import sys
 from sc_data import db
-from sqlalchemy.orm import sessionmaker
-from sqlmodel import create_engine
+from sqlmodel import Session, create_engine
 
 
-class Session:
+class Database:
     db_hash = db.hash
     engine = None
     session_obj = None
@@ -16,9 +14,9 @@ class Session:
             self.engine = create_engine("sqlite:///" + str(db.path),
                                         connect_args={"check_same_thread": False},
                                         echo=True)
-            self.session_obj = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+            self.session_obj = Session(autocommit=False, autoflush=False, bind=self.engine)
 
         return self.session_obj
 
 
-session = Session()
+session = Database()
