@@ -19,7 +19,7 @@ def get_db():
 async def lifespan(app: FastAPI):
     # set one example for Swagger docs
     db = next(get_db())
-    example_server = db.execute(select(Server).limit(1)).scalar()
+    example_server = db.exec(select(Server).limit(1)).one()
     Server.model_config["json_schema_extra"] = {"examples": [example_server.model_dump()]}
     yield
     # shutdown
@@ -50,7 +50,7 @@ def search_server(
         query = query.where(Server.vcpus >= vcpus_min)
     if price_max:
         query = query.where(Price.price <= price_max)
-    servers = db.execute(query).scalars().all()
+    servers = db.exec(query).all()
     return servers
 
 
