@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from typing import List, Optional, Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.middleware.gzip import GZipMiddleware
 from sc_crawler.schemas import Server, Price
 from sqlmodel import Session, select
 from .database import session
@@ -27,6 +28,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+# aggressive compression
+app.add_middleware(GZipMiddleware, minimum_size=100)
 
 
 @app.get("/server/{server_id}")
