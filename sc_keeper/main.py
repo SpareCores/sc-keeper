@@ -3,7 +3,7 @@ from typing import List, Optional, Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
-from sc_crawler.schemas import Server, Price
+from sc_crawler.schemas import Server, ServerPrice
 from sqlmodel import Session, select
 from .database import session
 
@@ -21,7 +21,9 @@ async def lifespan(app: FastAPI):
     # set one example for Swagger docs
     db = next(get_db())
     example_server = db.exec(select(Server).limit(1)).one()
-    Server.model_config["json_schema_extra"] = {"examples": [example_server.model_dump()]}
+    Server.model_config["json_schema_extra"] = {
+        "examples": [example_server.model_dump()]
+    }
     yield
     # shutdown
     pass
@@ -47,12 +49,12 @@ def search_server(
         Optional[float], Query(description="Maximum price (USD/hr).")
     ] = None,
     db: Session = Depends(get_db),
-) -> List[Price]:
-    query = select(Price).join(Server)
+) -> List[ServerPrice]:
+    query = select(ServerPrice).join(ServerPrice.server)
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
     if price_max:
-        query = query.where(Price.price <= price_max)
+        query = query.where(ServerPrice.price <= price_max)
     servers = db.exec(query).all()
     return servers
 
