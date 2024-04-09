@@ -34,9 +34,11 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=100)
 
 
-@app.get("/server/{server_id}")
-def read_server(server_id: str, db: Session = Depends(get_db)) -> Server:
-    server = db.query(Server).filter(Server.server_id == server_id).first()
+@app.get("/server/{vendor_id}/{server_id}")
+def read_server(
+    vendor_id: str, server_id: str, db: Session = Depends(get_db)
+) -> Server:
+    server = db.get(Server, (vendor_id, server_id))
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
     return server
