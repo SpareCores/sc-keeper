@@ -3,6 +3,7 @@ from typing import List, Optional, Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from sc_crawler.tables import Server, ServerPrice
 from sqlmodel import Session, select
 from .database import session
@@ -30,6 +31,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
 # aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
 
