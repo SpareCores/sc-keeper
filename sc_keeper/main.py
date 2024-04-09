@@ -3,7 +3,7 @@ from typing import List, Optional, Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
-from sc_crawler.schemas import Server, ServerPrice
+from sc_crawler.tables import Server, ServerPrice
 from sqlmodel import Session, select
 from .database import session
 
@@ -36,7 +36,7 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 
 @app.get("/server/{server_id}")
 def read_server(server_id: str, db: Session = Depends(get_db)) -> Server:
-    server = db.query(Server).filter(Server.id == server_id).first()
+    server = db.query(Server).filter(Server.server_id == server_id).first()
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
     return server
