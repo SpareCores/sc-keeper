@@ -61,7 +61,13 @@ def search_server(
     ] = None,
     db: Session = Depends(get_db),
 ) -> List[ServerPrice]:
-    query = select(ServerPrice).join(ServerPrice.server)
+    query = (
+        select(ServerPrice)
+        .join(ServerPrice.vendor)
+        .join(ServerPrice.datacenter)
+        .join(ServerPrice.zone)
+        .join(ServerPrice.server)
+    )
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
     if price_max:
