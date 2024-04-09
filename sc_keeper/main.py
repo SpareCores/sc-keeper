@@ -4,6 +4,13 @@ from typing import List, Optional, Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
 from sc_crawler.tables import Server, ServerPrice
+from sc_crawler.table_bases import (
+    VendorBase,
+    DatacenterBase,
+    ZoneBase,
+    ServerBase,
+    ServerPriceBase,
+)
 from sqlmodel import Session, select
 from .database import session
 
@@ -34,14 +41,25 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=100)
 
 
+class ServerPKs(ServerBase):
+    vendor: VendorBase
+
+
 @app.get("/server/{vendor_id}/{server_id}")
 def read_server(
     vendor_id: str, server_id: str, db: Session = Depends(get_db)
-) -> Server:
+) -> ServerPKs:
     server = db.get(Server, (vendor_id, server_id))
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
     return server
+
+
+class ServerPriceWithPKs(ServerPriceBase):
+    vendor: VendorBase
+    datacenter: DatacenterBase
+    zone: ZoneBase
+    server: ServerBase
 
 
 @app.get("/search")
@@ -51,7 +69,7 @@ def search_server(
         Optional[float], Query(description="Maximum price (USD/hr).")
     ] = None,
     db: Session = Depends(get_db),
-) -> List[ServerPrice]:
+) -> List[ServerPriceWithPKs]:
     query = (
         select(ServerPrice)
         .join(ServerPrice.vendor)
