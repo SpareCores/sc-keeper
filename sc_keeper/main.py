@@ -76,9 +76,14 @@ class ServerPriceWithPKs(ServerPriceBase):
 @app.get("/search")
 def search_server(
     vcpus_min: Annotated[int, Query(description="Minimum number of virtual CPUs.")] = 1,
+    memory_min: Annotated[Optional[int], Query(description="Minimum amount of memory in GBs.")] = None,
     price_max: Annotated[
         Optional[float], Query(description="Maximum price (USD/hr).")
     ] = None,
+    limit: Annotated[int, Query(description="Maximum number of results. Set to -1 for unlimited")] = 50,
+    page: Annotated[Optional[int], Query(description="Page number.")] = None,
+    orderBy: Annotated[Optional[str], Query(description="Order by column.")] = 'price',
+    orderDir: Annotated[Optional[str], Query(description="Order direction.")] = 'asc',
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
     query = (
@@ -90,8 +95,26 @@ def search_server(
     )
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
+    if memory_min:
+        query = query.where(Server.memory >= memory_min)
     if price_max:
         query = query.where(ServerPrice.price <= price_max)
+
+    #ordering
+    if orderBy:
+        if hasattr(ServerPrice, orderBy):
+            order_by = getattr(ServerPrice, orderBy)
+            if orderDir == 'asc':
+                query = query.order_by(order_by)
+            else:
+                query = query.order_by(order_by.desc())
+    
+    #pagination
+    if limit > 0:
+        query = query.limit(limit)
+    # only apply if limit is set
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
     servers = db.exec(query).all()
     return servers
 
