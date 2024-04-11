@@ -6,7 +6,6 @@ from sqlmodel import Session, create_engine
 class Database:
     db_hash = db.hash
     engine = None
-    session_obj = None
 
     @property
     def sessionmaker(self):
@@ -17,11 +16,7 @@ class Database:
                 connect_args={"check_same_thread": False},
                 echo=True,
             )
-            self.session_obj = Session(
-                autocommit=False, autoflush=False, bind=self.engine
-            )
-
-        return self.session_obj
+        return Session(autocommit=False, autoflush=False, bind=self.engine)
 
 
 session = Database()
