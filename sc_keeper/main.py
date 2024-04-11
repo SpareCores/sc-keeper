@@ -24,11 +24,13 @@ def get_db():
         db.close()
 
 
+db = next(get_db())
+example_server = db.exec(select(Server).limit(1)).one()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # set one example for Swagger docs
-    db = next(get_db())
-    example_server = db.exec(select(Server).limit(1)).one()
     Server.model_config["json_schema_extra"] = {
         "examples": [example_server.model_dump()]
     }
