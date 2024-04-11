@@ -78,7 +78,7 @@ class ServerPriceWithPKs(ServerPriceBase):
 @app.get("/search")
 def search_server(
     vcpus_min: Annotated[int, Query(description="Minimum number of virtual CPUs.")] = 1,
-    memory_min: Annotated[Optional[int], Query(description="Minimum amount of memory in GBs.")] = None,
+    memory_min: Annotated[Optional[int], Query(description="Minimum amount of memory in MBs.")] = None,
     price_max: Annotated[
         Optional[float], Query(description="Maximum price (USD/hr).")
     ] = None,
