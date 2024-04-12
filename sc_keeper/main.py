@@ -138,8 +138,9 @@ def search_server(
     for server in servers:
         if hasattr(server, "price") and hasattr(server, "currency"):
             if server.currency != currency:
-                server.price = currency_converter.convert(
-                    server.price, server.currency, currency
+                server.price = round(
+                    currency_converter.convert(server.price, server.currency, currency),
+                    4,
                 )
                 server.currency = currency
 
