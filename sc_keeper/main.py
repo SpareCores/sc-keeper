@@ -3,16 +3,20 @@ from enum import Enum
 from typing import List, Optional, Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-from sc_crawler.tables import Server, ServerPrice, Datacenter
+from fastapi.middleware.gzip import GZipMiddleware
 from sc_crawler.table_bases import (
-    VendorBase,
-    ZoneBase,
+    CountryBase,
+    DatacenterBase,
     ServerBase,
     ServerPriceBase,
+    VendorBase,
+    ZoneBase,
 )
+from sc_crawler.tables import Server, ServerPrice
 from sqlmodel import Session, select
+
+from .currency import CurrencyConverter
 from .database import session
 
 
@@ -28,6 +32,9 @@ db = next(get_db())
 example_server = db.exec(select(Server).limit(1)).one()
 
 
+currency_converter = CurrencyConverter()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # set one example for Swagger docs
@@ -41,14 +48,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
-)
+# CORS: allows all origins, without spec headers and without auth
+app.add_middleware(CORSMiddleware, allow_origins=["*"])
 
 # aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
@@ -71,9 +72,13 @@ def read_server(
     return server
 
 
+class DatacenterBaseWithPKs(DatacenterBase):
+    country: CountryBase
+
+
 class ServerPriceWithPKs(ServerPriceBase):
     vendor: VendorBase
-    datacenter: Datacenter
+    datacenter: DatacenterBaseWithPKs
     zone: ZoneBase
     server: ServerBase
 
@@ -81,14 +86,19 @@ class ServerPriceWithPKs(ServerPriceBase):
 @app.get("/search")
 def search_server(
     vcpus_min: Annotated[int, Query(description="Minimum number of virtual CPUs.")] = 1,
-    memory_min: Annotated[Optional[int], Query(description="Minimum amount of memory in MBs.")] = None,
+    memory_min: Annotated[
+        Optional[int], Query(description="Minimum amount of memory in MBs.")
+    ] = None,
     price_max: Annotated[
         Optional[float], Query(description="Maximum price (USD/hr).")
     ] = None,
-    limit: Annotated[int, Query(description="Maximum number of results. Set to -1 for unlimited")] = 50,
+    limit: Annotated[
+        int, Query(description="Maximum number of results. Set to -1 for unlimited")
+    ] = 50,
     page: Annotated[Optional[int], Query(description="Page number.")] = None,
     order_by: Annotated[str, Query(description="Order by column.")] = 'price',
     order_dir: Annotated[OrderDir, Query(description="Order direction.")] = OrderDir.ASC,
+    currency: Annotated[str, Query(description="Currency used for prices.")] = "USD",
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
     query = (
@@ -121,6 +131,17 @@ def search_server(
     if page and limit > 0:
         query = query.offset((page - 1) * limit)
     servers = db.exec(query).all()
+
+    # update prices to currency requested
+    for server in servers:
+        if hasattr(server, "price") and hasattr(server, "currency"):
+            if server.currency != currency:
+                server.price = round(
+                    currency_converter.convert(server.price, server.currency, currency),
+                    4,
+                )
+                server.currency = currency
+
     return servers
 
 

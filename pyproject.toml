@@ -11,6 +11,7 @@ dependencies = [
   "sparecores-data@git+https://github.com/spareCores/sc-data",
   "fastapi",
   "fastapi-sa-orm-filter",
+  "currencyconverter",
 ]
 authors = [
   { name="Attila Nagy" },

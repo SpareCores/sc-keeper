@@ -1,4 +1,5 @@
 from os.path import abspath
+
 from sc_data import db
 from sqlmodel import Session, create_engine
 
