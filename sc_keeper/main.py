@@ -47,14 +47,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
-)
+# CORS: allows all origins, without spec headers and without auth
+app.add_middleware(CORSMiddleware, allow_origins=["*"])
 
 # aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
