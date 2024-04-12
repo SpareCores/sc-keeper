@@ -6,6 +6,8 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from sc_crawler.tables import Server, ServerPrice, Datacenter
 from sc_crawler.table_bases import (
+    CountryBase,
+    DatacenterBase,
     VendorBase,
     ZoneBase,
     ServerBase,
@@ -67,9 +69,13 @@ def read_server(
     return server
 
 
+class DatacenterBaseWithPKs(DatacenterBase):
+    country: CountryBase
+
+
 class ServerPriceWithPKs(ServerPriceBase):
     vendor: VendorBase
-    datacenter: Datacenter
+    datacenter: DatacenterBaseWithPKs
     zone: ZoneBase
     server: ServerBase
 
