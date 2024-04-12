@@ -4,10 +4,9 @@ from typing import List, Optional, Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-from sc_crawler.tables import Server, ServerPrice
+from sc_crawler.tables import Server, ServerPrice, Datacenter
 from sc_crawler.table_bases import (
     VendorBase,
-    DatacenterBase,
     ZoneBase,
     ServerBase,
     ServerPriceBase,
@@ -70,7 +69,7 @@ def read_server(
 
 class ServerPriceWithPKs(ServerPriceBase):
     vendor: VendorBase
-    datacenter: DatacenterBase
+    datacenter: Datacenter
     zone: ZoneBase
     server: ServerBase
 
