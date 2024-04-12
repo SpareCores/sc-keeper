@@ -15,6 +15,7 @@ from sc_crawler.table_bases import (
 from sc_crawler.tables import Server, ServerPrice
 from sqlmodel import Session, select
 
+from .currency import CurrencyConverter
 from .database import session
 
 
@@ -28,6 +29,9 @@ def get_db():
 
 db = next(get_db())
 example_server = db.exec(select(Server).limit(1)).one()
+
+
+currency_converter = CurrencyConverter()
 
 
 @asynccontextmanager
@@ -96,6 +100,7 @@ def search_server(
     page: Annotated[Optional[int], Query(description="Page number.")] = None,
     orderBy: Annotated[Optional[str], Query(description="Order by column.")] = "price",
     orderDir: Annotated[Optional[str], Query(description="Order direction.")] = "asc",
+    currency: Annotated[str, Query(description="Currency used for prices.")] = "USD",
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
     query = (
@@ -128,6 +133,15 @@ def search_server(
     if page and limit > 0:
         query = query.offset((page - 1) * limit)
     servers = db.exec(query).all()
+
+    # update prices to currency requirest
+    for server in servers:
+        if hasattr(server, "price") and hasattr(server, "currency"):
+            server.price = currency_converter.convert(
+                server.price, server.currency, currency
+            )
+            server.currency = currency
+
     return servers
 
 
