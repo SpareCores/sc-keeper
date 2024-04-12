@@ -58,9 +58,11 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 class ServerPKs(ServerBase):
     vendor: VendorBase
 
+
 class OrderDir(Enum):
-    ASC = 'asc'
-    DESC = 'desc'
+    ASC = "asc"
+    DESC = "desc"
+
 
 @app.get("/server/{vendor_id}/{server_id}")
 def read_server(
@@ -96,8 +98,10 @@ def search_server(
         int, Query(description="Maximum number of results. Set to -1 for unlimited")
     ] = 50,
     page: Annotated[Optional[int], Query(description="Page number.")] = None,
-    order_by: Annotated[str, Query(description="Order by column.")] = 'price',
-    order_dir: Annotated[OrderDir, Query(description="Order direction.")] = OrderDir.ASC,
+    order_by: Annotated[str, Query(description="Order by column.")] = "price",
+    order_dir: Annotated[
+        OrderDir, Query(description="Order direction.")
+    ] = OrderDir.ASC,
     currency: Annotated[str, Query(description="Currency used for prices.")] = "USD",
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
@@ -115,7 +119,7 @@ def search_server(
     if price_max:
         query = query.where(ServerPrice.price <= price_max)
 
-    #ordering
+    # ordering
     if order_by:
         if hasattr(ServerPrice, order_by):
             order_field = getattr(ServerPrice, order_by)
@@ -123,8 +127,8 @@ def search_server(
                 query = query.order_by(order_field)
             else:
                 query = query.order_by(order_field.desc())
-    
-    #pagination
+
+    # pagination
     if limit > 0:
         query = query.limit(limit)
     # only apply if limit is set
