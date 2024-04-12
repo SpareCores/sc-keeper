@@ -14,7 +14,7 @@ jobs:
         run: pip install tox
       - name: Install local pkg
         run: pip install .
-      - name: Tests
-        run: tox
       - name: Linters
         run: tox -e lint
+      - name: Tests
+        run: tox
