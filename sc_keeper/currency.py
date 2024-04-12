@@ -15,7 +15,9 @@ class CurrencyConverter:
     def update(self):
         self.converter = CC(SINGLE_DAY_ECB_URL)
 
-    def convert(self, amount: float, from_currency: str, to_currency: str = "USD"):
+    def convert(
+        self, amount: float, from_currency: str, to_currency: str = "USD"
+    ) -> float:
         """Convert amount from a currency to another one.
 
         Args:
