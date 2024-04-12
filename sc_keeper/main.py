@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from enum import Enum
 from typing import List, Optional, Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -56,6 +57,9 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 class ServerPKs(ServerBase):
     vendor: VendorBase
 
+class OrderDir(Enum):
+    ASC = 'asc'
+    DESC = 'desc'
 
 @app.get("/server/{vendor_id}/{server_id}")
 def read_server(
@@ -83,8 +87,8 @@ def search_server(
     ] = None,
     limit: Annotated[int, Query(description="Maximum number of results. Set to -1 for unlimited")] = 50,
     page: Annotated[Optional[int], Query(description="Page number.")] = None,
-    orderBy: Annotated[Optional[str], Query(description="Order by column.")] = 'price',
-    orderDir: Annotated[Optional[str], Query(description="Order direction.")] = 'asc',
+    order_by: Annotated[str, Query(description="Order by column.")] = 'price',
+    order_dir: Annotated[OrderDir, Query(description="Order direction.")] = OrderDir.ASC,
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
     query = (
@@ -102,13 +106,13 @@ def search_server(
         query = query.where(ServerPrice.price <= price_max)
 
     #ordering
-    if orderBy:
-        if hasattr(ServerPrice, orderBy):
-            order_by = getattr(ServerPrice, orderBy)
-            if orderDir == 'asc':
-                query = query.order_by(order_by)
+    if order_by:
+        if hasattr(ServerPrice, order_by):
+            order_field = getattr(ServerPrice, order_by)
+            if OrderDir(order_dir) == OrderDir.ASC:
+                query = query.order_by(order_field)
             else:
-                query = query.order_by(order_by.desc())
+                query = query.order_by(order_field.desc())
     
     #pagination
     if limit > 0:
