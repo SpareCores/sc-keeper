@@ -10,7 +10,7 @@ dependencies = [
   "sparecores-crawler",
   "sparecores-data",
   "fastapi",
-  "fastapi-sa-orm-filter",
+  "uvicorn",
   "currencyconverter",
 ]
 authors = [
