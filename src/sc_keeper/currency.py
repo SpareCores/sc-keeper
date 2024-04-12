@@ -1,6 +1,7 @@
 from time import time
 
-from currency_converter import CurrencyConverter as CC, SINGLE_DAY_ECB_URL
+from currency_converter import SINGLE_DAY_ECB_URL
+from currency_converter import CurrencyConverter as CC
 
 
 class CurrencyConverter:

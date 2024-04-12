@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from enum import Enum
-from typing import List, Optional, Annotated
+from typing import Annotated, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
