@@ -28,6 +28,6 @@ class CurrencyConverter:
             >>> c.convert(42, "EUR", "HUF")  # doctest: +SKIP
             16371.6
         """
-        if self.last_updated < time() - 60:  # 60**2
+        if self.last_updated < time() - 60**2:
             self.update()
         return self.converter.convert(amount, from_currency, to_currency)

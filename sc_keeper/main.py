@@ -134,7 +134,7 @@ def search_server(
         query = query.offset((page - 1) * limit)
     servers = db.exec(query).all()
 
-    # update prices to currency requirest
+    # update prices to currency requested
     for server in servers:
         if hasattr(server, "price") and hasattr(server, "currency"):
             server.price = currency_converter.convert(
