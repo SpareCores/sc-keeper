@@ -1,19 +1,20 @@
 from contextlib import asynccontextmanager
-from typing import List, Optional, Annotated
+from typing import Annotated, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-from sc_crawler.tables import Server, ServerPrice, Datacenter
+from fastapi.middleware.gzip import GZipMiddleware
 from sc_crawler.table_bases import (
     CountryBase,
     DatacenterBase,
-    VendorBase,
-    ZoneBase,
     ServerBase,
     ServerPriceBase,
+    VendorBase,
+    ZoneBase,
 )
+from sc_crawler.tables import Server, ServerPrice
 from sqlmodel import Session, select
+
 from .database import session
 
 
@@ -83,14 +84,18 @@ class ServerPriceWithPKs(ServerPriceBase):
 @app.get("/search")
 def search_server(
     vcpus_min: Annotated[int, Query(description="Minimum number of virtual CPUs.")] = 1,
-    memory_min: Annotated[Optional[int], Query(description="Minimum amount of memory in MBs.")] = None,
+    memory_min: Annotated[
+        Optional[int], Query(description="Minimum amount of memory in MBs.")
+    ] = None,
     price_max: Annotated[
         Optional[float], Query(description="Maximum price (USD/hr).")
     ] = None,
-    limit: Annotated[int, Query(description="Maximum number of results. Set to -1 for unlimited")] = 50,
+    limit: Annotated[
+        int, Query(description="Maximum number of results. Set to -1 for unlimited")
+    ] = 50,
     page: Annotated[Optional[int], Query(description="Page number.")] = None,
-    orderBy: Annotated[Optional[str], Query(description="Order by column.")] = 'price',
-    orderDir: Annotated[Optional[str], Query(description="Order direction.")] = 'asc',
+    orderBy: Annotated[Optional[str], Query(description="Order by column.")] = "price",
+    orderDir: Annotated[Optional[str], Query(description="Order direction.")] = "asc",
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
     query = (
@@ -107,16 +112,16 @@ def search_server(
     if price_max:
         query = query.where(ServerPrice.price <= price_max)
 
-    #ordering
+    # ordering
     if orderBy:
         if hasattr(ServerPrice, orderBy):
             order_by = getattr(ServerPrice, orderBy)
-            if orderDir == 'asc':
+            if orderDir == "asc":
                 query = query.order_by(order_by)
             else:
                 query = query.order_by(order_by.desc())
-    
-    #pagination
+
+    # pagination
     if limit > 0:
         query = query.limit(limit)
     # only apply if limit is set
