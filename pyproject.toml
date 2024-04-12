@@ -38,6 +38,9 @@ issues = "https://github.com/SpareCores/sc-keeper/issues"
 testing = ["pytest"]
 all = ["sc-keeper[testing]"]
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
