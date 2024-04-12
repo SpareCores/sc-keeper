@@ -137,10 +137,11 @@ def search_server(
     # update prices to currency requested
     for server in servers:
         if hasattr(server, "price") and hasattr(server, "currency"):
-            server.price = currency_converter.convert(
-                server.price, server.currency, currency
-            )
-            server.currency = currency
+            if server.currency != currency:
+                server.price = currency_converter.convert(
+                    server.price, server.currency, currency
+                )
+                server.currency = currency
 
     return servers
 
