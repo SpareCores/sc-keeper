@@ -1,3 +1,4 @@
+from os import environ
 from os.path import abspath
 
 from sc_data import db
@@ -15,7 +16,7 @@ class Database:
             self.engine = create_engine(
                 "sqlite:///" + abspath(db.path),
                 connect_args={"check_same_thread": False},
-                echo=True,
+                echo=environ.get("KEEPER_DEBUG", False),
             )
         return Session(autocommit=False, autoflush=False, bind=self.engine)
 
