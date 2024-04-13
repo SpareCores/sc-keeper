@@ -32,5 +32,6 @@ class CurrencyConverter:
             16371.6
         """
         if self.last_updated < time() - 60**2:
+            self.last_updated = time()
             self.update()
         return self.converter.convert(amount, from_currency, to_currency)
