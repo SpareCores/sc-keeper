@@ -64,6 +64,15 @@ class OrderDir(Enum):
     DESC = "desc"
 
 
+@app.get("/healthcheck")
+def healthcheck(db: Session = Depends(get_db)) -> dict:
+    """Return database hash and last udpated timestamp."""
+    return {
+        "database_last_updated": session.last_updated,
+        "database_hash": session.db_hash,
+    }
+
+
 @app.get("/server/{vendor_id}/{server_id}")
 def read_server(
     vendor_id: str, server_id: str, db: Session = Depends(get_db)
