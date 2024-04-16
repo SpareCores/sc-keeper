@@ -14,6 +14,7 @@ from sc_crawler.table_bases import (
     VendorBase,
     ZoneBase,
 )
+from sc_crawler.table_fields import Status
 from sc_crawler.tables import Server, ServerPrice
 from sqlmodel import Session, select
 
@@ -173,7 +174,7 @@ def search_server(
             description="Show only active servers",
             json_schema_extra={"category_id": FilterCategories.BASIC},
         ),
-    ] = None,
+    ] = True,
     limit: Annotated[
         int, Query(description="Maximum number of results. Set to -1 for unlimited")
     ] = 50,
@@ -198,6 +199,8 @@ def search_server(
         query = query.where(Server.memory >= memory_min)
     if price_max:
         query = query.where(ServerPrice.price <= price_max)
+    if only_active:
+        query = query.where(Server.status == Status.ACTIVE)
 
     # ordering
     if order_by:
