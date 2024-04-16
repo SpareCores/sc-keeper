@@ -19,7 +19,7 @@ class Database:
             self.engine = create_engine(
                 "sqlite:///" + abspath(db.path),
                 connect_args={"check_same_thread": False},
-                echo=environ.get("KEEPER_DEBUG", False),
+                echo=bool(environ.get("KEEPER_DEBUG", False)),
             )
         return Session(autocommit=False, autoflush=False, bind=self.engine)
 

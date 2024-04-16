@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from enum import Enum
+from textwrap import dedent
 from typing import Annotated, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -13,6 +14,7 @@ from sc_crawler.table_bases import (
     VendorBase,
     ZoneBase,
 )
+from sc_crawler.table_fields import Status
 from sc_crawler.tables import Server, ServerPrice
 from sqlmodel import Session, select
 
@@ -46,7 +48,36 @@ async def lifespan(app: FastAPI):
     pass
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="Spare Cores (SC) Keeper",
+    description=dedent("""
+    API to search and serve data collected on cloud compute resources.
+
+    ## Licensing
+
+    This is a free service provided by the Spare Cores team, without any warranty.
+    The source code of the API is licensed under MPL-2.0, find more details at
+    <https://github.com/SpareCores/sc-keeper>.
+
+    ## References
+
+    - Spare Cores: <https://sparecores.com>
+    - SC Keeper: <https://github.com/SpareCores/sc-keeper>
+    - SC Crawler: <https://github.com/SpareCores/sc-crawler>
+    - SC Data: <https://github.com/SpareCores/sc-data>
+    """),
+    version="0.0.1",
+    # terms_of_service="TODO",
+    contact={
+        "name": "Spare Cores Team",
+        "email": "social@sparecores.com",
+    },
+    license_info={
+        "name": "Mozilla Public License 2.0 (MPL 2.0)",
+        "url": "http://mozilla.org/MPL/2.0/",
+    },
+    lifespan=lifespan,
+)
 
 # CORS: allows all origins, without spec headers and without auth
 app.add_middleware(CORSMiddleware, allow_origins=["*"])
@@ -62,6 +93,13 @@ class ServerPKs(ServerBase):
 class OrderDir(Enum):
     ASC = "asc"
     DESC = "desc"
+
+
+class FilterCategories(Enum):
+    BASIC = "basic"
+    PRICE = "price"
+    PROCESSOR = "processor"
+    MEMORY = "memory"
 
 
 @app.get("/healthcheck")
@@ -96,13 +134,47 @@ class ServerPriceWithPKs(ServerPriceBase):
 
 @app.get("/search")
 def search_server(
-    vcpus_min: Annotated[int, Query(description="Minimum number of virtual CPUs.")] = 1,
+    vcpus_min: Annotated[
+        int,
+        Query(
+            title="Processor number",
+            description="Minimum number of virtual CPUs.",
+            ge=1,
+            le=128,
+            json_schema_extra={
+                "category_id": FilterCategories.PROCESSOR,
+                "unit": "vCPUs",
+            },
+        ),
+    ] = 1,
     memory_min: Annotated[
-        Optional[int], Query(description="Minimum amount of memory in MBs.")
+        Optional[int],
+        Query(
+            title="Memory amount",
+            description="Minimum amount of memory in MBs.",
+            json_schema_extra={
+                "category_id": FilterCategories.MEMORY,
+                "unit": "GB",
+                "step": 0.1,
+            },
+        ),
     ] = None,
     price_max: Annotated[
-        Optional[float], Query(description="Maximum price (USD/hr).")
+        Optional[float],
+        Query(
+            title="Maximum price",
+            description="Maximum price (USD/hr).",
+            json_schema_extra={"category_id": FilterCategories.PRICE, "step": 0.0001},
+        ),
     ] = None,
+    only_active: Annotated[
+        Optional[bool],
+        Query(
+            title="Active only",
+            description="Show only active servers",
+            json_schema_extra={"category_id": FilterCategories.BASIC},
+        ),
+    ] = True,
     limit: Annotated[
         int, Query(description="Maximum number of results. Set to -1 for unlimited")
     ] = 50,
@@ -127,6 +199,8 @@ def search_server(
         query = query.where(Server.memory >= memory_min)
     if price_max:
         query = query.where(ServerPrice.price <= price_max)
+    if only_active:
+        query = query.where(Server.status == Status.ACTIVE)
 
     # ordering
     if order_by:
