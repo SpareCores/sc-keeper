@@ -63,11 +63,13 @@ class OrderDir(Enum):
     ASC = "asc"
     DESC = "desc"
 
+
 class FilterCategories(Enum):
     BASIC = "basic"
     PRICE = "price"
     PROCESSOR = "processor"
     MEMORY = "memory"
+
 
 @app.get("/healthcheck")
 def healthcheck(db: Session = Depends(get_db)) -> dict:
@@ -101,17 +103,46 @@ class ServerPriceWithPKs(ServerPriceBase):
 
 @app.get("/search")
 def search_server(
-    vcpus_min: Annotated[int, 
-        Query(title='Processor number', description="Minimum number of virtual CPUs.", ge=1, le=128, json_schema_extra={"category_id": FilterCategories.PROCESSOR, "unit": "vCPUs"})
+    vcpus_min: Annotated[
+        int,
+        Query(
+            title="Processor number",
+            description="Minimum number of virtual CPUs.",
+            ge=1,
+            le=128,
+            json_schema_extra={
+                "category_id": FilterCategories.PROCESSOR,
+                "unit": "vCPUs",
+            },
+        ),
     ] = 1,
     memory_min: Annotated[
-        Optional[int], Query(title='Memory amount', description="Minimum amount of memory in MBs.", json_schema_extra={"category_id": FilterCategories.MEMORY, "unit": "GB", "step": 0.1 })
+        Optional[int],
+        Query(
+            title="Memory amount",
+            description="Minimum amount of memory in MBs.",
+            json_schema_extra={
+                "category_id": FilterCategories.MEMORY,
+                "unit": "GB",
+                "step": 0.1,
+            },
+        ),
     ] = None,
     price_max: Annotated[
-        Optional[float], Query(title='Maximum price', description="Maximum price (USD/hr).", json_schema_extra={"category_id": FilterCategories.PRICE, 'step': 0.0001})
+        Optional[float],
+        Query(
+            title="Maximum price",
+            description="Maximum price (USD/hr).",
+            json_schema_extra={"category_id": FilterCategories.PRICE, "step": 0.0001},
+        ),
     ] = None,
     only_active: Annotated[
-        Optional[bool], Query(title="Active only", description="Show only active servers", json_schema_extra={"category_id": FilterCategories.BASIC})
+        Optional[bool],
+        Query(
+            title="Active only",
+            description="Show only active servers",
+            json_schema_extra={"category_id": FilterCategories.BASIC},
+        ),
     ] = None,
     limit: Annotated[
         int, Query(description="Maximum number of results. Set to -1 for unlimited")
