@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from enum import Enum
 from typing import Annotated, List, Optional
+from textwrap import dedent
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,7 +47,36 @@ async def lifespan(app: FastAPI):
     pass
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="Spare Cores (SC) Keeper",
+    description=dedent("""
+    API to search and serve data collected on cloud compute resources.
+
+    ## Licensing
+
+    This is a free service provided by the Spare Cores team, without any warranty.
+    The source code of the API is licensed under MPL-2.0, find more details at
+    <https://github.com/SpareCores/sc-keeper>.
+
+    ## References
+
+    - Spare Cores: <https://sparecores.com>
+    - SC Keeper: <https://github.com/SpareCores/sc-keeper>
+    - SC Crawler: <https://github.com/SpareCores/sc-crawler>
+    - SC Data: <https://github.com/SpareCores/sc-data>
+    """),
+    version="0.0.1",
+    # terms_of_service="TODO",
+    contact={
+        "name": "Spare Cores Team",
+        "email": "social@sparecores.com",
+    },
+    license_info={
+        "name": "Mozilla Public License 2.0 (MPL 2.0)",
+        "url": "http://mozilla.org/MPL/2.0/",
+    },
+    lifespan=lifespan,
+)
 
 # CORS: allows all origins, without spec headers and without auth
 app.add_middleware(CORSMiddleware, allow_origins=["*"])
