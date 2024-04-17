@@ -23,9 +23,8 @@ class JsonFormatter(Formatter):
 
     def format(self, record):
         json_record = {}
-        ## TODO event?
         json_record["message"] = record.getMessage()
-        for nested in ["request_id", "client", "req", "res", "timing"]:
+        for nested in ["event", "request_id", "client", "req", "res", "timing"]:
             if nested in record.__dict__:
                 json_record[nested] = record.__dict__[nested]
         if record.levelno == logging.ERROR and record.exc_info:
@@ -39,13 +38,10 @@ class LogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         request_id = _request_id_ctx_var.set(str(uuid4()))
         request_time = time()
-
-        response = await call_next(request)
-        response_time = time()
-
         logger.info(
-            "access",
+            "request received",
             extra={
+                "event": "request",
                 "request_id": get_request_id(),
                 "client": {
                     "ip": request.headers.get("X-Forwarded-For", request.client.host),
@@ -65,6 +61,17 @@ class LogMiddleware(BaseHTTPMiddleware):
                         "path": request.path_params,
                     },
                 },
+            },
+        )
+
+        response = await call_next(request)
+        response_time = time()
+
+        logger.info(
+            "response returned",
+            extra={
+                "event": "response",
+                "request_id": get_request_id(),
                 "res": {
                     "status_code": response.status_code,
                     "length": int(response.headers["content-length"]),
