@@ -18,7 +18,7 @@ def get_request_id() -> str:
 class JsonFormatter(Formatter):
     """Format the log record as a JSON blob."""
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super(JsonFormatter, self).__init__()
 
     def format(self, record):
@@ -46,7 +46,7 @@ class LogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         request_id = _request_id_ctx_var.set(str(uuid4()))
         request_time = time()
-        logger.info(
+        logging.info(
             "request received",
             extra={
                 "event": "request",
@@ -75,7 +75,7 @@ class LogMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response_time = time()
 
-        logger.info(
+        logging.info(
             "response returned",
             extra={
                 "event": "response",
@@ -89,10 +89,3 @@ class LogMiddleware(BaseHTTPMiddleware):
         )
         _request_id_ctx_var.reset(request_id)
         return response
-
-
-logger = logging.root
-handler = logging.StreamHandler()
-handler.setFormatter(JsonFormatter())
-logger.handlers = [handler]
-logger.setLevel(logging.DEBUG)
