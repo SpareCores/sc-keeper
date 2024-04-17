@@ -24,6 +24,12 @@ class JsonFormatter(Formatter):
     def format(self, record):
         json_record = {}
         json_record["message"] = record.getMessage()
+        json_record["level"] = record.__dict__["levelname"]
+        json_record["caller"] = {
+            k: record.__dict__[k]
+            for k in ["lineno", "module", "logger"]
+            if k in record.__dict__
+        }
         for nested in ["event", "request_id", "client", "req", "res", "timing"]:
             if nested in record.__dict__:
                 json_record[nested] = record.__dict__[nested]
