@@ -8,6 +8,7 @@ from sqlmodel import Session, create_engine
 
 class Database:
     db_hash = db.hash
+    updated = db.updated
     last_updated = None
     engine = None
 

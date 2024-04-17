@@ -38,6 +38,8 @@ currency_converter = CurrencyConverter()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # server startup tasks
+    # make sure we have a fresh database
+    session.updated.wait()
 
     yield
 
