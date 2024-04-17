@@ -20,6 +20,7 @@ from sqlmodel import Session, select
 
 from .currency import CurrencyConverter
 from .database import session
+from .logger import LogMiddleware
 
 
 def get_db():
@@ -78,6 +79,9 @@ app = FastAPI(
     },
     lifespan=lifespan,
 )
+
+# logging
+app.add_middleware(LogMiddleware)
 
 # CORS: allows all origins, without spec headers and without auth
 app.add_middleware(CORSMiddleware, allow_origins=["*"])
