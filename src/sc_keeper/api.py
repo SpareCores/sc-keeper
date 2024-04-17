@@ -32,19 +32,15 @@ def get_db():
 
 
 db = next(get_db())
-example_server = db.exec(select(Server).limit(1)).one()
-
-
 currency_converter = CurrencyConverter()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # set one example for Swagger docs
-    Server.model_config["json_schema_extra"] = {
-        "examples": [example_server.model_dump()]
-    }
+    # server startup tasks
+
     yield
+
     # shutdown
     pass
 
@@ -234,6 +230,3 @@ def search_server(
                 server.currency = currency
 
     return servers
-
-
-## https://fastapi-filter.netlify.app/#examples
