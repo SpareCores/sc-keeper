@@ -32,7 +32,7 @@ class JsonFormatter(Formatter):
                 if k in record.__dict__
             },
         }
-        for nested in ["event", "request_id", "client", "req", "res", "timing"]:
+        for nested in ["event", "request_id", "client", "req", "res", "elapsed_time"]:
             if nested in record.__dict__:
                 json_record[nested] = record.__dict__[nested]
         if record.levelno == logging.ERROR and record.exc_info:
@@ -84,11 +84,7 @@ class LogMiddleware(BaseHTTPMiddleware):
                     "status_code": response.status_code,
                     "length": int(response.headers["content-length"]),
                 },
-                "timing": {
-                    "reponse": response_time,
-                    "request": request_time,
-                    "duration": round(response_time - request_time, 4),
-                },
+                "elapsed_time": round(response_time - request_time, 4),
             },
         )
         _request_id_ctx_var.reset(request_id)
