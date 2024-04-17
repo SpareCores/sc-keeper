@@ -1,12 +1,23 @@
 import logging
+from contextvars import ContextVar
 from json import dumps
 from logging import Formatter
 from time import time
+from uuid import uuid4
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
+_request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default=None)
+
+
+def get_request_id() -> str:
+    """Return the request id of the current request based on the related context variable."""
+    return _request_id_ctx_var.get()
+
 
 class JsonFormatter(Formatter):
+    """Format the log record as a JSON blob."""
+
     def __init__(self):
         super(JsonFormatter, self).__init__()
 
@@ -14,7 +25,7 @@ class JsonFormatter(Formatter):
         json_record = {}
         ## TODO event?
         json_record["message"] = record.getMessage()
-        for nested in ["client", "req", "res", "timing"]:
+        for nested in ["request_id", "client", "req", "res", "timing"]:
             if nested in record.__dict__:
                 json_record[nested] = record.__dict__[nested]
         if record.levelno == logging.ERROR and record.exc_info:
@@ -23,13 +34,19 @@ class JsonFormatter(Formatter):
 
 
 class LogMiddleware(BaseHTTPMiddleware):
+    """Logs requests and responses with metadata."""
+
     async def dispatch(self, request, call_next):
+        request_id = _request_id_ctx_var.set(str(uuid4()))
         request_time = time()
+
         response = await call_next(request)
         response_time = time()
+
         logger.info(
             "access",
             extra={
+                "request_id": get_request_id(),
                 "client": {
                     "ip": request.headers.get("X-Forwarded-For", request.client.host),
                     "ua": request.headers.get("User-Agent"),
@@ -59,6 +76,7 @@ class LogMiddleware(BaseHTTPMiddleware):
                 },
             },
         )
+        _request_id_ctx_var.reset(request_id)
         return response
 
 
