@@ -68,6 +68,7 @@ class LogMiddleware(BaseHTTPMiddleware):
                         "query": request.query_params._dict,
                         "path": request.path_params,
                     },
+                    "referer": request.headers.get("Referer"),
                 },
             },
         )
