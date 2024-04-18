@@ -28,7 +28,7 @@ class JsonFormatter(Formatter):
             "level": record.__dict__["levelname"],
             "caller": {
                 k: record.__dict__[k]
-                for k in ["lineno", "module", "logger"]
+                for k in ["lineno", "funcName", "name", "module", "logger"]
                 if k in record.__dict__
             },
         }
