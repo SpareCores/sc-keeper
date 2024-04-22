@@ -102,8 +102,8 @@ class FilterCategories(Enum):
     PRICE = "price"
     PROCESSOR = "processor"
     MEMORY = "memory"
-    DATACENTER="datacenter"
-    VENDOR="vendor"
+    DATACENTER = "datacenter"
+    VENDOR = "vendor"
 
 
 @app.get("/healthcheck")
