@@ -14,8 +14,8 @@ from sc_crawler.table_bases import (
     VendorBase,
     ZoneBase,
 )
-from sc_crawler.table_fields import Status, Allocation
-from sc_crawler.tables import Server, ServerPrice, Datacenter
+from sc_crawler.table_fields import Allocation, Status
+from sc_crawler.tables import Datacenter, Server, ServerPrice
 from sqlmodel import Session, select
 
 from .currency import CurrencyConverter
