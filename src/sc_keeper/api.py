@@ -14,7 +14,7 @@ from sc_crawler.table_bases import (
     VendorBase,
     ZoneBase,
 )
-from sc_crawler.table_fields import Status
+from sc_crawler.table_fields import Status, Allocation
 from sc_crawler.tables import Server, ServerPrice, Datacenter
 from sqlmodel import Session, select
 
@@ -187,6 +187,13 @@ def search_server(
             json_schema_extra={"category_id": FilterCategories.DATACENTER},
         ),
     ] = None,
+    allocation: Annotated[
+        Optional[Allocation],
+        Query(
+            title="Allocation",
+            description="Server allocation method.",
+        ),
+    ] = None,
     limit: Annotated[
         int, Query(description="Maximum number of results. Set to -1 for unlimited")
     ] = 50,
@@ -215,15 +222,22 @@ def search_server(
         query = query.where(Server.status == Status.ACTIVE)
     if green_energy:
         query = query.where(Datacenter.green_energy == green_energy)
+    if allocation:
+        query = query.where(ServerPrice.allocation == allocation)
 
     # ordering
     if order_by:
-        if hasattr(ServerPrice, order_by):
+        try:
             order_field = getattr(ServerPrice, order_by)
-            if OrderDir(order_dir) == OrderDir.ASC:
-                query = query.order_by(order_field)
-            else:
-                query = query.order_by(order_field.desc())
+        except AttributeError:
+            try:
+                order_field = getattr(Server, order_by)
+            except AttributeError:
+                order_field = getattr(Datacenter, order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
 
     # pagination
     if limit > 0:
