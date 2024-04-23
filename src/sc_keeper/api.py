@@ -240,13 +240,14 @@ def search_server(
 
     # ordering
     if order_by:
-        try:
-            order_field = getattr(ServerPrice, order_by)
-        except AttributeError:
-            try:
-                order_field = getattr(Server, order_by)
-            except AttributeError:
-                order_field = getattr(Datacenter, order_by)
+        order_obj = [
+            o for o in [ServerPrice, Server, Datacenter] if hasattr(o, order_by)
+        ]
+        if len(order_obj) == 0:
+            raise HTTPException(status_code=400, detail="Unknown order_by field.")
+        if len(order_obj) > 1:
+            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+        order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
         else:
