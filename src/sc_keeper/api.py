@@ -14,7 +14,7 @@ from sc_crawler.table_bases import (
     VendorBase,
     ZoneBase,
 )
-from sc_crawler.table_fields import Allocation, Status
+from sc_crawler.table_fields import Allocation, Status, CpuArchitecture
 from sc_crawler.tables import Datacenter, Server, ServerPrice
 from sqlmodel import Session, select
 
@@ -151,6 +151,17 @@ def search_server(
             },
         ),
     ] = 1,
+    architecture: Annotated[
+        Optional[List[CpuArchitecture]],
+        Query(
+            title="Processor architecture",
+            description="Processor architecture.",
+            json_schema_extra={
+                "category_id": FilterCategories.PROCESSOR,
+                "enum": [e.value for e in CpuArchitecture],
+            },
+        ),
+    ] = None,
     memory_min: Annotated[
         Optional[int],
         Query(
@@ -168,7 +179,7 @@ def search_server(
         Query(
             title="Maximum price",
             description="Maximum price (USD/hr).",
-            json_schema_extra={"category_id": FilterCategories.PRICE, "step": 0.0001},
+            json_schema_extra={"category_id": FilterCategories.PRICE, "step": 0.0001, "unit": "USD"},
         ),
     ] = None,
     only_active: Annotated[
@@ -224,6 +235,8 @@ def search_server(
         query = query.where(Datacenter.green_energy == green_energy)
     if allocation:
         query = query.where(ServerPrice.allocation == allocation)
+    if architecture:
+        query = query.where(Server.cpu_architecture.in_(architecture))
 
     # ordering
     if order_by:
