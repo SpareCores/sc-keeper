@@ -46,8 +46,8 @@ async def lifespan(app: FastAPI):
 # make sure we have a fresh database
 session.updated.wait()
 
-# create lists/enums from DB values for filtering options
-Vendors = [m.vendor_id for m in db.query(Vendor).all()]
+# create enums from DB values for filtering options
+Vendors = Enum("Vendors", {m.vendor_id: m.vendor_id for m in db.query(Vendor).all()})
 
 
 app = FastAPI(
@@ -212,13 +212,13 @@ def search_server(
         ),
     ] = None,
     vendor: Annotated[
-        Optional[List[str]],
+        Optional[List[Vendors]],
         Query(
             title="Vendor id",
             description="Cloud provider vendor.",
             json_schema_extra={
                 "category_id": FilterCategories.VENDOR,
-                "enum": Vendors,
+                "enum": [m.value for m in Vendors],
             },
         ),
     ] = None,
@@ -259,7 +259,7 @@ def search_server(
     if architecture:
         query = query.where(Server.cpu_architecture.in_(architecture))
     if vendor:
-        query = query.where(Server.vendor_id.in_(vendor))
+        query = query.where(Server.vendor_id.in_([m.value for m in vendor]))
 
     # ordering
     if order_by:
