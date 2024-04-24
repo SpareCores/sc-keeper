@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from enum import Enum
+from enum import Enum, StrEnum
 from textwrap import dedent
 from typing import Annotated, List, Optional
 
@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
 session.updated.wait()
 
 # create enums from DB values for filtering options
-Vendors = Enum("Vendors", {m.vendor_id: m.vendor_id for m in db.query(Vendor).all()})
+Vendors = StrEnum("Vendors", {m.vendor_id: m.vendor_id for m in db.query(Vendor).all()})
 
 
 app = FastAPI(
@@ -259,7 +259,7 @@ def search_server(
     if architecture:
         query = query.where(Server.cpu_architecture.in_(architecture))
     if vendor:
-        query = query.where(Server.vendor_id.in_([m.value for m in vendor]))
+        query = query.where(Server.vendor_id.in_(vendor))
 
     # ordering
     if order_by:
