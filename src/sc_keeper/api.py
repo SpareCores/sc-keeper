@@ -227,11 +227,9 @@ def search_server(
         .join(ServerPrice.server)
     )
 
-    if price_max and currency != "USD":
-        query = query.where(
-            ServerPrice.price <= currency_converter.convert(price_max, currency, "USD")
-        )
-    elif price_max:
+    if price_max:
+        if currency != "USD":
+            price_max = currency_converter.convert(price_max, currency, "USD")
         query = query.where(ServerPrice.price <= price_max)
 
     if vcpus_min:
