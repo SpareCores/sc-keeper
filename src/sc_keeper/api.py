@@ -14,7 +14,7 @@ from sc_crawler.table_bases import (
     VendorBase,
     ZoneBase,
 )
-from sc_crawler.table_fields import Allocation, Status, CpuArchitecture
+from sc_crawler.table_fields import Allocation, CpuArchitecture, Status
 from sc_crawler.tables import Datacenter, Server, ServerPrice
 from sqlmodel import Session, select
 
@@ -179,7 +179,11 @@ def search_server(
         Query(
             title="Maximum price",
             description="Maximum price (USD/hr).",
-            json_schema_extra={"category_id": FilterCategories.PRICE, "step": 0.0001, "unit": "USD"},
+            json_schema_extra={
+                "category_id": FilterCategories.PRICE,
+                "step": 0.0001,
+                "unit": "USD",
+            },
         ),
     ] = None,
     only_active: Annotated[
