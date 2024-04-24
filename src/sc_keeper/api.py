@@ -15,7 +15,14 @@ from sc_crawler.table_bases import (
     ZoneBase,
 )
 from sc_crawler.table_fields import Allocation, CpuArchitecture, Status
-from sc_crawler.tables import Datacenter, Server, ServerPrice, Vendor
+from sc_crawler.tables import (
+    ComplianceFramework,
+    Datacenter,
+    Server,
+    ServerPrice,
+    Vendor,
+    VendorComplianceLink,
+)
 from sqlmodel import Session, select
 
 from .currency import CurrencyConverter
@@ -48,6 +55,13 @@ session.updated.wait()
 
 # create enums from DB values for filtering options
 Vendors = StrEnum("Vendors", {m.vendor_id: m.vendor_id for m in db.query(Vendor).all()})
+ComplianceFrameworks = StrEnum(
+    "ComplianceFrameworks",
+    {
+        m.compliance_framework_id: m.compliance_framework_id
+        for m in db.query(ComplianceFramework).all()
+    },
+)
 
 
 app = FastAPI(
@@ -222,6 +236,17 @@ def search_server(
             },
         ),
     ] = None,
+    compliance_framework: Annotated[
+        Optional[List[ComplianceFrameworks]],
+        Query(
+            title="Compliance Framework id",
+            description="Compliance framework implemented at the vendor.",
+            json_schema_extra={
+                "category_id": FilterCategories.VENDOR,
+                "enum": [m.value for m in ComplianceFrameworks],
+            },
+        ),
+    ] = None,
     limit: Annotated[
         int, Query(description="Maximum number of results. Set to -1 for unlimited")
     ] = 50,
@@ -236,6 +261,8 @@ def search_server(
     query = (
         select(ServerPrice)
         .join(ServerPrice.vendor)
+        .join(Vendor.compliance_framework_links)
+        .join(VendorComplianceLink.compliance_framework)
         .join(ServerPrice.datacenter)
         .join(ServerPrice.zone)
         .join(ServerPrice.server)
@@ -260,6 +287,10 @@ def search_server(
         query = query.where(Server.cpu_architecture.in_(architecture))
     if vendor:
         query = query.where(Server.vendor_id.in_(vendor))
+    if compliance_framework:
+        query = query.where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
 
     # ordering
     if order_by:
