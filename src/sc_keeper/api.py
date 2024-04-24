@@ -182,7 +182,6 @@ def search_server(
             json_schema_extra={
                 "category_id": FilterCategories.PRICE,
                 "step": 0.0001,
-                "unit": "USD",
             },
         ),
     ] = None,
@@ -227,12 +226,18 @@ def search_server(
         .join(ServerPrice.zone)
         .join(ServerPrice.server)
     )
+
+    if price_max and currency != "USD":
+        query = query.where(
+            ServerPrice.price <= currency_converter.convert(price_max, currency, "USD")
+        )
+    elif price_max:
+        query = query.where(ServerPrice.price <= price_max)
+
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
     if memory_min:
         query = query.where(Server.memory >= memory_min)
-    if price_max:
-        query = query.where(ServerPrice.price <= price_max)
     if only_active:
         query = query.where(Server.status == Status.ACTIVE)
     if green_energy:
