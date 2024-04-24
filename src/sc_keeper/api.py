@@ -15,7 +15,7 @@ from sc_crawler.table_bases import (
     ZoneBase,
 )
 from sc_crawler.table_fields import Allocation, CpuArchitecture, Status
-from sc_crawler.tables import Datacenter, Server, ServerPrice
+from sc_crawler.tables import Datacenter, Server, ServerPrice, Vendor
 from sqlmodel import Session, select
 
 from .currency import CurrencyConverter
@@ -37,14 +37,17 @@ currency_converter = CurrencyConverter()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # server startup tasks
-    # make sure we have a fresh database
-    session.updated.wait()
-
+    # startup
     yield
-
     # shutdown
     pass
+
+
+# make sure we have a fresh database
+session.updated.wait()
+
+# create lists/enums from DB values for filtering options
+Vendors = [m.vendor_id for m in db.query(Vendor).all()]
 
 
 app = FastAPI(
@@ -208,6 +211,17 @@ def search_server(
             description="Server allocation method.",
         ),
     ] = None,
+    vendor: Annotated[
+        Optional[List[str]],
+        Query(
+            title="Vendor id",
+            description="Cloud provider vendor.",
+            json_schema_extra={
+                "category_id": FilterCategories.VENDOR,
+                "enum": Vendors,
+            },
+        ),
+    ] = None,
     limit: Annotated[
         int, Query(description="Maximum number of results. Set to -1 for unlimited")
     ] = 50,
@@ -246,6 +260,8 @@ def search_server(
         query = query.where(ServerPrice.allocation == allocation)
     if architecture:
         query = query.where(Server.cpu_architecture.in_(architecture))
+    if vendor:
+        query = query.where(Server.vendor_id.in_(vendor))
 
     # ordering
     if order_by:
