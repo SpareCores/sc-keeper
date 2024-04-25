@@ -76,6 +76,7 @@ class LogMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response_time = time()
 
+        response.headers["X-Request-ID"] = get_request_id()
         logging.info(
             "response returned",
             extra={
