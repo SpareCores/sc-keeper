@@ -3,7 +3,7 @@ from enum import Enum, StrEnum
 from textwrap import dedent
 from typing import Annotated, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from sc_crawler.table_bases import (
@@ -23,7 +23,7 @@ from sc_crawler.tables import (
     Vendor,
     VendorComplianceLink,
 )
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from .currency import CurrencyConverter
 from .database import session
@@ -155,6 +155,7 @@ class ServerPriceWithPKs(ServerPriceBase):
 
 @app.get("/search")
 def search_server(
+    response: Response,
     vcpus_min: Annotated[
         int,
         Query(
@@ -256,6 +257,12 @@ def search_server(
         OrderDir, Query(description="Order direction.")
     ] = OrderDir.ASC,
     currency: Annotated[str, Query(description="Currency used for prices.")] = "USD",
+    add_total_count_header: Annotated[
+        bool,
+        Query(
+            description="Add the X-Total-Count header to the response with the overall number of items (without paging). Note that it might reduce response times."
+        ),
+    ] = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
     query = (
@@ -306,6 +313,11 @@ def search_server(
             query = query.order_by(order_field)
         else:
             query = query.order_by(order_field.desc())
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        count_query = select(func.count()).select_from(query.alias("subquery"))
+        response.headers["X-Total-Count"] = str(db.exec(count_query).one())
 
     # pagination
     if limit > 0:
