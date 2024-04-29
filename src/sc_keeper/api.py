@@ -99,7 +99,7 @@ app = FastAPI(
 app.add_middleware(LogMiddleware)
 
 # CORS: allows all origins, without spec headers and without auth
-app.add_middleware(CORSMiddleware, allow_origins=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"], expose_headers=["X-Total-Count"])
 
 # aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
