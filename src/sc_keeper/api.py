@@ -314,6 +314,9 @@ def search_server(
         else:
             query = query.order_by(order_field.desc())
 
+    # avoid duplicate rows introduced by the many-to-many relationships
+    query = query.distinct()
+
     # count all records to be returned in header
     if add_total_count_header:
         count_query = select(func.count()).select_from(query.alias("subquery"))
