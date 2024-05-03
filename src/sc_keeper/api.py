@@ -55,8 +55,13 @@ session.updated.wait()
 
 # create enums from DB values for filtering options
 Vendors = StrEnum("Vendors", {m.vendor_id: m.vendor_id for m in db.query(Vendor).all()})
-Datacenters = StrEnum("Datacenters", {m.datacenter_id: m.datacenter_id for m in db.query(Datacenter).all()}) 
-DatacenterNames = StrEnum("Datacenters", {m.datacenter_id: m.name for m in db.query(Datacenter).all()}) 
+Datacenters = StrEnum(
+    "Datacenters",
+    {m.datacenter_id: m.datacenter_id for m in db.query(Datacenter).all()},
+)
+DatacenterNames = StrEnum(
+    "Datacenters", {m.datacenter_id: m.name for m in db.query(Datacenter).all()}
+)
 ComplianceFrameworks = StrEnum(
     "ComplianceFrameworks",
     {
@@ -249,7 +254,7 @@ def search_server(
             description="Datacenter.",
             json_schema_extra={
                 "category_id": FilterCategories.DATACENTER,
-                "enum": [{'key': m.name, 'value': m.value} for m in DatacenterNames],
+                "enum": [{"key": m.name, "value": m.value} for m in DatacenterNames],
             },
         ),
     ] = None,
@@ -269,7 +274,7 @@ def search_server(
         Query(
             title="Storage Size",
             description="Reserver storage size in GBs.",
-             json_schema_extra={
+            json_schema_extra={
                 "category_id": FilterCategories.STORAGE,
                 "step": 0.1,
                 "unit": "GB",
