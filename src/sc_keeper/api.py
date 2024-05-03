@@ -55,6 +55,8 @@ session.updated.wait()
 
 # create enums from DB values for filtering options
 Vendors = StrEnum("Vendors", {m.vendor_id: m.vendor_id for m in db.query(Vendor).all()})
+Datacenters = StrEnum("Datacenters", {m.datacenter_id: m.datacenter_id for m in db.query(Datacenter).all()}) 
+DatacenterNames = StrEnum("Datacenters", {m.datacenter_id: m.name for m in db.query(Datacenter).all()}) 
 ComplianceFrameworks = StrEnum(
     "ComplianceFrameworks",
     {
@@ -121,6 +123,7 @@ class FilterCategories(Enum):
     MEMORY = "memory"
     DATACENTER = "datacenter"
     VENDOR = "vendor"
+    STORAGE = "storage"
 
 
 @app.get("/healthcheck")
@@ -181,10 +184,10 @@ def search_server(
         ),
     ] = None,
     memory_min: Annotated[
-        Optional[int],
+        Optional[float],
         Query(
             title="Memory amount",
-            description="Minimum amount of memory in MBs.",
+            description="Minimum amount of memory in GBs.",
             json_schema_extra={
                 "category_id": FilterCategories.MEMORY,
                 "unit": "GB",
@@ -237,6 +240,17 @@ def search_server(
             },
         ),
     ] = None,
+    datacenter: Annotated[
+        Optional[List[Datacenters]],
+        Query(
+            title="Datacenter id",
+            description="Datacenter.",
+            json_schema_extra={
+                "category_id": FilterCategories.DATACENTER,
+                "enum": [{'key': m.name, 'value': m.value} for m in DatacenterNames],
+            },
+        ),
+    ] = None,
     compliance_framework: Annotated[
         Optional[List[ComplianceFrameworks]],
         Query(
@@ -245,6 +259,18 @@ def search_server(
             json_schema_extra={
                 "category_id": FilterCategories.VENDOR,
                 "enum": [m.value for m in ComplianceFrameworks],
+            },
+        ),
+    ] = None,
+    storage_size: Annotated[
+        Optional[float],
+        Query(
+            title="Storage Size",
+            description="Reserver storage size in GBs.",
+             json_schema_extra={
+                "category_id": FilterCategories.STORAGE,
+                "step": 0.1,
+                "unit": "GB",
             },
         ),
     ] = None,
@@ -283,7 +309,9 @@ def search_server(
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
     if memory_min:
-        query = query.where(Server.memory >= memory_min)
+        query = query.where(Server.memory >= memory_min * 1024)
+    if storage_size:
+        query = query.where(Server.storage_size >= storage_size)
     if only_active:
         query = query.where(Server.status == Status.ACTIVE)
     if green_energy:
@@ -298,6 +326,8 @@ def search_server(
         query = query.where(
             VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
         )
+    if datacenter:
+        query = query.where(Datacenter.datacenter_id.in_(datacenter))
 
     # ordering
     if order_by:
