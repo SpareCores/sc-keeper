@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
-from enum import Enum
+from enum import Enum, StrEnum
 from textwrap import dedent
 from typing import Annotated, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from sc_crawler.table_bases import (
@@ -14,9 +14,16 @@ from sc_crawler.table_bases import (
     VendorBase,
     ZoneBase,
 )
-from sc_crawler.table_fields import Status
-from sc_crawler.tables import Server, ServerPrice
-from sqlmodel import Session, select
+from sc_crawler.table_fields import Allocation, CpuArchitecture, Status
+from sc_crawler.tables import (
+    ComplianceFramework,
+    Datacenter,
+    Server,
+    ServerPrice,
+    Vendor,
+    VendorComplianceLink,
+)
+from sqlmodel import Session, func, select
 
 from .currency import CurrencyConverter
 from .database import session
@@ -37,14 +44,31 @@ currency_converter = CurrencyConverter()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # server startup tasks
-    # make sure we have a fresh database
-    session.updated.wait()
-
+    # startup
     yield
-
     # shutdown
     pass
+
+
+# make sure we have a fresh database
+session.updated.wait()
+
+# create enums from DB values for filtering options
+Vendors = StrEnum("Vendors", {m.vendor_id: m.vendor_id for m in db.query(Vendor).all()})
+Datacenters = StrEnum(
+    "Datacenters",
+    {m.datacenter_id: m.datacenter_id for m in db.query(Datacenter).all()},
+)
+DatacenterNames = StrEnum(
+    "Datacenters", {m.datacenter_id: m.name for m in db.query(Datacenter).all()}
+)
+ComplianceFrameworks = StrEnum(
+    "ComplianceFrameworks",
+    {
+        m.compliance_framework_id: m.compliance_framework_id
+        for m in db.query(ComplianceFramework).all()
+    },
+)
 
 
 app = FastAPI(
@@ -82,7 +106,9 @@ app = FastAPI(
 app.add_middleware(LogMiddleware)
 
 # CORS: allows all origins, without spec headers and without auth
-app.add_middleware(CORSMiddleware, allow_origins=["*"])
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], expose_headers=["X-Total-Count"]
+)
 
 # aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
@@ -102,6 +128,9 @@ class FilterCategories(Enum):
     PRICE = "price"
     PROCESSOR = "processor"
     MEMORY = "memory"
+    DATACENTER = "datacenter"
+    VENDOR = "vendor"
+    STORAGE = "storage"
 
 
 @app.get("/healthcheck")
@@ -136,6 +165,7 @@ class ServerPriceWithPKs(ServerPriceBase):
 
 @app.get("/search")
 def search_server(
+    response: Response,
     vcpus_min: Annotated[
         int,
         Query(
@@ -149,11 +179,22 @@ def search_server(
             },
         ),
     ] = 1,
+    architecture: Annotated[
+        Optional[List[CpuArchitecture]],
+        Query(
+            title="Processor architecture",
+            description="Processor architecture.",
+            json_schema_extra={
+                "category_id": FilterCategories.PROCESSOR,
+                "enum": [e.value for e in CpuArchitecture],
+            },
+        ),
+    ] = None,
     memory_min: Annotated[
-        Optional[int],
+        Optional[float],
         Query(
             title="Memory amount",
-            description="Minimum amount of memory in MBs.",
+            description="Minimum amount of memory in GBs.",
             json_schema_extra={
                 "category_id": FilterCategories.MEMORY,
                 "unit": "GB",
@@ -166,7 +207,10 @@ def search_server(
         Query(
             title="Maximum price",
             description="Maximum price (USD/hr).",
-            json_schema_extra={"category_id": FilterCategories.PRICE, "step": 0.0001},
+            json_schema_extra={
+                "category_id": FilterCategories.PRICE,
+                "step": 0.0001,
+            },
         ),
     ] = None,
     only_active: Annotated[
@@ -177,6 +221,66 @@ def search_server(
             json_schema_extra={"category_id": FilterCategories.BASIC},
         ),
     ] = True,
+    green_energy: Annotated[
+        Optional[bool],
+        Query(
+            title="Green energy",
+            description="Low CO2 emission only.",
+            json_schema_extra={"category_id": FilterCategories.DATACENTER},
+        ),
+    ] = None,
+    allocation: Annotated[
+        Optional[Allocation],
+        Query(
+            title="Allocation",
+            description="Server allocation method.",
+        ),
+    ] = None,
+    vendor: Annotated[
+        Optional[List[Vendors]],
+        Query(
+            title="Vendor id",
+            description="Cloud provider vendor.",
+            json_schema_extra={
+                "category_id": FilterCategories.VENDOR,
+                "enum": [m.value for m in Vendors],
+            },
+        ),
+    ] = None,
+    datacenter: Annotated[
+        Optional[List[Datacenters]],
+        Query(
+            title="Datacenter id",
+            description="Datacenter.",
+            json_schema_extra={
+                "category_id": FilterCategories.DATACENTER,
+                "enum": [{"key": m.name, "value": m.value} for m in DatacenterNames],
+            },
+        ),
+    ] = None,
+    compliance_framework: Annotated[
+        Optional[List[ComplianceFrameworks]],
+        Query(
+            title="Compliance Framework id",
+            description="Compliance framework implemented at the vendor.",
+            json_schema_extra={
+                "category_id": FilterCategories.VENDOR,
+                "enum": [m.value for m in ComplianceFrameworks],
+            },
+        ),
+    ] = None,
+    storage_size: Annotated[
+        Optional[float],
+        Query(
+            title="Storage Size",
+            description="Reserver storage size in GBs.",
+            json_schema_extra={
+                "category_id": FilterCategories.STORAGE,
+                "step": 0.1,
+                "unit": "GB",
+            },
+        ),
+    ] = None,
     limit: Annotated[
         int, Query(description="Maximum number of results. Set to -1 for unlimited")
     ] = 50,
@@ -186,32 +290,74 @@ def search_server(
         OrderDir, Query(description="Order direction.")
     ] = OrderDir.ASC,
     currency: Annotated[str, Query(description="Currency used for prices.")] = "USD",
+    add_total_count_header: Annotated[
+        bool,
+        Query(
+            description="Add the X-Total-Count header to the response with the overall number of items (without paging). Note that it might reduce response times."
+        ),
+    ] = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
     query = (
         select(ServerPrice)
         .join(ServerPrice.vendor)
+        .join(Vendor.compliance_framework_links)
+        .join(VendorComplianceLink.compliance_framework)
         .join(ServerPrice.datacenter)
         .join(ServerPrice.zone)
         .join(ServerPrice.server)
     )
+
+    if price_max:
+        if currency != "USD":
+            price_max = currency_converter.convert(price_max, currency, "USD")
+        query = query.where(ServerPrice.price <= price_max)
+
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
     if memory_min:
-        query = query.where(Server.memory >= memory_min)
-    if price_max:
-        query = query.where(ServerPrice.price <= price_max)
+        query = query.where(Server.memory >= memory_min * 1024)
+    if storage_size:
+        query = query.where(Server.storage_size >= storage_size)
     if only_active:
         query = query.where(Server.status == Status.ACTIVE)
+    if green_energy:
+        query = query.where(Datacenter.green_energy == green_energy)
+    if allocation:
+        query = query.where(ServerPrice.allocation == allocation)
+    if architecture:
+        query = query.where(Server.cpu_architecture.in_(architecture))
+    if vendor:
+        query = query.where(Server.vendor_id.in_(vendor))
+    if compliance_framework:
+        query = query.where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+    if datacenter:
+        query = query.where(ServerPrice.datacenter_id.in_(datacenter))
 
     # ordering
     if order_by:
-        if hasattr(ServerPrice, order_by):
-            order_field = getattr(ServerPrice, order_by)
-            if OrderDir(order_dir) == OrderDir.ASC:
-                query = query.order_by(order_field)
-            else:
-                query = query.order_by(order_field.desc())
+        order_obj = [
+            o for o in [ServerPrice, Server, Datacenter] if hasattr(o, order_by)
+        ]
+        if len(order_obj) == 0:
+            raise HTTPException(status_code=400, detail="Unknown order_by field.")
+        if len(order_obj) > 1:
+            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+        order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
+
+    # avoid duplicate rows introduced by the many-to-many relationships
+    query = query.distinct()
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        count_query = select(func.count()).select_from(query.alias("subquery"))
+        response.headers["X-Total-Count"] = str(db.exec(count_query).one())
 
     # pagination
     if limit > 0:
