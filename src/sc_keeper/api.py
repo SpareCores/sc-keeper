@@ -101,7 +101,9 @@ app = FastAPI(
 app.add_middleware(LogMiddleware)
 
 # CORS: allows all origins, without spec headers and without auth
-app.add_middleware(CORSMiddleware, allow_origins=["*"], expose_headers=["X-Total-Count"])
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], expose_headers=["X-Total-Count"]
+)
 
 # aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
@@ -343,6 +345,9 @@ def search_server(
             query = query.order_by(order_field)
         else:
             query = query.order_by(order_field.desc())
+
+    # avoid duplicate rows introduced by the many-to-many relationships
+    query = query.distinct()
 
     # count all records to be returned in header
     if add_total_count_header:
