@@ -334,7 +334,7 @@ def search_server(
             VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
         )
     if datacenter:
-        query = query.where(Datacenter.datacenter_id.in_(datacenter))
+        query = query.where(ServerPrice.datacenter_id.in_(datacenter))
 
     # ordering
     if order_by:
