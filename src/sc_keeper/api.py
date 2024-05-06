@@ -6,6 +6,7 @@ from typing import Annotated, List, Optional
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from sc_crawler import tables
 from sc_crawler.table_bases import (
     CountryBase,
     DatacenterBase,
@@ -140,6 +141,20 @@ def healthcheck(db: Session = Depends(get_db)) -> dict:
         "database_last_updated": session.last_updated,
         "database_hash": session.db_hash,
     }
+
+
+class MetaTables(Enum):
+    COUNTRY = "Country"
+    VENDOR = "Vendor"
+    DATACENTER = "Datacenter"
+    ZONE = "Zone"
+
+
+@app.get("/metatable/{meta_table}", tags=["Administrative endpoints"])
+def metadata(meta_table: MetaTables, db: Session = Depends(get_db)) -> List[dict]:
+    """Return a table with metadata as-is, e.g. all countries or vendors."""
+    results = db.exec(select(getattr(tables, meta_table.value))).all()
+    return [o.model_dump() for o in results]
 
 
 @app.get("/server/{vendor_id}/{server_id}", tags=["Query Server(s)"])
