@@ -133,7 +133,7 @@ class FilterCategories(Enum):
     STORAGE = "storage"
 
 
-@app.get("/healthcheck")
+@app.get("/healthcheck", tags=["Administrative endpoints"])
 def healthcheck(db: Session = Depends(get_db)) -> dict:
     """Return database hash and last udpated timestamp."""
     return {
@@ -142,7 +142,7 @@ def healthcheck(db: Session = Depends(get_db)) -> dict:
     }
 
 
-@app.get("/server/{vendor_id}/{server_id}")
+@app.get("/server/{vendor_id}/{server_id}", tags=["Query Server(s)"])
 def read_server(
     vendor_id: str, server_id: str, db: Session = Depends(get_db)
 ) -> ServerPKs:
@@ -163,7 +163,7 @@ class ServerPriceWithPKs(ServerPriceBase):
     server: ServerBase
 
 
-@app.get("/search")
+@app.get("/search", tags=["Query Server(s)"])
 def search_server(
     response: Response,
     vcpus_min: Annotated[
