@@ -6,6 +6,7 @@ from typing import Annotated, List, Optional
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from sc_crawler import tables
 from sc_crawler.table_bases import (
     CountryBase,
     DatacenterBase,
@@ -133,7 +134,7 @@ class FilterCategories(Enum):
     STORAGE = "storage"
 
 
-@app.get("/healthcheck")
+@app.get("/healthcheck", tags=["Administrative endpoints"])
 def healthcheck(db: Session = Depends(get_db)) -> dict:
     """Return database hash and last udpated timestamp."""
     return {
@@ -142,7 +143,21 @@ def healthcheck(db: Session = Depends(get_db)) -> dict:
     }
 
 
-@app.get("/server/{vendor_id}/{server_id}")
+class MetaTables(Enum):
+    COUNTRY = "Country"
+    VENDOR = "Vendor"
+    DATACENTER = "Datacenter"
+    ZONE = "Zone"
+
+
+@app.get("/metatable/{meta_table}", tags=["Administrative endpoints"])
+def metadata(meta_table: MetaTables, db: Session = Depends(get_db)) -> List[dict]:
+    """Return a table with metadata as-is, e.g. all countries or vendors."""
+    results = db.exec(select(getattr(tables, meta_table.value))).all()
+    return [o.model_dump() for o in results]
+
+
+@app.get("/server/{vendor_id}/{server_id}", tags=["Query Server(s)"])
 def read_server(
     vendor_id: str, server_id: str, db: Session = Depends(get_db)
 ) -> ServerPKs:
@@ -163,7 +178,7 @@ class ServerPriceWithPKs(ServerPriceBase):
     server: ServerBase
 
 
-@app.get("/search")
+@app.get("/search", tags=["Query Server(s)"])
 def search_server(
     response: Response,
     vcpus_min: Annotated[
