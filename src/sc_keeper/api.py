@@ -55,19 +55,21 @@ async def lifespan(app: FastAPI):
 session.updated.wait()
 
 # create enums from DB values for filtering options
-Vendors = StrEnum("Vendors", {m.vendor_id: m.vendor_id for m in db.query(Vendor).all()})
+Vendors = StrEnum(
+    "Vendors", {m.vendor_id: m.vendor_id for m in db.exec(select(Vendor)).all()}
+)
 Datacenters = StrEnum(
     "Datacenters",
-    {m.datacenter_id: m.datacenter_id for m in db.query(Datacenter).all()},
+    {m.datacenter_id: m.datacenter_id for m in db.exec(select(Datacenter)).all()},
 )
 DatacenterNames = StrEnum(
-    "Datacenters", {m.datacenter_id: m.name for m in db.query(Datacenter).all()}
+    "Datacenters", {m.datacenter_id: m.name for m in db.exec(select(Datacenter)).all()}
 )
 ComplianceFrameworks = StrEnum(
     "ComplianceFrameworks",
     {
         m.compliance_framework_id: m.compliance_framework_id
-        for m in db.query(ComplianceFramework).all()
+        for m in db.exec(select(ComplianceFramework)).all()
     },
 )
 
