@@ -262,7 +262,7 @@ def search_server(
             },
         ),
     ] = None,
-    datacenter: Annotated[
+    datacenters: Annotated[
         Optional[List[Datacenters]],
         Query(
             title="Datacenter id",
@@ -293,6 +293,16 @@ def search_server(
                 "category_id": FilterCategories.STORAGE,
                 "step": 0.1,
                 "unit": "GB",
+            },
+        ),
+    ] = None,
+    countries: Annotated[
+        Optional[List[str]],
+        Query(
+            title="Countries",
+            description="Datacenter countries.",
+            json_schema_extra={
+                "category_id": FilterCategories.DATACENTER,
             },
         ),
     ] = None,
@@ -348,8 +358,10 @@ def search_server(
         query = query.where(
             VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
         )
-    if datacenter:
-        query = query.where(ServerPrice.datacenter_id.in_(datacenter))
+    if datacenters:
+        query = query.where(ServerPrice.datacenter_id.in_(datacenters))
+    if countries:
+        query = query.where(Datacenter.country_id.in_(countries))
 
     # ordering
     if order_by:
