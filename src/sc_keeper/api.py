@@ -55,19 +55,21 @@ async def lifespan(app: FastAPI):
 session.updated.wait()
 
 # create enums from DB values for filtering options
-Vendors = StrEnum("Vendors", {m.vendor_id: m.vendor_id for m in db.query(Vendor).all()})
+Vendors = StrEnum(
+    "Vendors", {m.vendor_id: m.vendor_id for m in db.exec(select(Vendor)).all()}
+)
 Datacenters = StrEnum(
     "Datacenters",
-    {m.datacenter_id: m.datacenter_id for m in db.query(Datacenter).all()},
+    {m.datacenter_id: m.datacenter_id for m in db.exec(select(Datacenter)).all()},
 )
 DatacenterNames = StrEnum(
-    "Datacenters", {m.datacenter_id: m.name for m in db.query(Datacenter).all()}
+    "Datacenters", {m.datacenter_id: m.name for m in db.exec(select(Datacenter)).all()}
 )
 ComplianceFrameworks = StrEnum(
     "ComplianceFrameworks",
     {
         m.compliance_framework_id: m.compliance_framework_id
-        for m in db.query(ComplianceFramework).all()
+        for m in db.exec(select(ComplianceFramework)).all()
     },
 )
 
@@ -132,6 +134,7 @@ class FilterCategories(Enum):
     DATACENTER = "datacenter"
     VENDOR = "vendor"
     STORAGE = "storage"
+    GPU = "gpu"
 
 
 @app.get("/healthcheck", tags=["Administrative endpoints"])
@@ -306,6 +309,29 @@ def search_server(
             },
         ),
     ] = None,
+    gpu_min: Annotated[
+        Optional[int],
+        Query(
+            title="GPU count",
+            description="Number of GPUs.",
+            json_schema_extra={
+                "category_id": FilterCategories.GPU,
+                "unit": "GPUs",
+            },
+        ),
+    ] = None,
+    gpu_memory_min: Annotated[
+        Optional[float],
+        Query(
+            title="GPU memory",
+            description="Amount of GPU memory in GBs.",
+            json_schema_extra={
+                "category_id": FilterCategories.GPU,
+                "unit": "GB",
+                "step": 0.1,
+            },
+        ),
+    ] = None,
     limit: Annotated[
         int, Query(description="Maximum number of results. Set to -1 for unlimited")
     ] = 50,
@@ -344,6 +370,10 @@ def search_server(
         query = query.where(Server.memory >= memory_min * 1024)
     if storage_size:
         query = query.where(Server.storage_size >= storage_size)
+    if gpu_min:
+        query = query.where(Server.gpu_count >= gpu_min)
+    if gpu_memory_min:
+        query = query.where(Server.gpu_memory_min >= gpu_memory_min * 1024)
     if only_active:
         query = query.where(Server.status == Status.ACTIVE)
     if green_energy:
