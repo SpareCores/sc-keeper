@@ -15,7 +15,7 @@ from sc_crawler.table_bases import (
     VendorBase,
     ZoneBase,
 )
-from sc_crawler.table_fields import Allocation, CpuArchitecture, Status
+from sc_crawler.table_fields import Allocation, CpuArchitecture, Status, StorageType
 from sc_crawler.tables import (
     ComplianceFramework,
     Datacenter,
@@ -310,6 +310,17 @@ def search_server(
             },
         ),
     ] = None,
+    storage_type: Annotated[
+        Optional[List[StorageType]],
+        Query(
+            title="Storage Type",
+            description="Storage type.",
+            json_schema_extra={
+                "category_id": FilterCategories.STORAGE,
+                "enum": [e.value for e in StorageType],
+            },
+        ),
+    ] = None,
     countries: Annotated[
         Optional[List[str]],
         Query(
@@ -393,6 +404,8 @@ def search_server(
         query = query.where(ServerPrice.allocation == allocation)
     if architecture:
         query = query.where(Server.cpu_architecture.in_(architecture))
+    if storage_type:
+        query = query.where(Server.storage_type.in_(storage_type))
     if vendor:
         query = query.where(Server.vendor_id.in_(vendor))
     if compliance_framework:
