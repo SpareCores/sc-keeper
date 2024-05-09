@@ -121,6 +121,10 @@ class ServerPKs(ServerBase):
     vendor: VendorBase
 
 
+class ServerPKsWithPrices(ServerPKs):
+    prices: List[ServerPrice]
+
+
 class OrderDir(Enum):
     ASC = "asc"
     DESC = "desc"
@@ -161,12 +165,19 @@ def metadata(meta_table: MetaTables, db: Session = Depends(get_db)) -> List[dict
 
 
 @app.get("/server/{vendor_id}/{server_id}", tags=["Query Server(s)"])
-def read_server(
+def get_server(
     vendor_id: str, server_id: str, db: Session = Depends(get_db)
-) -> ServerPKs:
+) -> ServerPKsWithPrices:
+    # TODO async
     server = db.get(Server, (vendor_id, server_id))
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
+    prices = db.exec(
+        select(ServerPrice)
+        .where(ServerPrice.vendor_id == vendor_id)
+        .where(ServerPrice.server_id == server_id)
+    ).all()
+    server.prices = prices
     return server
 
 
