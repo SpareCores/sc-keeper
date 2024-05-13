@@ -129,17 +129,26 @@ example_compliance_framwork = db.exec(select(ComplianceFramework).limit(1)).one(
 ComplianceFramework.model_config["json_schema_extra"] = {
     "examples": [example_compliance_framwork.model_dump()]
 }
-example_vendor = db.exec(select(Vendor).limit(1)).one()
+example_vendor = db.exec(select(Vendor).where(Vendor.vendor_id == "aws")).one()
 Vendor.model_config["json_schema_extra"] = {"examples": [example_vendor.model_dump()]}
-example_datacenter = db.exec(select(Datacenter).limit(1)).one()
+example_datacenter = db.exec(
+    select(Datacenter).where(Datacenter.vendor_id == "aws").limit(1)
+).one()
 Datacenter.model_config["json_schema_extra"] = {
     "examples": [example_datacenter.model_dump()]
 }
-example_zone = db.exec(select(Zone).limit(1)).one()
+DatacenterPKs.model_config["json_schema_extra"] = {
+    "examples": [
+        example_datacenter.model_dump() | {"vendor": example_vendor.model_dump()}
+    ]
+}
+example_zone = db.exec(select(Zone).where(Zone.vendor_id == "aws").limit(1)).one()
 Zone.model_config["json_schema_extra"] = {"examples": [example_zone.model_dump()]}
-example_server = db.exec(select(Server).limit(1)).one()
+example_server = db.exec(select(Server).where(Server.vendor_id == "aws").limit(1)).one()
 Server.model_config["json_schema_extra"] = {"examples": [example_server.model_dump()]}
-example_storage = db.exec(select(Storage).limit(1)).one()
+example_storage = db.exec(
+    select(Storage).where(Storage.vendor_id == "aws").limit(1)
+).one()
 Storage.model_config["json_schema_extra"] = {"examples": [example_storage.model_dump()]}
 
 # ##############################################################################
