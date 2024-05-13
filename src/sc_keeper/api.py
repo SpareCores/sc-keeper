@@ -54,6 +54,11 @@ async def lifespan(app: FastAPI):
 # make sure we have a fresh database
 session.updated.wait()
 
+# load examples for the docs
+example_vendor = db.exec(select(Vendor).limit(1)).one()
+Vendor.model_config["json_schema_extra"] = {"examples": [example_vendor.model_dump()]}
+
+
 # create enums from DB values for filtering options
 Vendors = StrEnum(
     "Vendors", {m.vendor_id: m.vendor_id for m in db.exec(select(Vendor)).all()}
@@ -157,11 +162,12 @@ class MetaTables(Enum):
     ZONE = "Zone"
 
 
-@app.get("/metatable/{meta_table}", tags=["Administrative endpoints"])
-def metadata(meta_table: MetaTables, db: Session = Depends(get_db)) -> List[dict]:
-    """Return a table with metadata as-is, e.g. all countries or vendors."""
-    results = db.exec(select(getattr(tables, meta_table.value))).all()
-    return [o.model_dump() for o in results]
+@app.get("/table/vendor", tags=["Table dumps"])
+def table_vendor(db: Session = Depends(get_db)) -> List[Vendor]:
+    """Return the Vendor table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Vendor)).all()
+
+
 
 
 @app.get("/server/{vendor_id}/{server_id}", tags=["Query Server(s)"])
