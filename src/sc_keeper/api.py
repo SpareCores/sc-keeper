@@ -18,11 +18,14 @@ from sc_crawler.table_bases import (
 from sc_crawler.table_fields import Allocation, CpuArchitecture, Status, StorageType
 from sc_crawler.tables import (
     ComplianceFramework,
+    Country,
     Datacenter,
     Server,
     ServerPrice,
+    Storage,
     Vendor,
     VendorComplianceLink,
+    Zone,
 )
 from sqlmodel import Session, func, select
 
@@ -55,8 +58,24 @@ async def lifespan(app: FastAPI):
 session.updated.wait()
 
 # load examples for the docs
+example_country = db.exec(select(Country).limit(1)).one()
+Country.model_config["json_schema_extra"] = {"examples": [example_country.model_dump()]}
+example_compliance_framwork = db.exec(select(ComplianceFramework).limit(1)).one()
+ComplianceFramework.model_config["json_schema_extra"] = {
+    "examples": [example_compliance_framwork.model_dump()]
+}
 example_vendor = db.exec(select(Vendor).limit(1)).one()
 Vendor.model_config["json_schema_extra"] = {"examples": [example_vendor.model_dump()]}
+example_datacenter = db.exec(select(Datacenter).limit(1)).one()
+Datacenter.model_config["json_schema_extra"] = {
+    "examples": [example_datacenter.model_dump()]
+}
+example_zone = db.exec(select(Zone).limit(1)).one()
+Zone.model_config["json_schema_extra"] = {"examples": [example_zone.model_dump()]}
+example_server = db.exec(select(Server).limit(1)).one()
+Server.model_config["json_schema_extra"] = {"examples": [example_server.model_dump()]}
+example_storage = db.exec(select(Storage).limit(1)).one()
+Storage.model_config["json_schema_extra"] = {"examples": [example_storage.model_dump()]}
 
 
 # create enums from DB values for filtering options
@@ -162,15 +181,74 @@ class MetaTables(Enum):
     ZONE = "Zone"
 
 
+@app.get("/table/country", tags=["Table dumps"])
+def table_country(db: Session = Depends(get_db)) -> List[Country]:
+    """Return the Country table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Country)).all()
+
+
+@app.get("/table/compliance_framework", tags=["Table dumps"])
+def table_compliance_frameworks(
+    db: Session = Depends(get_db),
+) -> List[ComplianceFramework]:
+    """Return the ComplianceFramework table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(ComplianceFramework)).all()
+
+
 @app.get("/table/vendor", tags=["Table dumps"])
 def table_vendor(db: Session = Depends(get_db)) -> List[Vendor]:
     """Return the Vendor table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Vendor)).all()
 
 
+@app.get("/table/datacenter", tags=["Table dumps"])
+def table_datacenter(db: Session = Depends(get_db)) -> List[Datacenter]:
+    """Return the Datacenter table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Datacenter)).all()
 
 
-@app.get("/server/{vendor_id}/{server_id}", tags=["Query Server(s)"])
+@app.get("/table/zone", tags=["Table dumps"])
+def table_zone(db: Session = Depends(get_db)) -> List[Zone]:
+    """Return the Zone table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Zone)).all()
+
+
+@app.get("/table/server", tags=["Table dumps"])
+def table_server(db: Session = Depends(get_db)) -> List[Server]:
+    """Return the Server table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Server)).all()
+
+
+@app.get("/table/storage", tags=["Table dumps"])
+def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
+    """Return the Storage table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Storage)).all()
+
+
+# class DatacenterNoPKs(DatacenterBase):
+#     country: None
+#     vendor: None
+#     zones: None
+#     server_prices: None
+#     traffic_prices: None
+#     ipv4_prices: None
+#     storage_prices: None
+
+
+class DatacenterPKs(DatacenterBase):
+    vendor: VendorBase
+
+
+@app.get("/datacenters", tags=["Query Resources"])
+def search_datacenters(
+    include_nested_data: bool = True,
+    db: Session = Depends(get_db),
+) -> List[DatacenterPKs]:
+    results = db.exec(select(Datacenter)).all()
+    return results
+
+
+@app.get("/server/{vendor_id}/{server_id}", tags=["Query Resources"])
 def get_server(
     vendor_id: str, server_id: str, db: Session = Depends(get_db)
 ) -> ServerPKsWithPrices:
@@ -198,7 +276,7 @@ class ServerPriceWithPKs(ServerPriceBase):
     server: ServerBase
 
 
-@app.get("/search", tags=["Query Server(s)"])
+@app.get("/search", tags=["Query Resources"])
 def search_server(
     response: Response,
     vcpus_min: Annotated[
