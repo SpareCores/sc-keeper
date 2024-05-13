@@ -165,6 +165,21 @@ class FilterCategories(Enum):
     GPU = "gpu"
 
 
+FILTERS = {
+    "vendor": Annotated[
+        Optional[List[Vendors]],
+        Query(
+            title="Vendor id",
+            description="Cloud provider vendor.",
+            json_schema_extra={
+                "category_id": FilterCategories.VENDOR,
+                "enum": [m.value for m in Vendors],
+            },
+        ),
+    ]
+}
+
+
 @app.get("/healthcheck", tags=["Administrative endpoints"])
 def healthcheck(db: Session = Depends(get_db)) -> dict:
     """Return database hash and last udpated timestamp."""
@@ -225,27 +240,19 @@ def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
     return db.exec(select(Storage)).all()
 
 
-# class DatacenterNoPKs(DatacenterBase):
-#     country: None
-#     vendor: None
-#     zones: None
-#     server_prices: None
-#     traffic_prices: None
-#     ipv4_prices: None
-#     storage_prices: None
-
-
 class DatacenterPKs(DatacenterBase):
     vendor: VendorBase
 
 
 @app.get("/datacenters", tags=["Query Resources"])
 def search_datacenters(
-    include_nested_data: bool = True,
+    vendor: FILTERS["vendor"] = None,
     db: Session = Depends(get_db),
 ) -> List[DatacenterPKs]:
-    results = db.exec(select(Datacenter)).all()
-    return results
+    query = select(Datacenter)
+    if vendor:
+        query = query.where(Datacenter.vendor_id.in_(vendor))
+    return db.exec(query).all()
 
 
 @app.get("/server/{vendor_id}/{server_id}", tags=["Query Resources"])
@@ -349,17 +356,7 @@ def search_server(
             description="Server allocation method.",
         ),
     ] = None,
-    vendor: Annotated[
-        Optional[List[Vendors]],
-        Query(
-            title="Vendor id",
-            description="Cloud provider vendor.",
-            json_schema_extra={
-                "category_id": FilterCategories.VENDOR,
-                "enum": [m.value for m in Vendors],
-            },
-        ),
-    ] = None,
+    vendor: FILTERS["vendor"] = None,
     datacenters: Annotated[
         Optional[List[Datacenters]],
         Query(
