@@ -66,10 +66,7 @@ Vendors = StrEnum(
 )
 Datacenters = StrEnum(
     "Datacenters",
-    {m.datacenter_id: m.datacenter_id for m in db.exec(select(Datacenter)).all()},
-)
-DatacenterNames = StrEnum(
-    "Datacenters", {m.datacenter_id: m.name for m in db.exec(select(Datacenter)).all()}
+    {m.display_name: m.datacenter_id for m in db.exec(select(Datacenter)).all()},
 )
 ComplianceFrameworks = StrEnum(
     "ComplianceFrameworks",
@@ -403,7 +400,8 @@ def search_servers(
             description="Datacenter.",
             json_schema_extra={
                 "category_id": FilterCategories.DATACENTER,
-                "enum": [{"key": m.name, "value": m.value} for m in DatacenterNames],
+                "enum": [m.value for m in Datacenters],
+                "labels": [m.name for m in Datacenters],
             },
         ),
     ] = None,
