@@ -92,6 +92,17 @@ class DatacenterPKs(DatacenterBase):
     vendor: VendorBase
 
 
+class DatacenterBaseWithPKs(DatacenterBase):
+    country: CountryBase
+
+
+class ServerPriceWithPKs(ServerPriceBase):
+    vendor: VendorBase
+    datacenter: DatacenterBaseWithPKs
+    zone: ZoneBase
+    server: ServerBase
+
+
 class OrderDir(Enum):
     ASC = "asc"
     DESC = "desc"
@@ -150,6 +161,32 @@ example_storage = db.exec(
     select(Storage).where(Storage.vendor_id == "aws").limit(1)
 ).one()
 Storage.model_config["json_schema_extra"] = {"examples": [example_storage.model_dump()]}
+example_prices = db.exec(
+    select(ServerPrice).where(ServerPrice.vendor_id == "aws").limit(5)
+).all()
+ServerPKsWithPrices.model_config["json_schema_extra"] = {
+    "examples": [
+        example_server.model_dump()
+        | {
+            "vendor": example_vendor.model_dump(),
+            "prices": [p.model_dump() for p in example_prices],
+        }
+    ]
+}
+ServerPriceWithPKs.model_config["json_schema_extra"] = {
+    "examples": [
+        example_prices[0].model_dump()
+        | {
+            "vendor": example_vendor.model_dump(),
+            "datacenter": (
+                example_datacenter.model_dump()
+                | {"country": example_country.model_dump()}
+            ),
+            "zone": example_zone.model_dump(),
+            "server": example_server.model_dump(),
+        }
+    ]
+}
 
 # ##############################################################################
 # API metadata
@@ -211,13 +248,6 @@ def healthcheck(db: Session = Depends(get_db)) -> dict:
         "database_last_updated": session.last_updated,
         "database_hash": session.db_hash,
     }
-
-
-class MetaTables(Enum):
-    COUNTRY = "Country"
-    VENDOR = "Vendor"
-    DATACENTER = "Datacenter"
-    ZONE = "Zone"
 
 
 @app.get("/table/country", tags=["Table dumps"])
@@ -292,19 +322,8 @@ def get_server(
     return server
 
 
-class DatacenterBaseWithPKs(DatacenterBase):
-    country: CountryBase
-
-
-class ServerPriceWithPKs(ServerPriceBase):
-    vendor: VendorBase
-    datacenter: DatacenterBaseWithPKs
-    zone: ZoneBase
-    server: ServerBase
-
-
-@app.get("/search", tags=["Query Resources"])
-def search_server(
+@app.get("/servers", tags=["Query Resources"])
+def search_servers(
     response: Response,
     vcpus_min: Annotated[
         int,
