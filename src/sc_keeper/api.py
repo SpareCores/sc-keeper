@@ -57,26 +57,8 @@ async def lifespan(app: FastAPI):
 # make sure we have a fresh database
 session.updated.wait()
 
-# load examples for the docs
-example_country = db.exec(select(Country).limit(1)).one()
-Country.model_config["json_schema_extra"] = {"examples": [example_country.model_dump()]}
-example_compliance_framwork = db.exec(select(ComplianceFramework).limit(1)).one()
-ComplianceFramework.model_config["json_schema_extra"] = {
-    "examples": [example_compliance_framwork.model_dump()]
-}
-example_vendor = db.exec(select(Vendor).limit(1)).one()
-Vendor.model_config["json_schema_extra"] = {"examples": [example_vendor.model_dump()]}
-example_datacenter = db.exec(select(Datacenter).limit(1)).one()
-Datacenter.model_config["json_schema_extra"] = {
-    "examples": [example_datacenter.model_dump()]
-}
-example_zone = db.exec(select(Zone).limit(1)).one()
-Zone.model_config["json_schema_extra"] = {"examples": [example_zone.model_dump()]}
-example_server = db.exec(select(Server).limit(1)).one()
-Server.model_config["json_schema_extra"] = {"examples": [example_server.model_dump()]}
-example_storage = db.exec(select(Storage).limit(1)).one()
-Storage.model_config["json_schema_extra"] = {"examples": [example_storage.model_dump()]}
-
+# ##############################################################################
+# Helper classes
 
 # create enums from DB values for filtering options
 Vendors = StrEnum(
@@ -97,6 +79,71 @@ ComplianceFrameworks = StrEnum(
     },
 )
 
+
+class ServerPKs(ServerBase):
+    vendor: VendorBase
+
+
+class ServerPKsWithPrices(ServerPKs):
+    prices: List[ServerPrice]
+
+
+class DatacenterPKs(DatacenterBase):
+    vendor: VendorBase
+
+
+class OrderDir(Enum):
+    ASC = "asc"
+    DESC = "desc"
+
+
+class FilterCategories(Enum):
+    BASIC = "basic"
+    PRICE = "price"
+    PROCESSOR = "processor"
+    MEMORY = "memory"
+    DATACENTER = "datacenter"
+    VENDOR = "vendor"
+    STORAGE = "storage"
+    GPU = "gpu"
+
+
+FILTERS = {
+    "vendor": Annotated[
+        Optional[List[Vendors]],
+        Query(
+            title="Vendor id",
+            description="Cloud provider vendor.",
+            json_schema_extra={
+                "category_id": FilterCategories.VENDOR,
+                "enum": [m.value for m in Vendors],
+            },
+        ),
+    ]
+}
+
+# load examples for the docs
+example_country = db.exec(select(Country).limit(1)).one()
+Country.model_config["json_schema_extra"] = {"examples": [example_country.model_dump()]}
+example_compliance_framwork = db.exec(select(ComplianceFramework).limit(1)).one()
+ComplianceFramework.model_config["json_schema_extra"] = {
+    "examples": [example_compliance_framwork.model_dump()]
+}
+example_vendor = db.exec(select(Vendor).limit(1)).one()
+Vendor.model_config["json_schema_extra"] = {"examples": [example_vendor.model_dump()]}
+example_datacenter = db.exec(select(Datacenter).limit(1)).one()
+Datacenter.model_config["json_schema_extra"] = {
+    "examples": [example_datacenter.model_dump()]
+}
+example_zone = db.exec(select(Zone).limit(1)).one()
+Zone.model_config["json_schema_extra"] = {"examples": [example_zone.model_dump()]}
+example_server = db.exec(select(Server).limit(1)).one()
+Server.model_config["json_schema_extra"] = {"examples": [example_server.model_dump()]}
+example_storage = db.exec(select(Storage).limit(1)).one()
+Storage.model_config["json_schema_extra"] = {"examples": [example_storage.model_dump()]}
+
+# ##############################################################################
+# API metadata
 
 app = FastAPI(
     title="Spare Cores (SC) Keeper",
@@ -129,6 +176,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ##############################################################################
+# Middlewares
+
 # logging
 app.add_middleware(LogMiddleware)
 
@@ -141,43 +191,8 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=100)
 
 
-class ServerPKs(ServerBase):
-    vendor: VendorBase
-
-
-class ServerPKsWithPrices(ServerPKs):
-    prices: List[ServerPrice]
-
-
-class OrderDir(Enum):
-    ASC = "asc"
-    DESC = "desc"
-
-
-class FilterCategories(Enum):
-    BASIC = "basic"
-    PRICE = "price"
-    PROCESSOR = "processor"
-    MEMORY = "memory"
-    DATACENTER = "datacenter"
-    VENDOR = "vendor"
-    STORAGE = "storage"
-    GPU = "gpu"
-
-
-FILTERS = {
-    "vendor": Annotated[
-        Optional[List[Vendors]],
-        Query(
-            title="Vendor id",
-            description="Cloud provider vendor.",
-            json_schema_extra={
-                "category_id": FilterCategories.VENDOR,
-                "enum": [m.value for m in Vendors],
-            },
-        ),
-    ]
-}
+# ##############################################################################
+# API endpoints
 
 
 @app.get("/healthcheck", tags=["Administrative endpoints"])
@@ -238,10 +253,6 @@ def table_server(db: Session = Depends(get_db)) -> List[Server]:
 def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
     """Return the Storage table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Storage)).all()
-
-
-class DatacenterPKs(DatacenterBase):
-    vendor: VendorBase
 
 
 @app.get("/datacenters", tags=["Query Resources"])
