@@ -184,7 +184,14 @@ ServerPKsWithPrices.model_config["json_schema_extra"] = {
         example_data["server"].model_dump()
         | {
             "vendor": example_data["vendor"].model_dump(),
-            "prices": [p.model_dump() for p in example_data["prices"]],
+            "prices": [
+                p.model_dump()
+                | {
+                    "datacenter": example_data["datacenter"].model_dump(),
+                    "zone": example_data["zone"].model_dump(),
+                }
+                for p in example_data["prices"]
+            ],
         }
     ]
 }
