@@ -1,8 +1,8 @@
 import json
 import logging
-import requests
 import os
 
+import requests
 from fastapi.openapi.utils import get_openapi
 
 
