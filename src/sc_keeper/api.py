@@ -135,56 +135,68 @@ FILTERS = {
 }
 
 # load examples for the docs
-example_country = db.exec(select(Country).limit(1)).one()
-Country.model_config["json_schema_extra"] = {"examples": [example_country.model_dump()]}
-example_compliance_framwork = db.exec(select(ComplianceFramework).limit(1)).one()
-ComplianceFramework.model_config["json_schema_extra"] = {
-    "examples": [example_compliance_framwork.model_dump()]
+example_data = {
+    "country": db.exec(select(Country).limit(1)).one(),
+    "compliance_framework": db.exec(select(ComplianceFramework).limit(1)).one(),
+    "vendor": db.exec(select(Vendor).where(Vendor.vendor_id == "aws")).one(),
+    "datacenter": db.exec(
+        select(Datacenter).where(Datacenter.vendor_id == "aws").limit(1)
+    ).one(),
+    "zone": db.exec(select(Zone).where(Zone.vendor_id == "aws").limit(1)).one(),
+    "server": db.exec(select(Server).where(Server.vendor_id == "aws").limit(1)).one(),
+    "storage": db.exec(
+        select(Storage).where(Storage.vendor_id == "aws").limit(1)
+    ).one(),
+    "prices": db.exec(
+        select(ServerPrice).where(ServerPrice.vendor_id == "aws").limit(5)
+    ).all(),
 }
-example_vendor = db.exec(select(Vendor).where(Vendor.vendor_id == "aws")).one()
-Vendor.model_config["json_schema_extra"] = {"examples": [example_vendor.model_dump()]}
-example_datacenter = db.exec(
-    select(Datacenter).where(Datacenter.vendor_id == "aws").limit(1)
-).one()
+
+Country.model_config["json_schema_extra"] = {
+    "examples": [example_data["country"].model_dump()]
+}
+ComplianceFramework.model_config["json_schema_extra"] = {
+    "examples": [example_data["compliance_framework"].model_dump()]
+}
+Vendor.model_config["json_schema_extra"] = {
+    "examples": [example_data["vendor"].model_dump()]
+}
 Datacenter.model_config["json_schema_extra"] = {
-    "examples": [example_datacenter.model_dump()]
+    "examples": [example_data["datacenter"].model_dump()]
 }
 DatacenterPKs.model_config["json_schema_extra"] = {
     "examples": [
-        example_datacenter.model_dump() | {"vendor": example_vendor.model_dump()}
+        example_data["datacenter"].model_dump()
+        | {"vendor": example_data["vendor"].model_dump()}
     ]
 }
-example_zone = db.exec(select(Zone).where(Zone.vendor_id == "aws").limit(1)).one()
-Zone.model_config["json_schema_extra"] = {"examples": [example_zone.model_dump()]}
-example_server = db.exec(select(Server).where(Server.vendor_id == "aws").limit(1)).one()
-Server.model_config["json_schema_extra"] = {"examples": [example_server.model_dump()]}
-example_storage = db.exec(
-    select(Storage).where(Storage.vendor_id == "aws").limit(1)
-).one()
-Storage.model_config["json_schema_extra"] = {"examples": [example_storage.model_dump()]}
-example_prices = db.exec(
-    select(ServerPrice).where(ServerPrice.vendor_id == "aws").limit(5)
-).all()
+Zone.model_config["json_schema_extra"] = {
+    "examples": [example_data["zone"].model_dump()]
+}
+Server.model_config["json_schema_extra"] = {
+    "examples": [example_data["server"].model_dump()]
+}
+Storage.model_config["json_schema_extra"] = {
+    "examples": [example_data["storage"].model_dump()]
+}
 ServerPKsWithPrices.model_config["json_schema_extra"] = {
     "examples": [
-        example_server.model_dump()
+        example_data["server"].model_dump()
         | {
-            "vendor": example_vendor.model_dump(),
-            "prices": [p.model_dump() for p in example_prices],
+            "vendor": example_data["vendor"].model_dump(),
+            "prices": [p.model_dump() for p in example_data["prices"]],
         }
     ]
 }
 ServerPriceWithPKs.model_config["json_schema_extra"] = {
     "examples": [
-        example_prices[0].model_dump()
+        example_data["prices"][0].model_dump()
         | {
-            "vendor": example_vendor.model_dump(),
-            "datacenter": (
-                example_datacenter.model_dump()
-                | {"country": example_country.model_dump()}
-            ),
-            "zone": example_zone.model_dump(),
-            "server": example_server.model_dump(),
+            "vendor": example_data["vendor"].model_dump(),
+            "datacenter": example_data["datacenter"].model_dump()
+            | {"country": example_data["country"].model_dump()},
+            "zone": example_data["zone"].model_dump(),
+            "server": example_data["server"].model_dump(),
         }
     ]
 }
