@@ -81,8 +81,13 @@ class ServerPKs(ServerBase):
     vendor: VendorBase
 
 
+class ServerPricePKs(ServerPriceBase):
+    datacenter: DatacenterBase
+    zone: ZoneBase
+
+
 class ServerPKsWithPrices(ServerPKs):
-    prices: List[ServerPrice]
+    prices: List[ServerPricePKs]
 
 
 class DatacenterPKs(DatacenterBase):
