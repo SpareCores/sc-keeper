@@ -1,3 +1,4 @@
+import json
 import logging
 import requests
 import os
@@ -102,4 +103,10 @@ def openai_extract_filters(prompt):
         "https://api.openai.com/v1/chat/completions", headers=headers, json=json_data
     )
     logging.debug(response.json())
-    return response.json().get("choices")[0].get("message").get("content")
+    try:
+        message = response.json()["choices"][0]["message"]
+        args = message["tool_calls"][0]["function"]["arguments"]
+        return json.loads(args)
+    except Exception as exc:
+        logging.exception(exc)
+        raise exc

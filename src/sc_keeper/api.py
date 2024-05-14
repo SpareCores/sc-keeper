@@ -61,6 +61,9 @@ session.updated.wait()
 # Helper classes
 
 # create enums from DB values for filtering options
+Countries = StrEnum(
+    "Countries", {m.country_id: m.country_id for m in db.exec(select(Country)).all()}
+)
 Vendors = StrEnum(
     "Vendors", {m.vendor_id: m.vendor_id for m in db.exec(select(Vendor)).all()}
 )
@@ -473,6 +476,7 @@ def search_servers(
             description="Datacenter countries.",
             json_schema_extra={
                 "category_id": FilterCategories.DATACENTER,
+                "enum": [e.value for e in Countries],
             },
         ),
     ] = None,
