@@ -28,6 +28,7 @@ from sc_crawler.tables import (
 )
 from sqlmodel import Session, func, select
 
+from .ai import openai_extract_filters
 from .currency import CurrencyConverter
 from .database import session
 from .logger import LogMiddleware
@@ -413,6 +414,9 @@ def search_servers(
         Query(
             title="Allocation",
             description="Server allocation method.",
+            json_schema_extra={
+                "enum": [m.value for m in Allocation],
+            },
         ),
     ] = None,
     vendor: FILTERS["vendor"] = None,  # noqa F821
@@ -600,3 +604,9 @@ def search_servers(
                 server.currency = currency
 
     return servers
+
+
+@app.get("/ai/assist_filters", tags=["AI"])
+def assist_filters(text: str) -> dict:
+    """Extract JSON filters from freetext."""
+    return openai_extract_filters(text)
