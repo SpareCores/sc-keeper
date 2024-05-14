@@ -43,7 +43,11 @@ def convert_swagger_to_json_schema(swagger: dict) -> dict:
     return {
         item["name"]: build_json_schema(item)
         for item in swagger["paths"]["/servers"]["get"]["parameters"]
-        if item["in"] == "query"
+        if (
+            item["in"] == "query"
+            and item["name"]
+            not in ["limit", "page", "order_by", "order_dir", "add_total_count_header"]
+        )
     }
 
 
