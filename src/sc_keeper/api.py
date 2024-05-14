@@ -6,7 +6,6 @@ from typing import Annotated, List, Optional
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from sc_crawler import tables
 from sc_crawler.table_bases import (
     CountryBase,
     DatacenterBase,
@@ -298,7 +297,7 @@ def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
 
 @app.get("/datacenters", tags=["Query Resources"])
 def search_datacenters(
-    vendor: FILTERS["vendor"] = None,
+    vendor: FILTERS["vendor"] = None,  # noqa F821
     db: Session = Depends(get_db),
 ) -> List[DatacenterPKs]:
     query = select(Datacenter)
@@ -397,7 +396,7 @@ def search_servers(
             description="Server allocation method.",
         ),
     ] = None,
-    vendor: FILTERS["vendor"] = None,
+    vendor: FILTERS["vendor"] = None,  # noqa F821
     datacenters: Annotated[
         Optional[List[Datacenters]],
         Query(
