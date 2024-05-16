@@ -2,10 +2,12 @@ from contextlib import asynccontextmanager
 from enum import Enum, StrEnum
 from textwrap import dedent
 from typing import Annotated, List, Optional
+import logging
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from pydantic import BaseModel
 from sc_crawler.table_bases import (
     CountryBase,
     DatacenterBase,
@@ -78,6 +80,16 @@ ComplianceFrameworks = StrEnum(
         for m in db.exec(select(ComplianceFramework)).all()
     },
 )
+
+
+class NameAndDescription(BaseModel):
+    name: str
+    description: str
+
+
+class TableMetaData(BaseModel):
+    table: NameAndDescription
+    fields: List[NameAndDescription]
 
 
 class ServerPKs(ServerBase):
@@ -310,6 +322,20 @@ def table_zone(db: Session = Depends(get_db)) -> List[Zone]:
 def table_server(db: Session = Depends(get_db)) -> List[Server]:
     """Return the Server table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Server)).all()
+
+
+@app.get("/table/server/meta", tags=["Table metadata"])
+def table_server(db: Session = Depends(get_db)) -> TableMetaData:
+    """Server table and column names and comments."""
+    table = {
+        "name": Server.get_table_name(),
+        "description": Server.__doc__.splitlines()[0],
+    }
+    fields = [
+        {"name": k, "description": v.description}
+        for k, v in Server.model_fields.items()
+    ]
+    return {"table": table, "fields": fields}
 
 
 @app.get("/table/storage", tags=["Table dumps"])
