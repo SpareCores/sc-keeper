@@ -58,7 +58,7 @@ def openai_extract_filters(prompt):
             "Content-Type": "application/json",
             "Authorization": "Bearer " + os.environ["OPENAI_API_KEY"],
         }
-    except KeyError as exc:
+    except (KeyError, ValueError) as exc:
         raise RuntimeError(
             "No OpenAI key found, which is required for this task."
         ) from exc
@@ -103,6 +103,7 @@ def openai_extract_filters(prompt):
     response = requests.post(
         "https://api.openai.com/v1/chat/completions", headers=headers, json=json_data
     )
+    response.raise_for_status()
     try:
         message = response.json()["choices"][0]["message"]
         args = message["tool_calls"][0]["function"]["arguments"]
