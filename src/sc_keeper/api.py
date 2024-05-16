@@ -33,7 +33,7 @@ from sqlmodel import Session, func, select
 from .ai import openai_extract_filters
 from .currency import CurrencyConverter
 from .database import session
-from .logger import LogMiddleware
+from .logger import get_request_id, LogMiddleware
 
 
 def get_db():
@@ -645,6 +645,7 @@ def assist_filters(text: str, request: Request) -> dict:
         extra={
             "event": "assist_filters response",
             "res": res,
+            "request_id": get_request_id(),
         },
     )
     return res
