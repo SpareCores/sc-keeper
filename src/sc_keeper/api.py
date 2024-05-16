@@ -1,8 +1,8 @@
+import logging
 from contextlib import asynccontextmanager
 from enum import Enum, StrEnum
 from textwrap import dedent
 from typing import Annotated, List, Optional
-import logging
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,7 +33,7 @@ from sqlmodel import Session, func, select
 from .ai import openai_extract_filters
 from .currency import CurrencyConverter
 from .database import session
-from .logger import get_request_id, LogMiddleware
+from .logger import LogMiddleware, get_request_id
 
 
 def get_db():
