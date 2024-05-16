@@ -325,7 +325,7 @@ def table_server(db: Session = Depends(get_db)) -> List[Server]:
 
 
 @app.get("/table/server/meta", tags=["Table metadata"])
-def table_server(db: Session = Depends(get_db)) -> TableMetaData:
+def table_metadata_server(db: Session = Depends(get_db)) -> TableMetaData:
     """Server table and column names and comments."""
     table = {
         "name": Server.get_table_name(),
