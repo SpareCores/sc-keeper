@@ -1,11 +1,13 @@
+import logging
 from contextlib import asynccontextmanager
 from enum import Enum, StrEnum
 from textwrap import dedent
 from typing import Annotated, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from pydantic import BaseModel
 from sc_crawler.table_bases import (
     CountryBase,
     DatacenterBase,
@@ -28,9 +30,10 @@ from sc_crawler.tables import (
 )
 from sqlmodel import Session, func, select
 
+from .ai import openai_extract_filters
 from .currency import CurrencyConverter
 from .database import session
-from .logger import LogMiddleware
+from .logger import LogMiddleware, get_request_id
 
 
 def get_db():
@@ -60,6 +63,9 @@ session.updated.wait()
 # Helper classes
 
 # create enums from DB values for filtering options
+Countries = StrEnum(
+    "Countries", {m.country_id: m.country_id for m in db.exec(select(Country)).all()}
+)
 Vendors = StrEnum(
     "Vendors", {m.vendor_id: m.vendor_id for m in db.exec(select(Vendor)).all()}
 )
@@ -74,6 +80,16 @@ ComplianceFrameworks = StrEnum(
         for m in db.exec(select(ComplianceFramework)).all()
     },
 )
+
+
+class NameAndDescription(BaseModel):
+    name: str
+    description: str
+
+
+class TableMetaData(BaseModel):
+    table: NameAndDescription
+    fields: List[NameAndDescription]
 
 
 class ServerPKs(ServerBase):
@@ -308,6 +324,20 @@ def table_server(db: Session = Depends(get_db)) -> List[Server]:
     return db.exec(select(Server)).all()
 
 
+@app.get("/table/server/meta", tags=["Table metadata"])
+def table_metadata_server(db: Session = Depends(get_db)) -> TableMetaData:
+    """Server table and column names and comments."""
+    table = {
+        "name": Server.get_table_name(),
+        "description": Server.__doc__.splitlines()[0],
+    }
+    fields = [
+        {"name": k, "description": v.description}
+        for k, v in Server.model_fields.items()
+    ]
+    return {"table": table, "fields": fields}
+
+
 @app.get("/table/storage", tags=["Table dumps"])
 def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
     """Return the Storage table as-is, without filtering options or relationships resolved."""
@@ -413,6 +443,9 @@ def search_servers(
         Query(
             title="Allocation",
             description="Server allocation method.",
+            json_schema_extra={
+                "enum": [m.value for m in Allocation],
+            },
         ),
     ] = None,
     vendor: FILTERS["vendor"] = None,  # noqa F821
@@ -469,6 +502,7 @@ def search_servers(
             description="Datacenter countries.",
             json_schema_extra={
                 "category_id": FilterCategories.DATACENTER,
+                "enum": [e.value for e in Countries],
             },
         ),
     ] = None,
@@ -600,3 +634,18 @@ def search_servers(
                 server.currency = currency
 
     return servers
+
+
+@app.get("/ai/assist_filters", tags=["AI"])
+def assist_filters(text: str, request: Request) -> dict:
+    """Extract JSON filters from freetext."""
+    res = openai_extract_filters(text)
+    logging.info(
+        "openai response",
+        extra={
+            "event": "assist_filters response",
+            "res": res,
+            "request_id": get_request_id(),
+        },
+    )
+    return res
