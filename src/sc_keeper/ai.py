@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 
 import requests
@@ -64,8 +63,6 @@ def openai_extract_filters(prompt):
             "No OpenAI key found, which is required for this task."
         ) from exc
 
-    print(convert_swagger_to_json_schema(get_swagger()))
-
     json_data = {
         "model": "gpt-3.5-turbo",
         "response_format": {"type": "json_object"},
@@ -106,7 +103,6 @@ def openai_extract_filters(prompt):
     response = requests.post(
         "https://api.openai.com/v1/chat/completions", headers=headers, json=json_data
     )
-    logging.debug(response.json())
     try:
         message = response.json()["choices"][0]["message"]
         args = message["tool_calls"][0]["function"]["arguments"]

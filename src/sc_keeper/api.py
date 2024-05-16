@@ -611,6 +611,14 @@ def search_servers(
 
 
 @app.get("/ai/assist_filters", tags=["AI"])
-def assist_filters(text: str) -> dict:
+def assist_filters(text: str, request: Request) -> dict:
     """Extract JSON filters from freetext."""
-    return openai_extract_filters(text)
+    res = openai_extract_filters(text)
+    logging.info(
+        "openai response",
+        extra={
+            "event": "assist_filters response",
+            "res": res,
+        },
+    )
+    return res
