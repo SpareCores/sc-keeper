@@ -72,7 +72,7 @@ def openai_extract_filters(prompt):
                 "type": "function",
                 "function": {
                     "name": "search_servers",
-                    "description": "Search server instances accross cloud vendors using the provided filters.",
+                    "description": "Search server instances across cloud vendors using the provided filters.",
                     "parameters": {
                         "type": "object",
                         "properties": convert_swagger_to_json_schema(get_swagger()),
@@ -87,8 +87,8 @@ def openai_extract_filters(prompt):
                 "role": "system",
                 "content": (
                     "You are a cloud server search assistant, "
-                    "helping users to find the optimal instances accross cloud providers. "
-                    "The user describes their needs in plain English (or anoother natural language), "
+                    "helping users to find the optimal instances across cloud providers. "
+                    "The user describes their needs in plain English (or another natural language), "
                     "and you need to understand what kind of server is required to accomplish the task, "
                     "and generate a JSON describing the filters (e.g. number of CPUs or memory). "
                 ),
