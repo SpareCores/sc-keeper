@@ -137,20 +137,6 @@ class FilterCategories(Enum):
     GPU = "gpu"
 
 
-FILTERS = {
-    "vendor": Annotated[
-        Optional[List[Vendors]],
-        Query(
-            title="Vendor id",
-            description="Cloud provider vendor.",
-            json_schema_extra={
-                "category_id": FilterCategories.VENDOR,
-                "enum": [m.value for m in Vendors],
-            },
-        ),
-    ]
-}
-
 # load examples for the docs
 example_data = {
     "country": db.exec(select(Country).limit(1)).one(),
@@ -278,6 +264,17 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 # Shared parameters
 
 options = SimpleNamespace(
+    vendor=Annotated[
+        Optional[List[Vendors]],
+        Query(
+            title="Vendor id",
+            description="Cloud provider vendor.",
+            json_schema_extra={
+                "category_id": FilterCategories.VENDOR,
+                "enum": [m.value for m in Vendors],
+            },
+        ),
+    ],
     vcpus_min=Annotated[
         int,
         Query(
@@ -518,7 +515,7 @@ def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
 
 @app.get("/datacenters", tags=["Query Resources"])
 def search_datacenters(
-    vendor: FILTERS["vendor"] = None,  # noqa F821
+    vendor: options.vendor = None,
     db: Session = Depends(get_db),
 ) -> List[DatacenterPKs]:
     query = select(Datacenter)
@@ -554,7 +551,7 @@ def search_server_prices(
     only_active: options.only_active = True,
     green_energy: options.green_energy = None,
     allocation: options.allocation = None,
-    vendor: FILTERS["vendor"] = None,  # noqa F821
+    vendor: options.vendor = None,
     datacenters: options.datacenters = None,
     compliance_framework: options.compliance_framework = None,
     storage_size: options.storage_size = None,
