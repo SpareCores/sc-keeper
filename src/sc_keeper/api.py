@@ -372,8 +372,8 @@ def get_server(
     return server
 
 
-@app.get("/servers", tags=["Query Resources"])
-def search_servers(
+@app.get("/server_prices", tags=["Query Resources"])
+def search_server_prices(
     response: Response,
     vcpus_min: Annotated[
         int,
