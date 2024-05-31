@@ -580,8 +580,6 @@ def search_servers(
         query = query.where(Server.gpu_memory_min >= gpu_memory_min * 1024)
     if only_active:
         query = query.where(Server.status == Status.ACTIVE)
-    if allocation:
-        query = query.where(ServerPrice.allocation == allocation)
     if architecture:
         query = query.where(Server.cpu_architecture.in_(architecture))
     if storage_type:
