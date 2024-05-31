@@ -541,6 +541,96 @@ def get_server(
     return server
 
 
+@app.get("/servers", tags=["Query Resources"])
+def search_servers(
+    response: Response,
+    vcpus_min: options.vcpus_min = 1,
+    architecture: options.architecture = None,
+    memory_min: options.memory_min = None,
+    # price_max: options.price_max = None,
+    only_active: options.only_active = True,
+    # green_energy: options.green_energy = None,
+    allocation: options.allocation = None,
+    vendor: options.vendor = None,
+    # datacenters: options.datacenters = None,
+    compliance_framework: options.compliance_framework = None,
+    storage_size: options.storage_size = None,
+    storage_type: options.storage_type = None,
+    # countries: options.countries = None,
+    gpu_min: options.gpu_min = None,
+    gpu_memory_min: options.gpu_memory_min = None,
+    limit: options.limit = 50,
+    page: options.page = None,
+    order_by: options.order_by = "vcpus",
+    order_dir: options.order_dir = OrderDir.ASC,
+    currency: options.currency = "USD",
+    add_total_count_header: options.add_total_count_header = False,
+    db: Session = Depends(get_db),
+) -> List[ServerPKs]:
+    query = (
+        select(Server)
+        .join(Server.vendor)
+        .join(Vendor.compliance_framework_links)
+        .join(VendorComplianceLink.compliance_framework)
+    )
+
+    if vcpus_min:
+        query = query.where(Server.vcpus >= vcpus_min)
+    if memory_min:
+        query = query.where(Server.memory >= memory_min * 1024)
+    if storage_size:
+        query = query.where(Server.storage_size >= storage_size)
+    if gpu_min:
+        query = query.where(Server.gpu_count >= gpu_min)
+    if gpu_memory_min:
+        query = query.where(Server.gpu_memory_min >= gpu_memory_min * 1024)
+    if only_active:
+        query = query.where(Server.status == Status.ACTIVE)
+    if allocation:
+        query = query.where(ServerPrice.allocation == allocation)
+    if architecture:
+        query = query.where(Server.cpu_architecture.in_(architecture))
+    if storage_type:
+        query = query.where(Server.storage_type.in_(storage_type))
+    if vendor:
+        query = query.where(Server.vendor_id.in_(vendor))
+    if compliance_framework:
+        query = query.where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+
+    # ordering
+    if order_by:
+        order_obj = [o for o in [Server] if hasattr(o, order_by)]
+        if len(order_obj) == 0:
+            raise HTTPException(status_code=400, detail="Unknown order_by field.")
+        if len(order_obj) > 1:
+            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+        order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
+
+    # avoid duplicate rows introduced by the many-to-many relationships
+    query = query.distinct()
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        count_query = select(func.count()).select_from(query.alias("subquery"))
+        response.headers["X-Total-Count"] = str(db.exec(count_query).one())
+
+    # pagination
+    if limit > 0:
+        query = query.limit(limit)
+    # only apply if limit is set
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
+    servers = db.exec(query).all()
+
+    return servers
+
+
 @app.get("/server_prices", tags=["Query Resources"])
 def search_server_prices(
     response: Response,
