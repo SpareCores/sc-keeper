@@ -563,7 +563,6 @@ def search_servers(
     page: options.page = None,
     order_by: options.order_by = "vcpus",
     order_dir: options.order_dir = OrderDir.ASC,
-    currency: options.currency = "USD",
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
