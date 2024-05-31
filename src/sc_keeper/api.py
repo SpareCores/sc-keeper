@@ -747,10 +747,25 @@ def search_server_prices(
     return servers
 
 
-@app.get("/ai/assist_filters", tags=["AI"])
-def assist_filters(text: str, request: Request) -> dict:
-    """Extract JSON filters from freetext."""
-    res = openai_extract_filters(text)
+@app.get("/ai/assist_server_filters", tags=["AI"])
+def assist_server_filters(text: str, request: Request) -> dict:
+    """Extract Server JSON filters from freetext."""
+    res = openai_extract_filters(text, endpoint="/servers")
+    logging.info(
+        "openai response",
+        extra={
+            "event": "assist_filters response",
+            "res": res,
+            "request_id": get_request_id(),
+        },
+    )
+    return res
+
+
+@app.get("/ai/assist_server_price_filters", tags=["AI"])
+def assist_server_price_filters(text: str, request: Request) -> dict:
+    """Extract ServerPrice JSON filters from freetext."""
+    res = openai_extract_filters(text, endpoint="/server_prices")
     logging.info(
         "openai response",
         extra={
