@@ -608,12 +608,18 @@ def search_regions(
     return db.exec(query).all()
 
 
-@app.get("/server/{vendor_id}/{server_id}", tags=["Query Resources"])
+@app.get("/server/{vendor}/{server}", tags=["Query Resources"])
 def get_server(
-    vendor_id: Annotated[str, Path(description="Vendor id.")],
-    server_id: Annotated[str, Path(description="Server id or API reference name.")],
+    vendor: Annotated[str, Path(description="Vendor ID.")],
+    server: Annotated[str, Path(description="Server ID or API reference.")],
     db: Session = Depends(get_db),
 ) -> ServerPKsWithPrices:
+    """Query a single server by its vendor id and either the server or, or its API reference.
+
+    Return dictionary includes all server fields, along
+    with the current prices per zone, and
+    the available benchmark scores.
+    """
     # TODO async
     server = db.exec(
         select(Server)
