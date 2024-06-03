@@ -266,7 +266,7 @@ options = SimpleNamespace(
         Optional[List[Vendors]],
         Query(
             title="Vendor id",
-            description="Cloud provider vendor.",
+            description="Identifier of the cloud provider vendor.",
             json_schema_extra={
                 "category_id": FilterCategories.VENDOR,
                 "enum": [m.value for m in Vendors],
@@ -324,7 +324,7 @@ options = SimpleNamespace(
         Optional[bool],
         Query(
             title="Active only",
-            description="Show only active servers",
+            description="Filter for active servers only.",
             json_schema_extra={"category_id": FilterCategories.BASIC},
         ),
     ],
@@ -332,7 +332,7 @@ options = SimpleNamespace(
         Optional[bool],
         Query(
             title="Green energy",
-            description="Low CO2 emission only.",
+            description="Filter for regions with kow CO2 emission only.",
             json_schema_extra={"category_id": FilterCategories.REGION},
         ),
     ],
@@ -350,7 +350,7 @@ options = SimpleNamespace(
         Optional[List[Regions]],
         Query(
             title="region id",
-            description="Region.",
+            description="Identifier of the region.",
             json_schema_extra={
                 "category_id": FilterCategories.REGION,
                 "enum": [m.value for m in Regions],
@@ -372,7 +372,7 @@ options = SimpleNamespace(
         Optional[float],
         Query(
             title="Storage Size",
-            description="Reserver storage size in GBs.",
+            description="Minimum amount of storage (GBs) attached to the server.",
             json_schema_extra={
                 "category_id": FilterCategories.STORAGE,
                 "step": 0.1,
@@ -384,7 +384,7 @@ options = SimpleNamespace(
         Optional[List[StorageType]],
         Query(
             title="Storage Type",
-            description="Storage type.",
+            description="Type of the storage attached to the server.",
             json_schema_extra={
                 "category_id": FilterCategories.STORAGE,
                 "enum": [e.value for e in StorageType],
@@ -395,7 +395,7 @@ options = SimpleNamespace(
         Optional[List[str]],
         Query(
             title="Countries",
-            description="Region countries.",
+            description="Filter for regions in the provided list of countries.",
             json_schema_extra={
                 "category_id": FilterCategories.REGION,
                 "enum": [e.value for e in Countries],
@@ -406,7 +406,7 @@ options = SimpleNamespace(
         Optional[int],
         Query(
             title="GPU count",
-            description="Number of GPUs.",
+            description="Minimum number of GPUs.",
             json_schema_extra={
                 "category_id": FilterCategories.GPU,
                 "unit": "GPUs",
@@ -417,7 +417,7 @@ options = SimpleNamespace(
         Optional[float],
         Query(
             title="GPU memory",
-            description="Amount of GPU memory in GBs.",
+            description="Minimum amount of GPU memory in GBs.",
             json_schema_extra={
                 "category_id": FilterCategories.GPU,
                 "unit": "GB",
