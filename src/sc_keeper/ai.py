@@ -38,11 +38,11 @@ def build_json_schema(d: dict) -> dict:
     return root_keys | schema_keys
 
 
-def convert_swagger_to_json_schema(swagger: dict) -> dict:
+def convert_swagger_to_json_schema(swagger: dict, endpoint: str) -> dict:
     """Filter Swagger JSON for the parameters and format as JSON schema."""
     return {
         item["name"]: build_json_schema(item)
-        for item in swagger["paths"]["/servers"]["get"]["parameters"]
+        for item in swagger["paths"][endpoint]["get"]["parameters"]
         if (
             item["in"] == "query"
             and item["name"]
@@ -51,7 +51,7 @@ def convert_swagger_to_json_schema(swagger: dict) -> dict:
     }
 
 
-def openai_extract_filters(prompt):
+def openai_extract_filters(prompt: str, endpoint: str) -> dict:
     """Ask ChatGPT to generate filter JSON based on freetext input."""
 
     try:
@@ -75,7 +75,9 @@ def openai_extract_filters(prompt):
                     "description": "Search server instances across cloud vendors using the provided filters.",
                     "parameters": {
                         "type": "object",
-                        "properties": convert_swagger_to_json_schema(get_swagger()),
+                        "properties": convert_swagger_to_json_schema(
+                            get_swagger(), endpoint=endpoint
+                        ),
                         "required": [],
                     },
                 },
