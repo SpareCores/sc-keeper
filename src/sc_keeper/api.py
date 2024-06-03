@@ -5,7 +5,7 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Annotated, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Path, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
@@ -610,12 +610,19 @@ def search_regions(
 
 @app.get("/server/{vendor_id}/{server_id}", tags=["Query Resources"])
 def get_server(
-    vendor_id: str, server_id: str, db: Session = Depends(get_db)
+    vendor_id: Annotated[str, Path(description="Vendor id.")],
+    server_id: Annotated[str, Path(description="Server id or API reference name.")],
+    db: Session = Depends(get_db),
 ) -> ServerPKsWithPrices:
     # TODO async
-    server = db.get(Server, (vendor_id, server_id))
+    server = db.exec(
+        select(Server)
+        .where(Server.vendor_id == vendor_id)
+        .where((Server.server_id == server_id) | (Server.api_reference == server_id))
+    ).all()
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
+    server = server[0]
     prices = db.exec(
         select(ServerPrice)
         .where(ServerPrice.vendor_id == vendor_id)
