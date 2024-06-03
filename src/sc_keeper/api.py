@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from enum import Enum, StrEnum
 from textwrap import dedent
+from types import SimpleNamespace
 from typing import Annotated, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
@@ -136,20 +137,6 @@ class FilterCategories(Enum):
     GPU = "gpu"
 
 
-FILTERS = {
-    "vendor": Annotated[
-        Optional[List[Vendors]],
-        Query(
-            title="Vendor id",
-            description="Cloud provider vendor.",
-            json_schema_extra={
-                "category_id": FilterCategories.VENDOR,
-                "enum": [m.value for m in Vendors],
-            },
-        ),
-    ]
-}
-
 # load examples for the docs
 example_data = {
     "country": db.exec(select(Country).limit(1)).one(),
@@ -274,6 +261,188 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 
 
 # ##############################################################################
+# Shared parameters
+
+options = SimpleNamespace(
+    vendor=Annotated[
+        Optional[List[Vendors]],
+        Query(
+            title="Vendor id",
+            description="Cloud provider vendor.",
+            json_schema_extra={
+                "category_id": FilterCategories.VENDOR,
+                "enum": [m.value for m in Vendors],
+            },
+        ),
+    ],
+    vcpus_min=Annotated[
+        int,
+        Query(
+            title="Processor number",
+            description="Minimum number of virtual CPUs.",
+            ge=1,
+            le=128,
+            json_schema_extra={
+                "category_id": FilterCategories.PROCESSOR,
+                "unit": "vCPUs",
+            },
+        ),
+    ],
+    architecture=Annotated[
+        Optional[List[CpuArchitecture]],
+        Query(
+            title="Processor architecture",
+            description="Processor architecture.",
+            json_schema_extra={
+                "category_id": FilterCategories.PROCESSOR,
+                "enum": [e.value for e in CpuArchitecture],
+            },
+        ),
+    ],
+    memory_min=Annotated[
+        Optional[float],
+        Query(
+            title="Memory amount",
+            description="Minimum amount of memory in GBs.",
+            json_schema_extra={
+                "category_id": FilterCategories.MEMORY,
+                "unit": "GB",
+                "step": 0.1,
+            },
+        ),
+    ],
+    price_max=Annotated[
+        Optional[float],
+        Query(
+            title="Maximum price",
+            description="Maximum price (USD/hr).",
+            json_schema_extra={
+                "category_id": FilterCategories.PRICE,
+                "step": 0.0001,
+            },
+        ),
+    ],
+    only_active=Annotated[
+        Optional[bool],
+        Query(
+            title="Active only",
+            description="Show only active servers",
+            json_schema_extra={"category_id": FilterCategories.BASIC},
+        ),
+    ],
+    green_energy=Annotated[
+        Optional[bool],
+        Query(
+            title="Green energy",
+            description="Low CO2 emission only.",
+            json_schema_extra={"category_id": FilterCategories.DATACENTER},
+        ),
+    ],
+    allocation=Annotated[
+        Optional[Allocation],
+        Query(
+            title="Allocation",
+            description="Server allocation method.",
+            json_schema_extra={
+                "enum": [m.value for m in Allocation],
+            },
+        ),
+    ],
+    datacenters=Annotated[
+        Optional[List[Datacenters]],
+        Query(
+            title="Datacenter id",
+            description="Datacenter.",
+            json_schema_extra={
+                "category_id": FilterCategories.DATACENTER,
+                "enum": [m.value for m in Datacenters],
+            },
+        ),
+    ],
+    compliance_framework=Annotated[
+        Optional[List[ComplianceFrameworks]],
+        Query(
+            title="Compliance Framework id",
+            description="Compliance framework implemented at the vendor.",
+            json_schema_extra={
+                "category_id": FilterCategories.VENDOR,
+                "enum": [m.value for m in ComplianceFrameworks],
+            },
+        ),
+    ],
+    storage_size=Annotated[
+        Optional[float],
+        Query(
+            title="Storage Size",
+            description="Reserver storage size in GBs.",
+            json_schema_extra={
+                "category_id": FilterCategories.STORAGE,
+                "step": 0.1,
+                "unit": "GB",
+            },
+        ),
+    ],
+    storage_type=Annotated[
+        Optional[List[StorageType]],
+        Query(
+            title="Storage Type",
+            description="Storage type.",
+            json_schema_extra={
+                "category_id": FilterCategories.STORAGE,
+                "enum": [e.value for e in StorageType],
+            },
+        ),
+    ],
+    countries=Annotated[
+        Optional[List[str]],
+        Query(
+            title="Countries",
+            description="Datacenter countries.",
+            json_schema_extra={
+                "category_id": FilterCategories.DATACENTER,
+                "enum": [e.value for e in Countries],
+            },
+        ),
+    ],
+    gpu_min=Annotated[
+        Optional[int],
+        Query(
+            title="GPU count",
+            description="Number of GPUs.",
+            json_schema_extra={
+                "category_id": FilterCategories.GPU,
+                "unit": "GPUs",
+            },
+        ),
+    ],
+    gpu_memory_min=Annotated[
+        Optional[float],
+        Query(
+            title="GPU memory",
+            description="Amount of GPU memory in GBs.",
+            json_schema_extra={
+                "category_id": FilterCategories.GPU,
+                "unit": "GB",
+                "step": 0.1,
+            },
+        ),
+    ],
+    limit=Annotated[
+        int, Query(description="Maximum number of results. Set to -1 for unlimited")
+    ],
+    page=Annotated[Optional[int], Query(description="Page number.")],
+    order_by=Annotated[str, Query(description="Order by column.")],
+    order_dir=Annotated[OrderDir, Query(description="Order direction.")],
+    currency=Annotated[str, Query(description="Currency used for prices.")],
+    add_total_count_header=Annotated[
+        bool,
+        Query(
+            description="Add the X-Total-Count header to the response with the overall number of items (without paging). Note that it might reduce response times."
+        ),
+    ],
+)
+
+# ##############################################################################
 # API endpoints
 
 
@@ -346,7 +515,7 @@ def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
 
 @app.get("/datacenters", tags=["Query Resources"])
 def search_datacenters(
-    vendor: FILTERS["vendor"] = None,  # noqa F821
+    vendor: options.vendor = None,
     db: Session = Depends(get_db),
 ) -> List[DatacenterPKs]:
     query = select(Datacenter)
@@ -375,174 +544,109 @@ def get_server(
 @app.get("/servers", tags=["Query Resources"])
 def search_servers(
     response: Response,
-    vcpus_min: Annotated[
-        int,
-        Query(
-            title="Processor number",
-            description="Minimum number of virtual CPUs.",
-            ge=1,
-            le=128,
-            json_schema_extra={
-                "category_id": FilterCategories.PROCESSOR,
-                "unit": "vCPUs",
-            },
-        ),
-    ] = 1,
-    architecture: Annotated[
-        Optional[List[CpuArchitecture]],
-        Query(
-            title="Processor architecture",
-            description="Processor architecture.",
-            json_schema_extra={
-                "category_id": FilterCategories.PROCESSOR,
-                "enum": [e.value for e in CpuArchitecture],
-            },
-        ),
-    ] = None,
-    memory_min: Annotated[
-        Optional[float],
-        Query(
-            title="Memory amount",
-            description="Minimum amount of memory in GBs.",
-            json_schema_extra={
-                "category_id": FilterCategories.MEMORY,
-                "unit": "GB",
-                "step": 0.1,
-            },
-        ),
-    ] = None,
-    price_max: Annotated[
-        Optional[float],
-        Query(
-            title="Maximum price",
-            description="Maximum price (USD/hr).",
-            json_schema_extra={
-                "category_id": FilterCategories.PRICE,
-                "step": 0.0001,
-            },
-        ),
-    ] = None,
-    only_active: Annotated[
-        Optional[bool],
-        Query(
-            title="Active only",
-            description="Show only active servers",
-            json_schema_extra={"category_id": FilterCategories.BASIC},
-        ),
-    ] = True,
-    green_energy: Annotated[
-        Optional[bool],
-        Query(
-            title="Green energy",
-            description="Low CO2 emission only.",
-            json_schema_extra={"category_id": FilterCategories.DATACENTER},
-        ),
-    ] = None,
-    allocation: Annotated[
-        Optional[Allocation],
-        Query(
-            title="Allocation",
-            description="Server allocation method.",
-            json_schema_extra={
-                "enum": [m.value for m in Allocation],
-            },
-        ),
-    ] = None,
-    vendor: FILTERS["vendor"] = None,  # noqa F821
-    datacenters: Annotated[
-        Optional[List[Datacenters]],
-        Query(
-            title="Datacenter id",
-            description="Datacenter.",
-            json_schema_extra={
-                "category_id": FilterCategories.DATACENTER,
-                "enum": [m.value for m in Datacenters],
-            },
-        ),
-    ] = None,
-    compliance_framework: Annotated[
-        Optional[List[ComplianceFrameworks]],
-        Query(
-            title="Compliance Framework id",
-            description="Compliance framework implemented at the vendor.",
-            json_schema_extra={
-                "category_id": FilterCategories.VENDOR,
-                "enum": [m.value for m in ComplianceFrameworks],
-            },
-        ),
-    ] = None,
-    storage_size: Annotated[
-        Optional[float],
-        Query(
-            title="Storage Size",
-            description="Reserver storage size in GBs.",
-            json_schema_extra={
-                "category_id": FilterCategories.STORAGE,
-                "step": 0.1,
-                "unit": "GB",
-            },
-        ),
-    ] = None,
-    storage_type: Annotated[
-        Optional[List[StorageType]],
-        Query(
-            title="Storage Type",
-            description="Storage type.",
-            json_schema_extra={
-                "category_id": FilterCategories.STORAGE,
-                "enum": [e.value for e in StorageType],
-            },
-        ),
-    ] = None,
-    countries: Annotated[
-        Optional[List[str]],
-        Query(
-            title="Countries",
-            description="Datacenter countries.",
-            json_schema_extra={
-                "category_id": FilterCategories.DATACENTER,
-                "enum": [e.value for e in Countries],
-            },
-        ),
-    ] = None,
-    gpu_min: Annotated[
-        Optional[int],
-        Query(
-            title="GPU count",
-            description="Number of GPUs.",
-            json_schema_extra={
-                "category_id": FilterCategories.GPU,
-                "unit": "GPUs",
-            },
-        ),
-    ] = None,
-    gpu_memory_min: Annotated[
-        Optional[float],
-        Query(
-            title="GPU memory",
-            description="Amount of GPU memory in GBs.",
-            json_schema_extra={
-                "category_id": FilterCategories.GPU,
-                "unit": "GB",
-                "step": 0.1,
-            },
-        ),
-    ] = None,
-    limit: Annotated[
-        int, Query(description="Maximum number of results. Set to -1 for unlimited")
-    ] = 50,
-    page: Annotated[Optional[int], Query(description="Page number.")] = None,
-    order_by: Annotated[str, Query(description="Order by column.")] = "price",
-    order_dir: Annotated[
-        OrderDir, Query(description="Order direction.")
-    ] = OrderDir.ASC,
-    currency: Annotated[str, Query(description="Currency used for prices.")] = "USD",
-    add_total_count_header: Annotated[
-        bool,
-        Query(
-            description="Add the X-Total-Count header to the response with the overall number of items (without paging). Note that it might reduce response times."
-        ),
-    ] = False,
+    vcpus_min: options.vcpus_min = 1,
+    architecture: options.architecture = None,
+    memory_min: options.memory_min = None,
+    only_active: options.only_active = True,
+    vendor: options.vendor = None,
+    compliance_framework: options.compliance_framework = None,
+    storage_size: options.storage_size = None,
+    storage_type: options.storage_type = None,
+    gpu_min: options.gpu_min = None,
+    gpu_memory_min: options.gpu_memory_min = None,
+    limit: options.limit = 50,
+    page: options.page = None,
+    order_by: options.order_by = "vcpus",
+    order_dir: options.order_dir = OrderDir.ASC,
+    add_total_count_header: options.add_total_count_header = False,
+    db: Session = Depends(get_db),
+) -> List[ServerPKs]:
+    query = (
+        select(Server)
+        .join(Server.vendor)
+        .join(Vendor.compliance_framework_links)
+        .join(VendorComplianceLink.compliance_framework)
+    )
+
+    if vcpus_min:
+        query = query.where(Server.vcpus >= vcpus_min)
+    if memory_min:
+        query = query.where(Server.memory >= memory_min * 1024)
+    if storage_size:
+        query = query.where(Server.storage_size >= storage_size)
+    if gpu_min:
+        query = query.where(Server.gpu_count >= gpu_min)
+    if gpu_memory_min:
+        query = query.where(Server.gpu_memory_min >= gpu_memory_min * 1024)
+    if only_active:
+        query = query.where(Server.status == Status.ACTIVE)
+    if architecture:
+        query = query.where(Server.cpu_architecture.in_(architecture))
+    if storage_type:
+        query = query.where(Server.storage_type.in_(storage_type))
+    if vendor:
+        query = query.where(Server.vendor_id.in_(vendor))
+    if compliance_framework:
+        query = query.where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+
+    # ordering
+    if order_by:
+        order_obj = [o for o in [Server] if hasattr(o, order_by)]
+        if len(order_obj) == 0:
+            raise HTTPException(status_code=400, detail="Unknown order_by field.")
+        if len(order_obj) > 1:
+            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+        order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
+
+    # avoid duplicate rows introduced by the many-to-many relationships
+    query = query.distinct()
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        count_query = select(func.count()).select_from(query.alias("subquery"))
+        response.headers["X-Total-Count"] = str(db.exec(count_query).one())
+
+    # pagination
+    if limit > 0:
+        query = query.limit(limit)
+    # only apply if limit is set
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
+    servers = db.exec(query).all()
+
+    return servers
+
+
+@app.get("/server_prices", tags=["Query Resources"])
+def search_server_prices(
+    response: Response,
+    vcpus_min: options.vcpus_min = 1,
+    architecture: options.architecture = None,
+    memory_min: options.memory_min = None,
+    price_max: options.price_max = None,
+    only_active: options.only_active = True,
+    green_energy: options.green_energy = None,
+    allocation: options.allocation = None,
+    vendor: options.vendor = None,
+    datacenters: options.datacenters = None,
+    compliance_framework: options.compliance_framework = None,
+    storage_size: options.storage_size = None,
+    storage_type: options.storage_type = None,
+    countries: options.countries = None,
+    gpu_min: options.gpu_min = None,
+    gpu_memory_min: options.gpu_memory_min = None,
+    limit: options.limit = 50,
+    page: options.page = None,
+    order_by: options.order_by = "price",
+    order_dir: options.order_dir = OrderDir.ASC,
+    currency: options.currency = "USD",
+    add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
     query = (
@@ -635,10 +739,25 @@ def search_servers(
     return servers
 
 
-@app.get("/ai/assist_filters", tags=["AI"])
-def assist_filters(text: str, request: Request) -> dict:
-    """Extract JSON filters from freetext."""
-    res = openai_extract_filters(text)
+@app.get("/ai/assist_server_filters", tags=["AI"])
+def assist_server_filters(text: str, request: Request) -> dict:
+    """Extract Server JSON filters from freetext."""
+    res = openai_extract_filters(text, endpoint="/servers")
+    logging.info(
+        "openai response",
+        extra={
+            "event": "assist_filters response",
+            "res": res,
+            "request_id": get_request_id(),
+        },
+    )
+    return res
+
+
+@app.get("/ai/assist_server_price_filters", tags=["AI"])
+def assist_server_price_filters(text: str, request: Request) -> dict:
+    """Extract ServerPrice JSON filters from freetext."""
+    res = openai_extract_filters(text, endpoint="/server_prices")
     logging.info(
         "openai response",
         extra={
