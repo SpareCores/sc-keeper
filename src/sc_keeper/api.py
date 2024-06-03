@@ -534,6 +534,7 @@ def get_server(
         raise HTTPException(status_code=404, detail="Server not found")
     prices = db.exec(
         select(ServerPrice)
+        .where(ServerPrice.status == Status.ACTIVE)
         .where(ServerPrice.vendor_id == vendor_id)
         .where(ServerPrice.server_id == server_id)
     ).all()
@@ -651,6 +652,7 @@ def search_server_prices(
 ) -> List[ServerPriceWithPKs]:
     query = (
         select(ServerPrice)
+        .where(ServerPrice.status == Status.ACTIVE)
         .join(ServerPrice.vendor)
         .join(Vendor.compliance_framework_links)
         .join(VendorComplianceLink.compliance_framework)
