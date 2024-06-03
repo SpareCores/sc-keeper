@@ -569,7 +569,7 @@ def search_servers(
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
     if memory_min:
-        query = query.where(Server.memory >= memory_min * 1024)
+        query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
         query = query.where(Server.storage_size >= storage_size)
     if gpu_min:
@@ -665,7 +665,7 @@ def search_server_prices(
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
     if memory_min:
-        query = query.where(Server.memory >= memory_min * 1024)
+        query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
         query = query.where(Server.storage_size >= storage_size)
     if gpu_min:
