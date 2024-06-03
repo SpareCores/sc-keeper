@@ -5,7 +5,7 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Annotated, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Path, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
@@ -477,7 +477,7 @@ def healthcheck(db: Session = Depends(get_db)) -> dict:
 
 
 @app.get("/table/benchmark", tags=["Table dumps"])
-def table_server(db: Session = Depends(get_db)) -> List[Benchmark]:
+def table_benchmark(db: Session = Depends(get_db)) -> List[Benchmark]:
     """Return the Benchmark table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Benchmark)).all()
 
