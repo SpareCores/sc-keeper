@@ -756,6 +756,7 @@ def search_server_prices(
 ) -> List[ServerPriceWithPKs]:
     query = (
         select(ServerPrice)
+        .where(ServerPrice.status == Status.ACTIVE)
         .join(ServerPrice.vendor)
         .join(Vendor.compliance_framework_links)
         .join(VendorComplianceLink.compliance_framework)
