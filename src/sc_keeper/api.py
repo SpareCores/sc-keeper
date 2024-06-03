@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 from sc_crawler.table_bases import (
+    BenchmarkScoreBase,
     CountryBase,
     RegionBase,
     ServerBase,
@@ -20,6 +21,7 @@ from sc_crawler.table_bases import (
 from sc_crawler.table_fields import Allocation, CpuArchitecture, Status, StorageType
 from sc_crawler.tables import (
     Benchmark,
+    BenchmarkScore,
     ComplianceFramework,
     Country,
     Region,
@@ -117,6 +119,7 @@ class ServerPricePKs(ServerPriceBase):
 
 class ServerPKsWithPrices(ServerPKs):
     prices: List[ServerPricePKs]
+    benchmark_scores: List[BenchmarkScoreBase]
 
 
 class RegionPKs(RegionBase):
@@ -212,6 +215,7 @@ ServerPKsWithPrices.model_config["json_schema_extra"] = {
                 }
                 for p in example_data["prices"]
             ],
+            "benchmarks": [example_data["benchmark"].model_dump()],
         }
     ]
 }
@@ -618,6 +622,13 @@ def get_server(
         .where(ServerPrice.server_id == server_id)
     ).all()
     server.prices = prices
+    benchmarks = db.exec(
+        select(BenchmarkScore)
+        .where(BenchmarkScore.status == Status.ACTIVE)
+        .where(BenchmarkScore.vendor_id == vendor_id)
+        .where(BenchmarkScore.server_id == server_id)
+    ).all()
+    server.benchmark_scores = benchmarks
     return server
 
 
