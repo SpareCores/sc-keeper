@@ -93,6 +93,14 @@ class TableMetaData(BaseModel):
     fields: List[NameAndDescription]
 
 
+class NameAndDescriptionAndCategory(NameAndDescription):
+    category: str
+
+
+class ServerTableMetaData(TableMetaData):
+    fields: List[NameAndDescriptionAndCategory]
+
+
 class ServerPKs(ServerBase):
     vendor: VendorBase
 
@@ -491,15 +499,48 @@ def table_server(db: Session = Depends(get_db)) -> List[Server]:
     return db.exec(select(Server)).all()
 
 
+def _get_category(server_column_name: str) -> str:
+    if server_column_name not in Server.get_columns()["all"]:
+        raise KeyError("Unknown Server column name.")
+    if server_column_name in [
+        "vendor_id",
+        "server_id",
+        "name",
+        "api_reference",
+        "display_name",
+        "description",
+        "family",
+        "status",
+        "observed_at",
+    ]:
+        return "meta"
+    if server_column_name in ["vcpus", "hypervisor"] or server_column_name.startswith(
+        "cpu"
+    ):
+        return "cpu"
+    if server_column_name.startswith("memory"):
+        return "memory"
+    if server_column_name.startswith("gpu"):
+        return "gpu"
+    if server_column_name.startswith("storage"):
+        return "storage"
+    if (
+        server_column_name.endswith("_traffic")
+        or server_column_name.startswith("network")
+        or server_column_name == "ipv4"
+    ):
+        return "network"
+
+
 @app.get("/table/server/meta", tags=["Table metadata"])
-def table_metadata_server(db: Session = Depends(get_db)) -> TableMetaData:
+def table_metadata_server(db: Session = Depends(get_db)) -> ServerTableMetaData:
     """Server table and column names and comments."""
     table = {
         "name": Server.get_table_name(),
         "description": Server.__doc__.splitlines()[0],
     }
     fields = [
-        {"name": k, "description": v.description}
+        {"name": k, "description": v.description, "category": _get_category(k)}
         for k, v in Server.model_fields.items()
     ]
     return {"table": table, "fields": fields}
