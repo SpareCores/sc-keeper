@@ -633,14 +633,14 @@ def get_server(
         select(ServerPrice)
         .where(ServerPrice.status == Status.ACTIVE)
         .where(ServerPrice.vendor_id == vendor)
-        .where(ServerPrice.server_id == server)
+        .where(ServerPrice.server_id == res.server_id)
     ).all()
     res.prices = prices
     benchmarks = db.exec(
         select(BenchmarkScore)
         .where(BenchmarkScore.status == Status.ACTIVE)
         .where(BenchmarkScore.vendor_id == vendor)
-        .where(BenchmarkScore.server_id == server)
+        .where(BenchmarkScore.server_id == res.server_id)
     ).all()
     res.benchmark_scores = benchmarks
     return res
