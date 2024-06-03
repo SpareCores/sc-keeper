@@ -621,28 +621,29 @@ def get_server(
     the available benchmark scores.
     """
     # TODO async
-    server = db.exec(
+    res = db.exec(
         select(Server)
-        .where(Server.vendor_id == vendor_id)
-        .where((Server.server_id == server_id) | (Server.api_reference == server_id))
+        .where(Server.vendor_id == vendor)
+        .where((Server.server_id == server) | (Server.api_reference == server))
     ).all()
-    if not server:
+    if not res:
         raise HTTPException(status_code=404, detail="Server not found")
-    server = server[0]
+    res = res[0]
     prices = db.exec(
         select(ServerPrice)
-        .where(ServerPrice.vendor_id == vendor_id)
-        .where(ServerPrice.server_id == server_id)
+        .where(ServerPrice.status == Status.ACTIVE)
+        .where(ServerPrice.vendor_id == vendor)
+        .where(ServerPrice.server_id == server)
     ).all()
-    server.prices = prices
+    res.prices = prices
     benchmarks = db.exec(
         select(BenchmarkScore)
         .where(BenchmarkScore.status == Status.ACTIVE)
-        .where(BenchmarkScore.vendor_id == vendor_id)
-        .where(BenchmarkScore.server_id == server_id)
+        .where(BenchmarkScore.vendor_id == vendor)
+        .where(BenchmarkScore.server_id == server)
     ).all()
-    server.benchmark_scores = benchmarks
-    return server
+    res.benchmark_scores = benchmarks
+    return res
 
 
 @app.get("/servers", tags=["Query Resources"])
