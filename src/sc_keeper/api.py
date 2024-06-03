@@ -88,17 +88,21 @@ class NameAndDescription(BaseModel):
     description: str
 
 
+class IdNameAndDescription(NameAndDescription):
+    id: str
+
+
 class TableMetaData(BaseModel):
     table: NameAndDescription
-    fields: List[NameAndDescription]
+    fields: List[IdNameAndDescription]
 
 
-class NameAndDescriptionAndCategory(NameAndDescription):
+class IdNameAndDescriptionAndCategory(IdNameAndDescription):
     category: str
 
 
 class ServerTableMetaData(TableMetaData):
-    fields: List[NameAndDescriptionAndCategory]
+    fields: List[IdNameAndDescriptionAndCategory]
 
 
 class ServerPKs(ServerBase):
@@ -532,6 +536,25 @@ def _get_category(server_column_name: str) -> str:
         return "network"
 
 
+def _get_name(server_column_name: str) -> str:
+    # special cases
+    mapping = {
+        "vcpus": "vCPUs",
+        "cpus": "CPUs",
+        "gpus": "GPUs",
+        "ipv4": "IPv4",
+    }
+    if server_column_name in mapping:
+        return mapping[server_column_name]
+    name = server_column_name.replace("_", " ").title()
+    name = name.replace(" Id", " ID")
+    name = name.replace("Api ", "API ")
+    name = name.replace("Cpu ", "CPU ")
+    name = name.replace("Gpu ", "GPU ")
+    name = name.replace(" Ecc", " ECC")
+    return name
+
+
 @app.get("/table/server/meta", tags=["Table metadata"])
 def table_metadata_server(db: Session = Depends(get_db)) -> ServerTableMetaData:
     """Server table and column names and comments."""
@@ -540,7 +563,12 @@ def table_metadata_server(db: Session = Depends(get_db)) -> ServerTableMetaData:
         "description": Server.__doc__.splitlines()[0],
     }
     fields = [
-        {"name": k, "description": v.description, "category": _get_category(k)}
+        {
+            "id": k,
+            "name": _get_name(k),
+            "description": v.description,
+            "category": _get_category(k),
+        }
         for k, v in Server.model_fields.items()
     ]
     return {"table": table, "fields": fields}
