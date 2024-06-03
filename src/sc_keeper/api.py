@@ -215,7 +215,7 @@ ServerPKsWithPrices.model_config["json_schema_extra"] = {
                 }
                 for p in example_data["prices"]
             ],
-            "benchmarks": [example_data["benchmark"].model_dump()],
+            "benchmark_scores": [example_data["benchmark"].model_dump()],
         }
     ]
 }
