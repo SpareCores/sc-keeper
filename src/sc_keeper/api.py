@@ -19,6 +19,7 @@ from sc_crawler.table_bases import (
 )
 from sc_crawler.table_fields import Allocation, CpuArchitecture, Status, StorageType
 from sc_crawler.tables import (
+    Benchmark,
     ComplianceFramework,
     Country,
     Region,
@@ -151,6 +152,9 @@ class FilterCategories(Enum):
 
 # load examples for the docs
 example_data = {
+    "benchmark": db.exec(
+        select(Benchmark).where(Benchmark.benchmark_id == "geekbench:hdr")
+    ).one(),
     "country": db.exec(select(Country).limit(1)).one(),
     "compliance_framework": db.exec(select(ComplianceFramework).limit(1)).one(),
     "vendor": db.exec(select(Vendor).where(Vendor.vendor_id == "aws")).one(),
@@ -165,6 +169,9 @@ example_data = {
     ).all(),
 }
 
+Benchmark.model_config["json_schema_extra"] = {
+    "examples": [example_data["benchmark"].model_dump()]
+}
 Country.model_config["json_schema_extra"] = {
     "examples": [example_data["country"].model_dump()]
 }
@@ -465,6 +472,12 @@ def healthcheck(db: Session = Depends(get_db)) -> dict:
     }
 
 
+@app.get("/table/benchmark", tags=["Table dumps"])
+def table_server(db: Session = Depends(get_db)) -> List[Benchmark]:
+    """Return the Benchmark table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Benchmark)).all()
+
+
 @app.get("/table/country", tags=["Table dumps"])
 def table_country(db: Session = Depends(get_db)) -> List[Country]:
     """Return the Country table as-is, without filtering options or relationships resolved."""
@@ -501,6 +514,12 @@ def table_zone(db: Session = Depends(get_db)) -> List[Zone]:
 def table_server(db: Session = Depends(get_db)) -> List[Server]:
     """Return the Server table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Server)).all()
+
+
+@app.get("/table/storage", tags=["Table dumps"])
+def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
+    """Return the Storage table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Storage)).all()
 
 
 def _get_category(server_column_name: str) -> str:
@@ -572,12 +591,6 @@ def table_metadata_server(db: Session = Depends(get_db)) -> ServerTableMetaData:
         for k, v in Server.model_fields.items()
     ]
     return {"table": table, "fields": fields}
-
-
-@app.get("/table/storage", tags=["Table dumps"])
-def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
-    """Return the Storage table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Storage)).all()
 
 
 @app.get("/regions", tags=["Query Resources"])
