@@ -5,13 +5,14 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Annotated, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 from sc_crawler.table_bases import (
+    BenchmarkScoreBase,
     CountryBase,
-    DatacenterBase,
+    RegionBase,
     ServerBase,
     ServerPriceBase,
     VendorBase,
@@ -19,9 +20,11 @@ from sc_crawler.table_bases import (
 )
 from sc_crawler.table_fields import Allocation, CpuArchitecture, Status, StorageType
 from sc_crawler.tables import (
+    Benchmark,
+    BenchmarkScore,
     ComplianceFramework,
     Country,
-    Datacenter,
+    Region,
     Server,
     ServerPrice,
     Storage,
@@ -70,9 +73,9 @@ Countries = StrEnum(
 Vendors = StrEnum(
     "Vendors", {m.vendor_id: m.vendor_id for m in db.exec(select(Vendor)).all()}
 )
-Datacenters = StrEnum(
-    "Datacenters",
-    {m.datacenter_id: m.datacenter_id for m in db.exec(select(Datacenter)).all()},
+Regions = StrEnum(
+    "Regions",
+    {m.region_id: m.region_id for m in db.exec(select(Region)).all()},
 )
 ComplianceFrameworks = StrEnum(
     "ComplianceFrameworks",
@@ -88,9 +91,21 @@ class NameAndDescription(BaseModel):
     description: str
 
 
+class IdNameAndDescription(NameAndDescription):
+    id: str
+
+
 class TableMetaData(BaseModel):
     table: NameAndDescription
-    fields: List[NameAndDescription]
+    fields: List[IdNameAndDescription]
+
+
+class IdNameAndDescriptionAndCategory(IdNameAndDescription):
+    category: str
+
+
+class ServerTableMetaData(TableMetaData):
+    fields: List[IdNameAndDescriptionAndCategory]
 
 
 class ServerPKs(ServerBase):
@@ -98,25 +113,26 @@ class ServerPKs(ServerBase):
 
 
 class ServerPricePKs(ServerPriceBase):
-    datacenter: DatacenterBase
+    region: RegionBase
     zone: ZoneBase
 
 
 class ServerPKsWithPrices(ServerPKs):
     prices: List[ServerPricePKs]
+    benchmark_scores: List[BenchmarkScoreBase]
 
 
-class DatacenterPKs(DatacenterBase):
+class RegionPKs(RegionBase):
     vendor: VendorBase
 
 
-class DatacenterBaseWithPKs(DatacenterBase):
+class RegionBaseWithPKs(RegionBase):
     country: CountryBase
 
 
 class ServerPriceWithPKs(ServerPriceBase):
     vendor: VendorBase
-    datacenter: DatacenterBaseWithPKs
+    region: RegionBaseWithPKs
     zone: ZoneBase
     server: ServerBase
 
@@ -131,7 +147,7 @@ class FilterCategories(Enum):
     PRICE = "price"
     PROCESSOR = "processor"
     MEMORY = "memory"
-    DATACENTER = "datacenter"
+    REGION = "region"
     VENDOR = "vendor"
     STORAGE = "storage"
     GPU = "gpu"
@@ -139,12 +155,13 @@ class FilterCategories(Enum):
 
 # load examples for the docs
 example_data = {
+    "benchmark": db.exec(
+        select(Benchmark).where(Benchmark.benchmark_id == "geekbench:hdr")
+    ).one(),
     "country": db.exec(select(Country).limit(1)).one(),
     "compliance_framework": db.exec(select(ComplianceFramework).limit(1)).one(),
     "vendor": db.exec(select(Vendor).where(Vendor.vendor_id == "aws")).one(),
-    "datacenter": db.exec(
-        select(Datacenter).where(Datacenter.vendor_id == "aws").limit(1)
-    ).one(),
+    "region": db.exec(select(Region).where(Region.vendor_id == "aws").limit(1)).one(),
     "zone": db.exec(select(Zone).where(Zone.vendor_id == "aws").limit(1)).one(),
     "server": db.exec(select(Server).where(Server.vendor_id == "aws").limit(1)).one(),
     "storage": db.exec(
@@ -155,6 +172,9 @@ example_data = {
     ).all(),
 }
 
+Benchmark.model_config["json_schema_extra"] = {
+    "examples": [example_data["benchmark"].model_dump()]
+}
 Country.model_config["json_schema_extra"] = {
     "examples": [example_data["country"].model_dump()]
 }
@@ -164,12 +184,12 @@ ComplianceFramework.model_config["json_schema_extra"] = {
 Vendor.model_config["json_schema_extra"] = {
     "examples": [example_data["vendor"].model_dump()]
 }
-Datacenter.model_config["json_schema_extra"] = {
-    "examples": [example_data["datacenter"].model_dump()]
+Region.model_config["json_schema_extra"] = {
+    "examples": [example_data["region"].model_dump()]
 }
-DatacenterPKs.model_config["json_schema_extra"] = {
+RegionPKs.model_config["json_schema_extra"] = {
     "examples": [
-        example_data["datacenter"].model_dump()
+        example_data["region"].model_dump()
         | {"vendor": example_data["vendor"].model_dump()}
     ]
 }
@@ -190,11 +210,12 @@ ServerPKsWithPrices.model_config["json_schema_extra"] = {
             "prices": [
                 p.model_dump()
                 | {
-                    "datacenter": example_data["datacenter"].model_dump(),
+                    "region": example_data["region"].model_dump(),
                     "zone": example_data["zone"].model_dump(),
                 }
                 for p in example_data["prices"]
             ],
+            "benchmark_scores": [example_data["benchmark"].model_dump()],
         }
     ]
 }
@@ -203,7 +224,7 @@ ServerPriceWithPKs.model_config["json_schema_extra"] = {
         example_data["prices"][0].model_dump()
         | {
             "vendor": example_data["vendor"].model_dump(),
-            "datacenter": example_data["datacenter"].model_dump()
+            "region": example_data["region"].model_dump()
             | {"country": example_data["country"].model_dump()},
             "zone": example_data["zone"].model_dump(),
             "server": example_data["server"].model_dump(),
@@ -268,7 +289,7 @@ options = SimpleNamespace(
         Optional[List[Vendors]],
         Query(
             title="Vendor id",
-            description="Cloud provider vendor.",
+            description="Identifier of the cloud provider vendor.",
             json_schema_extra={
                 "category_id": FilterCategories.VENDOR,
                 "enum": [m.value for m in Vendors],
@@ -326,7 +347,7 @@ options = SimpleNamespace(
         Optional[bool],
         Query(
             title="Active only",
-            description="Show only active servers",
+            description="Filter for active servers only.",
             json_schema_extra={"category_id": FilterCategories.BASIC},
         ),
     ],
@@ -334,8 +355,8 @@ options = SimpleNamespace(
         Optional[bool],
         Query(
             title="Green energy",
-            description="Low CO2 emission only.",
-            json_schema_extra={"category_id": FilterCategories.DATACENTER},
+            description="Filter for regions with kow CO2 emission only.",
+            json_schema_extra={"category_id": FilterCategories.REGION},
         ),
     ],
     allocation=Annotated[
@@ -348,14 +369,14 @@ options = SimpleNamespace(
             },
         ),
     ],
-    datacenters=Annotated[
-        Optional[List[Datacenters]],
+    regions=Annotated[
+        Optional[List[Regions]],
         Query(
-            title="Datacenter id",
-            description="Datacenter.",
+            title="region id",
+            description="Identifier of the region.",
             json_schema_extra={
-                "category_id": FilterCategories.DATACENTER,
-                "enum": [m.value for m in Datacenters],
+                "category_id": FilterCategories.REGION,
+                "enum": [m.value for m in Regions],
             },
         ),
     ],
@@ -374,7 +395,7 @@ options = SimpleNamespace(
         Optional[float],
         Query(
             title="Storage Size",
-            description="Reserver storage size in GBs.",
+            description="Minimum amount of storage (GBs) attached to the server.",
             json_schema_extra={
                 "category_id": FilterCategories.STORAGE,
                 "step": 0.1,
@@ -386,7 +407,7 @@ options = SimpleNamespace(
         Optional[List[StorageType]],
         Query(
             title="Storage Type",
-            description="Storage type.",
+            description="Type of the storage attached to the server.",
             json_schema_extra={
                 "category_id": FilterCategories.STORAGE,
                 "enum": [e.value for e in StorageType],
@@ -397,9 +418,9 @@ options = SimpleNamespace(
         Optional[List[str]],
         Query(
             title="Countries",
-            description="Datacenter countries.",
+            description="Filter for regions in the provided list of countries.",
             json_schema_extra={
-                "category_id": FilterCategories.DATACENTER,
+                "category_id": FilterCategories.REGION,
                 "enum": [e.value for e in Countries],
             },
         ),
@@ -408,7 +429,7 @@ options = SimpleNamespace(
         Optional[int],
         Query(
             title="GPU count",
-            description="Number of GPUs.",
+            description="Minimum number of GPUs.",
             json_schema_extra={
                 "category_id": FilterCategories.GPU,
                 "unit": "GPUs",
@@ -419,7 +440,7 @@ options = SimpleNamespace(
         Optional[float],
         Query(
             title="GPU memory",
-            description="Amount of GPU memory in GBs.",
+            description="Minimum amount of GPU memory in GBs.",
             json_schema_extra={
                 "category_id": FilterCategories.GPU,
                 "unit": "GB",
@@ -455,6 +476,12 @@ def healthcheck(db: Session = Depends(get_db)) -> dict:
     }
 
 
+@app.get("/table/benchmark", tags=["Table dumps"])
+def table_benchmark(db: Session = Depends(get_db)) -> List[Benchmark]:
+    """Return the Benchmark table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Benchmark)).all()
+
+
 @app.get("/table/country", tags=["Table dumps"])
 def table_country(db: Session = Depends(get_db)) -> List[Country]:
     """Return the Country table as-is, without filtering options or relationships resolved."""
@@ -475,10 +502,10 @@ def table_vendor(db: Session = Depends(get_db)) -> List[Vendor]:
     return db.exec(select(Vendor)).all()
 
 
-@app.get("/table/datacenter", tags=["Table dumps"])
-def table_datacenter(db: Session = Depends(get_db)) -> List[Datacenter]:
-    """Return the Datacenter table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Datacenter)).all()
+@app.get("/table/region", tags=["Table dumps"])
+def table_region(db: Session = Depends(get_db)) -> List[Region]:
+    """Return the Region table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Region)).all()
 
 
 @app.get("/table/zone", tags=["Table dumps"])
@@ -493,53 +520,130 @@ def table_server(db: Session = Depends(get_db)) -> List[Server]:
     return db.exec(select(Server)).all()
 
 
-@app.get("/table/server/meta", tags=["Table metadata"])
-def table_metadata_server(db: Session = Depends(get_db)) -> TableMetaData:
-    """Server table and column names and comments."""
-    table = {
-        "name": Server.get_table_name(),
-        "description": Server.__doc__.splitlines()[0],
-    }
-    fields = [
-        {"name": k, "description": v.description}
-        for k, v in Server.model_fields.items()
-    ]
-    return {"table": table, "fields": fields}
-
-
 @app.get("/table/storage", tags=["Table dumps"])
 def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
     """Return the Storage table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Storage)).all()
 
 
-@app.get("/datacenters", tags=["Query Resources"])
-def search_datacenters(
+def _get_category(server_column_name: str) -> str:
+    if server_column_name not in Server.get_columns()["all"]:
+        raise KeyError("Unknown Server column name.")
+    if server_column_name in [
+        "vendor_id",
+        "server_id",
+        "name",
+        "api_reference",
+        "display_name",
+        "description",
+        "family",
+        "status",
+        "observed_at",
+    ]:
+        return "meta"
+    if server_column_name in ["vcpus", "hypervisor"] or server_column_name.startswith(
+        "cpu"
+    ):
+        return "cpu"
+    if server_column_name.startswith("memory"):
+        return "memory"
+    if server_column_name.startswith("gpu"):
+        return "gpu"
+    if server_column_name.startswith("storage"):
+        return "storage"
+    if (
+        server_column_name.endswith("_traffic")
+        or server_column_name.startswith("network")
+        or server_column_name == "ipv4"
+    ):
+        return "network"
+
+
+def _get_name(server_column_name: str) -> str:
+    # special cases
+    mapping = {
+        "vcpus": "vCPUs",
+        "cpus": "CPUs",
+        "gpus": "GPUs",
+        "ipv4": "IPv4",
+    }
+    if server_column_name in mapping:
+        return mapping[server_column_name]
+    name = server_column_name.replace("_", " ").title()
+    name = name.replace(" Id", " ID")
+    name = name.replace("Api ", "API ")
+    name = name.replace("Cpu ", "CPU ")
+    name = name.replace("Gpu ", "GPU ")
+    name = name.replace(" Ecc", " ECC")
+    return name
+
+
+@app.get("/table/server/meta", tags=["Table metadata"])
+def table_metadata_server(db: Session = Depends(get_db)) -> ServerTableMetaData:
+    """Server table and column names and comments."""
+    table = {
+        "name": Server.get_table_name(),
+        "description": Server.__doc__.splitlines()[0],
+    }
+    fields = [
+        {
+            "id": k,
+            "name": _get_name(k),
+            "description": v.description,
+            "category": _get_category(k),
+        }
+        for k, v in Server.model_fields.items()
+    ]
+    return {"table": table, "fields": fields}
+
+
+@app.get("/regions", tags=["Query Resources"])
+def search_regions(
     vendor: options.vendor = None,
     db: Session = Depends(get_db),
-) -> List[DatacenterPKs]:
-    query = select(Datacenter)
+) -> List[RegionPKs]:
+    query = select(Region)
     if vendor:
-        query = query.where(Datacenter.vendor_id.in_(vendor))
+        query = query.where(Region.vendor_id.in_(vendor))
     return db.exec(query).all()
 
 
-@app.get("/server/{vendor_id}/{server_id}", tags=["Query Resources"])
+@app.get("/server/{vendor}/{server}", tags=["Query Resources"])
 def get_server(
-    vendor_id: str, server_id: str, db: Session = Depends(get_db)
+    vendor: Annotated[str, Path(description="Vendor ID.")],
+    server: Annotated[str, Path(description="Server ID or API reference.")],
+    db: Session = Depends(get_db),
 ) -> ServerPKsWithPrices:
+    """Query a single server by its vendor id and either the server or, or its API reference.
+
+    Return dictionary includes all server fields, along
+    with the current prices per zone, and
+    the available benchmark scores.
+    """
     # TODO async
-    server = db.get(Server, (vendor_id, server_id))
-    if not server:
+    res = db.exec(
+        select(Server)
+        .where(Server.vendor_id == vendor)
+        .where((Server.server_id == server) | (Server.api_reference == server))
+    ).all()
+    if not res:
         raise HTTPException(status_code=404, detail="Server not found")
+    res = res[0]
     prices = db.exec(
         select(ServerPrice)
         .where(ServerPrice.status == Status.ACTIVE)
-        .where(ServerPrice.vendor_id == vendor_id)
-        .where(ServerPrice.server_id == server_id)
+        .where(ServerPrice.vendor_id == vendor)
+        .where(ServerPrice.server_id == res.server_id)
     ).all()
-    server.prices = prices
-    return server
+    res.prices = prices
+    benchmarks = db.exec(
+        select(BenchmarkScore)
+        .where(BenchmarkScore.status == Status.ACTIVE)
+        .where(BenchmarkScore.vendor_id == vendor)
+        .where(BenchmarkScore.server_id == res.server_id)
+    ).all()
+    res.benchmark_scores = benchmarks
+    return res
 
 
 @app.get("/servers", tags=["Query Resources"])
@@ -572,7 +676,7 @@ def search_servers(
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
     if memory_min:
-        query = query.where(Server.memory >= memory_min * 1024)
+        query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
         query = query.where(Server.storage_size >= storage_size)
     if gpu_min:
@@ -635,7 +739,7 @@ def search_server_prices(
     green_energy: options.green_energy = None,
     allocation: options.allocation = None,
     vendor: options.vendor = None,
-    datacenters: options.datacenters = None,
+    regions: options.regions = None,
     compliance_framework: options.compliance_framework = None,
     storage_size: options.storage_size = None,
     storage_type: options.storage_type = None,
@@ -656,7 +760,7 @@ def search_server_prices(
         .join(ServerPrice.vendor)
         .join(Vendor.compliance_framework_links)
         .join(VendorComplianceLink.compliance_framework)
-        .join(ServerPrice.datacenter)
+        .join(ServerPrice.region)
         .join(ServerPrice.zone)
         .join(ServerPrice.server)
     )
@@ -669,7 +773,7 @@ def search_server_prices(
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
     if memory_min:
-        query = query.where(Server.memory >= memory_min * 1024)
+        query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
         query = query.where(Server.storage_size >= storage_size)
     if gpu_min:
@@ -679,7 +783,7 @@ def search_server_prices(
     if only_active:
         query = query.where(Server.status == Status.ACTIVE)
     if green_energy:
-        query = query.where(Datacenter.green_energy == green_energy)
+        query = query.where(Region.green_energy == green_energy)
     if allocation:
         query = query.where(ServerPrice.allocation == allocation)
     if architecture:
@@ -692,16 +796,14 @@ def search_server_prices(
         query = query.where(
             VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
         )
-    if datacenters:
-        query = query.where(ServerPrice.datacenter_id.in_(datacenters))
+    if regions:
+        query = query.where(ServerPrice.region_id.in_(regions))
     if countries:
-        query = query.where(Datacenter.country_id.in_(countries))
+        query = query.where(Region.country_id.in_(countries))
 
     # ordering
     if order_by:
-        order_obj = [
-            o for o in [ServerPrice, Server, Datacenter] if hasattr(o, order_by)
-        ]
+        order_obj = [o for o in [ServerPrice, Server, Region] if hasattr(o, order_by)]
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
