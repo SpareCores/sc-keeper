@@ -32,7 +32,7 @@ from sc_crawler.tables import (
     VendorComplianceLink,
     Zone,
 )
-from sqlmodel import Session, func, select
+from sqlmodel import Session, func, or_, select
 
 from .ai import openai_extract_filters
 from .currency import CurrencyConverter
@@ -293,6 +293,16 @@ options = SimpleNamespace(
             json_schema_extra={
                 "category_id": FilterCategories.VENDOR,
                 "enum": [m.value for m in Vendors],
+            },
+        ),
+    ],
+    partial_name_or_id=Annotated[
+        Optional[str],
+        Query(
+            title="Partial name or id",
+            description="Freetext, case-insensitive search on the server_id, name, api_reference or display_name.",
+            json_schema_extra={
+                "category_id": FilterCategories.BASIC,
             },
         ),
     ],
@@ -649,6 +659,7 @@ def get_server(
 @app.get("/servers", tags=["Query Resources"])
 def search_servers(
     response: Response,
+    partial_name_or_id: options.partial_name_or_id = None,
     vcpus_min: options.vcpus_min = 1,
     architecture: options.architecture = None,
     memory_min: options.memory_min = None,
@@ -672,6 +683,17 @@ def search_servers(
         .join(Vendor.compliance_framework_links)
         .join(VendorComplianceLink.compliance_framework)
     )
+
+    if partial_name_or_id:
+        ilike = "%" + partial_name_or_id + "%"
+        query = query.where(
+            or_(
+                Server.server_id.ilike(ilike),
+                Server.name.ilike(ilike),
+                Server.api_reference.ilike(ilike),
+                Server.display_name.ilike(ilike),
+            )
+        )
 
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
@@ -731,6 +753,7 @@ def search_servers(
 @app.get("/server_prices", tags=["Query Resources"])
 def search_server_prices(
     response: Response,
+    partial_name_or_id: options.partial_name_or_id = None,
     vcpus_min: options.vcpus_min = 1,
     architecture: options.architecture = None,
     memory_min: options.memory_min = None,
@@ -764,6 +787,17 @@ def search_server_prices(
         .join(ServerPrice.zone)
         .join(ServerPrice.server)
     )
+
+    if partial_name_or_id:
+        ilike = "%" + partial_name_or_id + "%"
+        query = query.where(
+            or_(
+                ServerPrice.server_id.ilike(ilike),
+                Server.name.ilike(ilike),
+                Server.api_reference.ilike(ilike),
+                Server.display_name.ilike(ilike),
+            )
+        )
 
     if price_max:
         if currency != "USD":
