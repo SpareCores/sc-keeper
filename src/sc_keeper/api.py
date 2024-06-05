@@ -102,6 +102,7 @@ class TableMetaData(BaseModel):
 
 class IdNameAndDescriptionAndCategory(IdNameAndDescription):
     category: str
+    unit: Optional[str]
 
 
 class ServerTableMetaData(TableMetaData):
@@ -588,6 +589,26 @@ def _get_name(server_column_name: str) -> str:
     return name
 
 
+def _get_unit(server_column_name: str) -> str:
+    mapping = {
+        "cpu_speed": "GHz",
+        "cpu_l1_cache": "byte",
+        "cpu_l2_cache": "byte",
+        "cpu_l3_cache": "byte",
+        "memory_amount": "MiB",
+        "memory_speed": "Mhz",
+        "gpu_memory_min": "MiB",
+        "gpu_memory_total": "MiB",
+        "storage_size": "GB",
+        "network_speed": "Gbps",
+        "inbound_traffic": "GB/month",
+        "outbound_traffic": "GB/month",
+    }
+    if server_column_name in mapping:
+        return mapping[server_column_name]
+    return None
+
+
 @app.get("/table/server/meta", tags=["Table metadata"])
 def table_metadata_server(db: Session = Depends(get_db)) -> ServerTableMetaData:
     """Server table and column names and comments."""
@@ -601,6 +622,7 @@ def table_metadata_server(db: Session = Depends(get_db)) -> ServerTableMetaData:
             "name": _get_name(k),
             "description": v.description,
             "category": _get_category(k),
+            "unit": _get_unit(k),
         }
         for k, v in Server.model_fields.items()
     ]
