@@ -32,13 +32,13 @@ from sc_crawler.tables import (
     VendorComplianceLink,
     Zone,
 )
-from sqlalchemy.orm import aliased
 from sqlmodel import Session, func, or_, select
 
 from .ai import openai_extract_filters
 from .currency import CurrencyConverter
 from .database import session
 from .logger import LogMiddleware, get_request_id
+from .query import where_benchmark_score_stressng_cpu_min
 
 
 def get_db():
@@ -734,15 +734,9 @@ def search_servers(
     if architecture:
         query = query.where(Server.cpu_architecture.in_(architecture))
     if benchmark_score_stressng_cpu_min:
-        stress_ng_cpu_all = aliased(BenchmarkScore, name="stress_ng_cpu_all")
-        query = query.join(
-            stress_ng_cpu_all,
-            (Server.vendor_id == stress_ng_cpu_all.vendor_id)
-            & (Server.server_id == stress_ng_cpu_all.server_id)
-            & (stress_ng_cpu_all.benchmark_id == "stress_ng:cpu_all"),
-            isouter=True,
+        query = where_benchmark_score_stressng_cpu_min(
+            query, benchmark_score_stressng_cpu_min
         )
-        query = query.where(stress_ng_cpu_all.score > benchmark_score_stressng_cpu_min)
     if memory_min:
         query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
@@ -854,15 +848,9 @@ def search_server_prices(
     if architecture:
         query = query.where(Server.cpu_architecture.in_(architecture))
     if benchmark_score_stressng_cpu_min:
-        stress_ng_cpu_all = aliased(BenchmarkScore, name="stress_ng_cpu_all")
-        query = query.join(
-            stress_ng_cpu_all,
-            (Server.vendor_id == stress_ng_cpu_all.vendor_id)
-            & (Server.server_id == stress_ng_cpu_all.server_id)
-            & (stress_ng_cpu_all.benchmark_id == "stress_ng:cpu_all"),
-            isouter=True,
+        query = where_benchmark_score_stressng_cpu_min(
+            query, benchmark_score_stressng_cpu_min
         )
-        query = query.where(stress_ng_cpu_all.score > benchmark_score_stressng_cpu_min)
     if memory_min:
         query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
