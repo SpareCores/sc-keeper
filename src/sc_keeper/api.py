@@ -32,6 +32,7 @@ from sc_crawler.tables import (
     VendorComplianceLink,
     Zone,
 )
+from sqlalchemy.orm import aliased
 from sqlmodel import Session, func, or_, select
 
 from .ai import openai_extract_filters
@@ -459,6 +460,16 @@ options = SimpleNamespace(
             },
         ),
     ],
+    benchmark_score_stressng_cpu_min=Annotated[
+        Optional[float],
+        Query(
+            title="SCore",
+            description="Minimum stress-ng CPU workload score.",
+            json_schema_extra={
+                "category_id": FilterCategories.PROCESSOR,
+            },
+        ),
+    ],
     limit=Annotated[
         int, Query(description="Maximum number of results. Set to -1 for unlimited")
     ],
@@ -684,6 +695,7 @@ def search_servers(
     partial_name_or_id: options.partial_name_or_id = None,
     vcpus_min: options.vcpus_min = 1,
     architecture: options.architecture = None,
+    benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     only_active: options.only_active = True,
     vendor: options.vendor = None,
@@ -719,6 +731,18 @@ def search_servers(
 
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
+    if architecture:
+        query = query.where(Server.cpu_architecture.in_(architecture))
+    if benchmark_score_stressng_cpu_min:
+        stress_ng_cpu_all = aliased(BenchmarkScore, name="stress_ng_cpu_all")
+        query = query.join(
+            stress_ng_cpu_all,
+            (Server.vendor_id == stress_ng_cpu_all.vendor_id)
+            & (Server.server_id == stress_ng_cpu_all.server_id)
+            & (stress_ng_cpu_all.benchmark_id == "stress_ng:cpu_all"),
+            isouter=True,
+        )
+        query = query.where(stress_ng_cpu_all.score > benchmark_score_stressng_cpu_min)
     if memory_min:
         query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
@@ -729,8 +753,6 @@ def search_servers(
         query = query.where(Server.gpu_memory_min >= gpu_memory_min * 1024)
     if only_active:
         query = query.where(Server.status == Status.ACTIVE)
-    if architecture:
-        query = query.where(Server.cpu_architecture.in_(architecture))
     if storage_type:
         query = query.where(Server.storage_type.in_(storage_type))
     if vendor:
@@ -778,6 +800,7 @@ def search_server_prices(
     partial_name_or_id: options.partial_name_or_id = None,
     vcpus_min: options.vcpus_min = 1,
     architecture: options.architecture = None,
+    benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     price_max: options.price_max = None,
     only_active: options.only_active = True,
@@ -828,6 +851,18 @@ def search_server_prices(
 
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
+    if architecture:
+        query = query.where(Server.cpu_architecture.in_(architecture))
+    if benchmark_score_stressng_cpu_min:
+        stress_ng_cpu_all = aliased(BenchmarkScore, name="stress_ng_cpu_all")
+        query = query.join(
+            stress_ng_cpu_all,
+            (Server.vendor_id == stress_ng_cpu_all.vendor_id)
+            & (Server.server_id == stress_ng_cpu_all.server_id)
+            & (stress_ng_cpu_all.benchmark_id == "stress_ng:cpu_all"),
+            isouter=True,
+        )
+        query = query.where(stress_ng_cpu_all.score > benchmark_score_stressng_cpu_min)
     if memory_min:
         query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
@@ -842,8 +877,6 @@ def search_server_prices(
         query = query.where(Region.green_energy == green_energy)
     if allocation:
         query = query.where(ServerPrice.allocation == allocation)
-    if architecture:
-        query = query.where(Server.cpu_architecture.in_(architecture))
     if storage_type:
         query = query.where(Server.storage_type.in_(storage_type))
     if vendor:
