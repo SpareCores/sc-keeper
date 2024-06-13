@@ -209,6 +209,7 @@ Server.model_config["json_schema_extra"] = {
 }
 ServerPKs.model_config["json_schema_extra"] = Server.model_config["json_schema_extra"]
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["score"] = 42
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["score_per_price"] = 22 / 7
 Storage.model_config["json_schema_extra"] = {
     "examples": [example_data["storage"].model_dump()]
 }
@@ -237,7 +238,7 @@ ServerPriceWithPKs.model_config["json_schema_extra"] = {
             "region": example_data["region"].model_dump()
             | {"country": example_data["country"].model_dump()},
             "zone": example_data["zone"].model_dump(),
-            "server": example_data["server"].model_dump(),
+            "server": ServerPKs.model_config["json_schema_extra"]["examples"][0],
         }
     ]
 }
