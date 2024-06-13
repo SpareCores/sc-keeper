@@ -38,7 +38,7 @@ from .ai import openai_extract_filters
 from .currency import CurrencyConverter
 from .database import session
 from .logger import LogMiddleware, get_request_id
-from .query import where_benchmark_score_stressng_cpu_min
+from .query import max_score_per_server
 
 
 def get_db():
@@ -110,8 +110,13 @@ class ServerTableMetaData(TableMetaData):
     fields: List[IdNameAndDescriptionAndCategory]
 
 
-class ServerPKs(ServerBase):
+class ServerWithScore(ServerBase):
+    score: Optional[float] = None
+
+
+class ServerPKs(ServerWithScore):
     vendor: VendorBase
+    score: Optional[float] = None
 
 
 class ServerPricePKs(ServerPriceBase):
@@ -136,7 +141,7 @@ class ServerPriceWithPKs(ServerPriceBase):
     vendor: VendorBase
     region: RegionBaseWithPKs
     zone: ZoneBase
-    server: ServerBase
+    server: ServerWithScore
 
 
 class OrderDir(Enum):
@@ -201,12 +206,14 @@ Zone.model_config["json_schema_extra"] = {
 Server.model_config["json_schema_extra"] = {
     "examples": [example_data["server"].model_dump()]
 }
+ServerPKs.model_config["json_schema_extra"] = Server.model_config["json_schema_extra"]
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["score"] = 42
 Storage.model_config["json_schema_extra"] = {
     "examples": [example_data["storage"].model_dump()]
 }
 ServerPKsWithPrices.model_config["json_schema_extra"] = {
     "examples": [
-        example_data["server"].model_dump()
+        ServerPKs.model_config["json_schema_extra"]["examples"][0]
         | {
             "vendor": example_data["vendor"].model_dump(),
             "prices": [
@@ -711,11 +718,18 @@ def search_servers(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
+    max_scores = max_score_per_server()
     query = (
-        select(Server)
+        select(Server, max_scores.c.score)
         .join(Server.vendor)
         .join(Vendor.compliance_framework_links)
         .join(VendorComplianceLink.compliance_framework)
+        .join(
+            max_scores,
+            (Server.vendor_id == max_scores.c.vendor_id)
+            & (Server.server_id == max_scores.c.server_id),
+            isouter=True,
+        )
     )
 
     if partial_name_or_id:
@@ -734,9 +748,7 @@ def search_servers(
     if architecture:
         query = query.where(Server.cpu_architecture.in_(architecture))
     if benchmark_score_stressng_cpu_min:
-        query = where_benchmark_score_stressng_cpu_min(
-            query, benchmark_score_stressng_cpu_min
-        )
+        query = query.where(max_scores.c.score > benchmark_score_stressng_cpu_min)
     if memory_min:
         query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
@@ -785,7 +797,14 @@ def search_servers(
         query = query.offset((page - 1) * limit)
     servers = db.exec(query).all()
 
-    return servers
+    # unpack score
+    serverlist = []
+    for server in servers:
+        serveri = ServerPKs.from_orm(server[0])
+        serveri.score = server[1]
+        serverlist.append(serveri)
+
+    return serverlist
 
 
 @app.get("/server_prices", tags=["Query Resources"])
@@ -816,8 +835,9 @@ def search_server_prices(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
+    max_scores = max_score_per_server()
     query = (
-        select(ServerPrice)
+        select(ServerPrice, max_scores.c.score)
         .where(ServerPrice.status == Status.ACTIVE)
         .join(ServerPrice.vendor)
         .join(Vendor.compliance_framework_links)
@@ -825,6 +845,12 @@ def search_server_prices(
         .join(ServerPrice.region)
         .join(ServerPrice.zone)
         .join(ServerPrice.server)
+        .join(
+            max_scores,
+            (ServerPrice.vendor_id == max_scores.c.vendor_id)
+            & (ServerPrice.server_id == max_scores.c.server_id),
+            isouter=True,
+        )
     )
 
     if partial_name_or_id:
@@ -848,9 +874,7 @@ def search_server_prices(
     if architecture:
         query = query.where(Server.cpu_architecture.in_(architecture))
     if benchmark_score_stressng_cpu_min:
-        query = where_benchmark_score_stressng_cpu_min(
-            query, benchmark_score_stressng_cpu_min
-        )
+        query = query.where(max_scores.c.score > benchmark_score_stressng_cpu_min)
     if memory_min:
         query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
@@ -905,19 +929,26 @@ def search_server_prices(
     # only apply if limit is set
     if page and limit > 0:
         query = query.offset((page - 1) * limit)
-    servers = db.exec(query).all()
+    results = db.exec(query).all()
+
+    # unpack score
+    prices = []
+    for result in results:
+        price = ServerPriceWithPKs.from_orm(result[0])
+        price.server.score = result[1]
+        prices.append(price)
 
     # update prices to currency requested
-    for server in servers:
-        if hasattr(server, "price") and hasattr(server, "currency"):
-            if server.currency != currency:
-                server.price = round(
-                    currency_converter.convert(server.price, server.currency, currency),
+    for price in prices:
+        if hasattr(price, "price") and hasattr(price, "currency"):
+            if price.currency != currency:
+                price.price = round(
+                    currency_converter.convert(price.price, price.currency, currency),
                     4,
                 )
-                server.currency = currency
+                price.currency = currency
 
-    return servers
+    return prices
 
 
 @app.get("/ai/assist_server_filters", tags=["AI"])
