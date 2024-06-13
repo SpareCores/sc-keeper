@@ -38,6 +38,7 @@ from .ai import openai_extract_filters
 from .currency import CurrencyConverter
 from .database import session
 from .logger import LogMiddleware, get_request_id
+from .lookups import min_server_price
 from .query import max_score_per_server
 
 
@@ -112,6 +113,7 @@ class ServerTableMetaData(TableMetaData):
 
 class ServerWithScore(ServerBase):
     score: Optional[float] = None
+    score_per_price: Optional[float] = None
 
 
 class ServerPKs(ServerWithScore):
@@ -814,6 +816,8 @@ def search_servers(
     for server in servers:
         serveri = ServerPKs.from_orm(server[0])
         serveri.score = server[1]
+        minprice = min_server_price(db, serveri.vendor_id, serveri.server_id)
+        serveri.score_per_price = serveri.score / minprice
         serverlist.append(serveri)
 
     return serverlist
@@ -948,6 +952,8 @@ def search_server_prices(
     for result in results:
         price = ServerPriceWithPKs.from_orm(result[0])
         price.server.score = result[1]
+        minprice = min_server_price(db, price.server.vendor_id, price.server.server_id)
+        price.server.score_per_price = price.server.score / minprice
         prices.append(price)
 
     # update prices to currency requested
