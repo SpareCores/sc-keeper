@@ -318,7 +318,7 @@ options = SimpleNamespace(
     vcpus_min=Annotated[
         int,
         Query(
-            title="Processor number",
+            title="Minimum vCPUs",
             description="Minimum number of virtual CPUs.",
             ge=1,
             le=128,
