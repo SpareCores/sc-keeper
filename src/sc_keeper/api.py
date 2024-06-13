@@ -116,7 +116,6 @@ class ServerWithScore(ServerBase):
 
 class ServerPKs(ServerWithScore):
     vendor: VendorBase
-    score: Optional[float] = None
 
 
 class ServerPricePKs(ServerPriceBase):
