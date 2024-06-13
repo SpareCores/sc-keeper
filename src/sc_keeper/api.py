@@ -483,7 +483,7 @@ options = SimpleNamespace(
     page=Annotated[Optional[int], Query(description="Page number.")],
     order_by=Annotated[str, Query(description="Order by column.")],
     order_dir=Annotated[OrderDir, Query(description="Order direction.")],
-    currency=Annotated[str, Query(description="Currency used for prices.")],
+    currency=Annotated[Optional[str], Query(description="Currency used for prices.")],
     add_total_count_header=Annotated[
         bool,
         Query(
@@ -662,6 +662,7 @@ def search_regions(
 def get_server(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
+    currency: options.currency = None,
     db: Session = Depends(get_db),
 ) -> ServerPKsWithPrices:
     """Query a single server by its vendor id and either the server or, or its API reference.
@@ -685,6 +686,18 @@ def get_server(
         .where(ServerPrice.vendor_id == vendor)
         .where(ServerPrice.server_id == res.server_id)
     ).all()
+    if currency:
+        for price in prices:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        4,
+                    )
+                    price.currency = currency
+
     res.prices = prices
     benchmarks = db.exec(
         select(BenchmarkScore)
@@ -939,14 +952,17 @@ def search_server_prices(
         prices.append(price)
 
     # update prices to currency requested
-    for price in prices:
-        if hasattr(price, "price") and hasattr(price, "currency"):
-            if price.currency != currency:
-                price.price = round(
-                    currency_converter.convert(price.price, price.currency, currency),
-                    4,
-                )
-                price.currency = currency
+    if currency:
+        for price in prices:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        4,
+                    )
+                    price.currency = currency
 
     return prices
 
