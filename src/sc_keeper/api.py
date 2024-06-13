@@ -342,7 +342,7 @@ options = SimpleNamespace(
     memory_min=Annotated[
         Optional[float],
         Query(
-            title="Memory amount",
+            title="Minimum memory",
             description="Minimum amount of memory in GBs.",
             json_schema_extra={
                 "category_id": FilterCategories.MEMORY,
