@@ -460,8 +460,20 @@ options = SimpleNamespace(
     gpu_memory_min=Annotated[
         Optional[float],
         Query(
-            title="GPU memory",
-            description="Minimum amount of GPU memory in GBs.",
+            title="Minimum GPU memory",
+            description="Minimum amount of GPU memory (GB) in each GPU.",
+            json_schema_extra={
+                "category_id": FilterCategories.GPU,
+                "unit": "GB",
+                "step": 0.1,
+            },
+        ),
+    ],
+    gpu_memory_total=Annotated[
+        Optional[float],
+        Query(
+            title="Total GPU memory",
+            description="Minimum amount of total GPU memory (GBs) in all GPUs.",
             json_schema_extra={
                 "category_id": FilterCategories.GPU,
                 "unit": "GB",
@@ -726,6 +738,7 @@ def search_servers(
     storage_type: options.storage_type = None,
     gpu_min: options.gpu_min = None,
     gpu_memory_min: options.gpu_memory_min = None,
+    gpu_memory_total: options.gpu_memory_total = None,
     limit: options.limit = 50,
     page: options.page = None,
     order_by: options.order_by = "vcpus",
@@ -772,6 +785,8 @@ def search_servers(
         query = query.where(Server.gpu_count >= gpu_min)
     if gpu_memory_min:
         query = query.where(Server.gpu_memory_min >= gpu_memory_min * 1024)
+    if gpu_memory_total:
+        query = query.where(Server.gpu_memory_total >= gpu_memory_total * 1024)
     if only_active:
         query = query.where(Server.status == Status.ACTIVE)
     if storage_type:
@@ -844,6 +859,7 @@ def search_server_prices(
     countries: options.countries = None,
     gpu_min: options.gpu_min = None,
     gpu_memory_min: options.gpu_memory_min = None,
+    gpu_memory_total: options.gpu_memory_total = None,
     limit: options.limit = 50,
     page: options.page = None,
     order_by: options.order_by = "price",
@@ -900,6 +916,8 @@ def search_server_prices(
         query = query.where(Server.gpu_count >= gpu_min)
     if gpu_memory_min:
         query = query.where(Server.gpu_memory_min >= gpu_memory_min * 1024)
+    if gpu_memory_total:
+        query = query.where(Server.gpu_memory_total >= gpu_memory_total * 1024)
     if only_active:
         query = query.where(Server.status == Status.ACTIVE)
     if green_energy:
