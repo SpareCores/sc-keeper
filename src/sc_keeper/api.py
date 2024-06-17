@@ -800,7 +800,7 @@ def search_servers(
 
     # ordering
     if order_by:
-        order_obj = [o for o in [Server] if hasattr(o, order_by)]
+        order_obj = [o for o in [Server, max_scores.c] if hasattr(o, order_by)]
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
@@ -942,7 +942,11 @@ def search_server_prices(
 
     # ordering
     if order_by:
-        order_obj = [o for o in [ServerPrice, Server, Region] if hasattr(o, order_by)]
+        order_obj = [
+            o
+            for o in [ServerPrice, Server, Region, max_scores.c]
+            if hasattr(o, order_by)
+        ]
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
