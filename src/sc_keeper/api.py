@@ -835,7 +835,7 @@ def search_servers(
         try:
             minprice = min_server_price(db, serveri.vendor_id, serveri.server_id)
             serveri.score_per_price = serveri.score / minprice
-        except Exception as e:
+        except Exception:
             serveri.score_per_price = None
         serverlist.append(serveri)
 
@@ -990,7 +990,7 @@ def search_server_prices(
                     price.currency = currency
         try:
             price.server.score_per_price = price.server.score / price.price
-        except Exception as e:
+        except Exception:
             price.server.score_per_price = None
 
     return prices
