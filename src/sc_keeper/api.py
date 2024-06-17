@@ -38,6 +38,8 @@ from .ai import openai_extract_filters
 from .currency import CurrencyConverter
 from .database import session
 from .logger import LogMiddleware, get_request_id
+from .lookups import min_server_price
+from .query import max_score_per_server
 
 
 def get_db():
@@ -109,7 +111,12 @@ class ServerTableMetaData(TableMetaData):
     fields: List[IdNameAndDescriptionAndCategory]
 
 
-class ServerPKs(ServerBase):
+class ServerWithScore(ServerBase):
+    score: Optional[float] = None
+    score_per_price: Optional[float] = None
+
+
+class ServerPKs(ServerWithScore):
     vendor: VendorBase
 
 
@@ -135,7 +142,7 @@ class ServerPriceWithPKs(ServerPriceBase):
     vendor: VendorBase
     region: RegionBaseWithPKs
     zone: ZoneBase
-    server: ServerBase
+    server: ServerWithScore
 
 
 class OrderDir(Enum):
@@ -200,12 +207,15 @@ Zone.model_config["json_schema_extra"] = {
 Server.model_config["json_schema_extra"] = {
     "examples": [example_data["server"].model_dump()]
 }
+ServerPKs.model_config["json_schema_extra"] = Server.model_config["json_schema_extra"]
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["score"] = 42
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["score_per_price"] = 22 / 7
 Storage.model_config["json_schema_extra"] = {
     "examples": [example_data["storage"].model_dump()]
 }
 ServerPKsWithPrices.model_config["json_schema_extra"] = {
     "examples": [
-        example_data["server"].model_dump()
+        ServerPKs.model_config["json_schema_extra"]["examples"][0]
         | {
             "vendor": example_data["vendor"].model_dump(),
             "prices": [
@@ -228,7 +238,7 @@ ServerPriceWithPKs.model_config["json_schema_extra"] = {
             "region": example_data["region"].model_dump()
             | {"country": example_data["country"].model_dump()},
             "zone": example_data["zone"].model_dump(),
-            "server": example_data["server"].model_dump(),
+            "server": ServerPKs.model_config["json_schema_extra"]["examples"][0],
         }
     ]
 }
@@ -310,7 +320,7 @@ options = SimpleNamespace(
     vcpus_min=Annotated[
         int,
         Query(
-            title="Processor number",
+            title="Minimum vCPUs",
             description="Minimum number of virtual CPUs.",
             ge=1,
             le=128,
@@ -334,7 +344,7 @@ options = SimpleNamespace(
     memory_min=Annotated[
         Optional[float],
         Query(
-            title="Memory amount",
+            title="Minimum memory",
             description="Minimum amount of memory in GBs.",
             json_schema_extra={
                 "category_id": FilterCategories.MEMORY,
@@ -450,12 +460,34 @@ options = SimpleNamespace(
     gpu_memory_min=Annotated[
         Optional[float],
         Query(
-            title="GPU memory",
-            description="Minimum amount of GPU memory in GBs.",
+            title="Minimum GPU memory",
+            description="Minimum amount of GPU memory (GB) in each GPU.",
             json_schema_extra={
                 "category_id": FilterCategories.GPU,
                 "unit": "GB",
                 "step": 0.1,
+            },
+        ),
+    ],
+    gpu_memory_total=Annotated[
+        Optional[float],
+        Query(
+            title="Total GPU memory",
+            description="Minimum amount of total GPU memory (GBs) in all GPUs.",
+            json_schema_extra={
+                "category_id": FilterCategories.GPU,
+                "unit": "GB",
+                "step": 0.1,
+            },
+        ),
+    ],
+    benchmark_score_stressng_cpu_min=Annotated[
+        Optional[float],
+        Query(
+            title="SCore",
+            description="Minimum stress-ng CPU workload score.",
+            json_schema_extra={
+                "category_id": FilterCategories.PROCESSOR,
             },
         ),
     ],
@@ -465,7 +497,7 @@ options = SimpleNamespace(
     page=Annotated[Optional[int], Query(description="Page number.")],
     order_by=Annotated[str, Query(description="Order by column.")],
     order_dir=Annotated[OrderDir, Query(description="Order direction.")],
-    currency=Annotated[str, Query(description="Currency used for prices.")],
+    currency=Annotated[Optional[str], Query(description="Currency used for prices.")],
     add_total_count_header=Annotated[
         bool,
         Query(
@@ -644,6 +676,7 @@ def search_regions(
 def get_server(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
+    currency: options.currency = None,
     db: Session = Depends(get_db),
 ) -> ServerPKsWithPrices:
     """Query a single server by its vendor id and either the server or, or its API reference.
@@ -667,6 +700,18 @@ def get_server(
         .where(ServerPrice.vendor_id == vendor)
         .where(ServerPrice.server_id == res.server_id)
     ).all()
+    if currency:
+        for price in prices:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        4,
+                    )
+                    price.currency = currency
+
     res.prices = prices
     benchmarks = db.exec(
         select(BenchmarkScore)
@@ -684,6 +729,7 @@ def search_servers(
     partial_name_or_id: options.partial_name_or_id = None,
     vcpus_min: options.vcpus_min = 1,
     architecture: options.architecture = None,
+    benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     only_active: options.only_active = True,
     vendor: options.vendor = None,
@@ -692,6 +738,7 @@ def search_servers(
     storage_type: options.storage_type = None,
     gpu_min: options.gpu_min = None,
     gpu_memory_min: options.gpu_memory_min = None,
+    gpu_memory_total: options.gpu_memory_total = None,
     limit: options.limit = 50,
     page: options.page = None,
     order_by: options.order_by = "vcpus",
@@ -699,11 +746,18 @@ def search_servers(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
+    max_scores = max_score_per_server()
     query = (
-        select(Server)
+        select(Server, max_scores.c.score)
         .join(Server.vendor)
         .join(Vendor.compliance_framework_links)
         .join(VendorComplianceLink.compliance_framework)
+        .join(
+            max_scores,
+            (Server.vendor_id == max_scores.c.vendor_id)
+            & (Server.server_id == max_scores.c.server_id),
+            isouter=True,
+        )
     )
 
     if partial_name_or_id:
@@ -719,6 +773,10 @@ def search_servers(
 
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
+    if architecture:
+        query = query.where(Server.cpu_architecture.in_(architecture))
+    if benchmark_score_stressng_cpu_min:
+        query = query.where(max_scores.c.score > benchmark_score_stressng_cpu_min)
     if memory_min:
         query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
@@ -727,10 +785,10 @@ def search_servers(
         query = query.where(Server.gpu_count >= gpu_min)
     if gpu_memory_min:
         query = query.where(Server.gpu_memory_min >= gpu_memory_min * 1024)
+    if gpu_memory_total:
+        query = query.where(Server.gpu_memory_total >= gpu_memory_total * 1024)
     if only_active:
         query = query.where(Server.status == Status.ACTIVE)
-    if architecture:
-        query = query.where(Server.cpu_architecture.in_(architecture))
     if storage_type:
         query = query.where(Server.storage_type.in_(storage_type))
     if vendor:
@@ -742,7 +800,7 @@ def search_servers(
 
     # ordering
     if order_by:
-        order_obj = [o for o in [Server] if hasattr(o, order_by)]
+        order_obj = [o for o in [Server, max_scores.c] if hasattr(o, order_by)]
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
@@ -769,7 +827,19 @@ def search_servers(
         query = query.offset((page - 1) * limit)
     servers = db.exec(query).all()
 
-    return servers
+    # unpack score
+    serverlist = []
+    for server in servers:
+        serveri = ServerPKs.from_orm(server[0])
+        serveri.score = server[1]
+        try:
+            minprice = min_server_price(db, serveri.vendor_id, serveri.server_id)
+            serveri.score_per_price = serveri.score / minprice
+        except Exception:
+            serveri.score_per_price = None
+        serverlist.append(serveri)
+
+    return serverlist
 
 
 @app.get("/server_prices", tags=["Query Resources"])
@@ -778,6 +848,7 @@ def search_server_prices(
     partial_name_or_id: options.partial_name_or_id = None,
     vcpus_min: options.vcpus_min = 1,
     architecture: options.architecture = None,
+    benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     price_max: options.price_max = None,
     only_active: options.only_active = True,
@@ -791,6 +862,7 @@ def search_server_prices(
     countries: options.countries = None,
     gpu_min: options.gpu_min = None,
     gpu_memory_min: options.gpu_memory_min = None,
+    gpu_memory_total: options.gpu_memory_total = None,
     limit: options.limit = 50,
     page: options.page = None,
     order_by: options.order_by = "price",
@@ -799,8 +871,9 @@ def search_server_prices(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
+    max_scores = max_score_per_server()
     query = (
-        select(ServerPrice)
+        select(ServerPrice, max_scores.c.score)
         .where(ServerPrice.status == Status.ACTIVE)
         .join(ServerPrice.vendor)
         .join(Vendor.compliance_framework_links)
@@ -808,6 +881,12 @@ def search_server_prices(
         .join(ServerPrice.region)
         .join(ServerPrice.zone)
         .join(ServerPrice.server)
+        .join(
+            max_scores,
+            (ServerPrice.vendor_id == max_scores.c.vendor_id)
+            & (ServerPrice.server_id == max_scores.c.server_id),
+            isouter=True,
+        )
     )
 
     if partial_name_or_id:
@@ -828,6 +907,10 @@ def search_server_prices(
 
     if vcpus_min:
         query = query.where(Server.vcpus >= vcpus_min)
+    if architecture:
+        query = query.where(Server.cpu_architecture.in_(architecture))
+    if benchmark_score_stressng_cpu_min:
+        query = query.where(max_scores.c.score > benchmark_score_stressng_cpu_min)
     if memory_min:
         query = query.where(Server.memory_amount >= memory_min * 1024)
     if storage_size:
@@ -836,14 +919,14 @@ def search_server_prices(
         query = query.where(Server.gpu_count >= gpu_min)
     if gpu_memory_min:
         query = query.where(Server.gpu_memory_min >= gpu_memory_min * 1024)
+    if gpu_memory_total:
+        query = query.where(Server.gpu_memory_total >= gpu_memory_total * 1024)
     if only_active:
         query = query.where(Server.status == Status.ACTIVE)
     if green_energy:
         query = query.where(Region.green_energy == green_energy)
     if allocation:
         query = query.where(ServerPrice.allocation == allocation)
-    if architecture:
-        query = query.where(Server.cpu_architecture.in_(architecture))
     if storage_type:
         query = query.where(Server.storage_type.in_(storage_type))
     if vendor:
@@ -859,7 +942,11 @@ def search_server_prices(
 
     # ordering
     if order_by:
-        order_obj = [o for o in [ServerPrice, Server, Region] if hasattr(o, order_by)]
+        order_obj = [
+            o
+            for o in [ServerPrice, Server, Region, max_scores.c]
+            if hasattr(o, order_by)
+        ]
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
@@ -884,19 +971,33 @@ def search_server_prices(
     # only apply if limit is set
     if page and limit > 0:
         query = query.offset((page - 1) * limit)
-    servers = db.exec(query).all()
+    results = db.exec(query).all()
+
+    # unpack score
+    prices = []
+    for result in results:
+        price = ServerPriceWithPKs.from_orm(result[0])
+        price.server.score = result[1]
+        prices.append(price)
 
     # update prices to currency requested
-    for server in servers:
-        if hasattr(server, "price") and hasattr(server, "currency"):
-            if server.currency != currency:
-                server.price = round(
-                    currency_converter.convert(server.price, server.currency, currency),
-                    4,
-                )
-                server.currency = currency
+    for price in prices:
+        if currency:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        4,
+                    )
+                    price.currency = currency
+        try:
+            price.server.score_per_price = price.server.score / price.price
+        except Exception:
+            price.server.score_per_price = None
 
-    return servers
+    return prices
 
 
 @app.get("/ai/assist_server_filters", tags=["AI"])
