@@ -988,7 +988,10 @@ def search_server_prices(
                         4,
                     )
                     price.currency = currency
-        price.server.score_per_price = price.server.score / price.price
+        try:
+            price.server.score_per_price = price.server.score / price.price
+        except Exception as e:
+            price.server.score_per_price = None
 
     return prices
 
