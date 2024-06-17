@@ -832,8 +832,11 @@ def search_servers(
     for server in servers:
         serveri = ServerPKs.from_orm(server[0])
         serveri.score = server[1]
-        minprice = min_server_price(db, serveri.vendor_id, serveri.server_id)
-        serveri.score_per_price = serveri.score / minprice
+        try:
+            minprice = min_server_price(db, serveri.vendor_id, serveri.server_id)
+            serveri.score_per_price = serveri.score / minprice
+        except Exception as e:
+            serveri.score_per_price = None
         serverlist.append(serveri)
 
     return serverlist
@@ -971,13 +974,11 @@ def search_server_prices(
     for result in results:
         price = ServerPriceWithPKs.from_orm(result[0])
         price.server.score = result[1]
-        minprice = min_server_price(db, price.server.vendor_id, price.server.server_id)
-        price.server.score_per_price = price.server.score / minprice
         prices.append(price)
 
     # update prices to currency requested
-    if currency:
-        for price in prices:
+    for price in prices:
+        if currency:
             if hasattr(price, "price") and hasattr(price, "currency"):
                 if price.currency != currency:
                     price.price = round(
@@ -987,6 +988,7 @@ def search_server_prices(
                         4,
                     )
                     price.currency = currency
+        price.server.score_per_price = price.server.score / price.price
 
     return prices
 
