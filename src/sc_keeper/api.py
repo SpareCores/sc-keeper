@@ -726,7 +726,10 @@ def get_server(
         [b.score for b in benchmarks if b.benchmark_id == "stress_ng:cpu_all"],
         default=None,
     )
-    minprice = min_server_price(db, res.vendor_id, res.server_id)
+    try:
+        minprice = min_server_price(db, res.vendor_id, res.server_id)
+    except KeyError:
+        minprice = None
     res.score_per_price = res.score / minprice if minprice and res.score else None
 
     return res
