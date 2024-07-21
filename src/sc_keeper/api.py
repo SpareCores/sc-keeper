@@ -113,6 +113,7 @@ class ServerTableMetaData(TableMetaData):
 
 class ServerWithScore(ServerBase):
     score: Optional[float] = None
+    price: Optional[float] = None
     score_per_price: Optional[float] = None
 
 
@@ -209,7 +210,8 @@ Server.model_config["json_schema_extra"] = {
 }
 ServerPKs.model_config["json_schema_extra"] = Server.model_config["json_schema_extra"]
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["score"] = 42
-ServerPKs.model_config["json_schema_extra"]["examples"][0]["score_per_price"] = 22 / 7
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["price"] = 7
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["score_per_price"] = 42 / 7
 Storage.model_config["json_schema_extra"] = {
     "examples": [example_data["storage"].model_dump()]
 }
@@ -727,10 +729,10 @@ def get_server(
         default=None,
     )
     try:
-        minprice = min_server_price(db, res.vendor_id, res.server_id)
+        res.price = min_server_price(db, res.vendor_id, res.server_id)
     except KeyError:
-        minprice = None
-    res.score_per_price = res.score / minprice if minprice and res.score else None
+        res.price = None
+    res.score_per_price = res.score / res.price if res.price and res.score else None
 
     return res
 
@@ -845,8 +847,8 @@ def search_servers(
         serveri = ServerPKs.from_orm(server[0])
         serveri.score = server[1]
         try:
-            minprice = min_server_price(db, serveri.vendor_id, serveri.server_id)
-            serveri.score_per_price = serveri.score / minprice
+            serveri.price = min_server_price(db, serveri.vendor_id, serveri.server_id)
+            serveri.score_per_price = serveri.score / serveri.price
         except Exception:
             serveri.score_per_price = None
         serverlist.append(serveri)
@@ -990,6 +992,18 @@ def search_server_prices(
     for result in results:
         price = ServerPriceWithPKs.from_orm(result[0])
         price.server.score = result[1]
+        try:
+            price.server.price = min_server_price(
+                db, price.server.vendor_id, price.server.server_id
+            )
+        except KeyError:
+            price.server.price = None
+        price.server.score_per_price = (
+            price.server.score / price.server.price
+            if price.server.price and price.server.score
+            else None
+        )
+
         prices.append(price)
 
     # update prices to currency requested
@@ -1004,10 +1018,6 @@ def search_server_prices(
                         4,
                     )
                     price.currency = currency
-        try:
-            price.server.score_per_price = price.server.score / price.price
-        except Exception:
-            price.server.score_per_price = None
 
     return prices
 
