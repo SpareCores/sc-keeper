@@ -775,7 +775,7 @@ def search_servers(
     if compliance_framework:
         query = query.join(Vendor.compliance_framework_links)
         query = query.join(VendorComplianceLink.compliance_framework)
-        query = query.distinct()    
+        query = query.distinct()
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
@@ -893,7 +893,7 @@ def search_server_prices(
         .join(ServerPrice.region)
         .join(ServerPrice.zone)
         .join(ServerPrice.server)
-        .join( 
+        .join(
             max_scores,
             (ServerPrice.vendor_id == max_scores.c.vendor_id)
             & (ServerPrice.server_id == max_scores.c.server_id),
@@ -904,7 +904,7 @@ def search_server_prices(
     if compliance_framework:
         query = query.join(Vendor.compliance_framework_links)
         query = query.join(VendorComplianceLink.compliance_framework)
-        query = query.distinct()    
+        query = query.distinct()
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
@@ -915,7 +915,7 @@ def search_server_prices(
                 Server.api_reference.ilike(ilike),
                 Server.display_name.ilike(ilike),
             )
-        ) 
+        )
 
     if price_max:
         if currency != "USD":
