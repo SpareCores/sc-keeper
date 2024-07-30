@@ -764,8 +764,6 @@ def search_servers(
     query = (
         select(Server, max_scores.c.score)
         .join(Server.vendor)
-        .join(Vendor.compliance_framework_links)
-        .join(VendorComplianceLink.compliance_framework)
         .join(
             max_scores,
             (Server.vendor_id == max_scores.c.vendor_id)
@@ -773,6 +771,10 @@ def search_servers(
             isouter=True,
         )
     )
+
+    if compliance_framework:
+        query = query.join(Vendor.compliance_framework_links)
+        query = query.join(VendorComplianceLink.compliance_framework)
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
@@ -825,8 +827,9 @@ def search_servers(
         else:
             query = query.order_by(order_field.desc())
 
-    # avoid duplicate rows introduced by the many-to-many relationships
-    query = query.distinct()
+    if compliance_framework:
+        # avoid duplicate rows introduced by the many-to-many relationships
+        query = query.distinct()
 
     # count all records to be returned in header
     if add_total_count_header:
@@ -890,8 +893,6 @@ def search_server_prices(
         select(ServerPrice, max_scores.c.score)
         .where(ServerPrice.status == Status.ACTIVE)
         .join(ServerPrice.vendor)
-        .join(Vendor.compliance_framework_links)
-        .join(VendorComplianceLink.compliance_framework)
         .join(ServerPrice.region)
         .join(ServerPrice.zone)
         .join(ServerPrice.server)
@@ -902,6 +903,10 @@ def search_server_prices(
             isouter=True,
         )
     )
+
+    if compliance_framework:
+        query = query.join(Vendor.compliance_framework_links)
+        query = query.join(VendorComplianceLink.compliance_framework)
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
@@ -971,8 +976,9 @@ def search_server_prices(
         else:
             query = query.order_by(order_field.desc())
 
-    # avoid duplicate rows introduced by the many-to-many relationships
-    query = query.distinct()
+    if compliance_framework:
+        # avoid duplicate rows introduced by the many-to-many relationships
+        query = query.distinct()
 
     # count all records to be returned in header
     if add_total_count_header:
@@ -1018,7 +1024,6 @@ def search_server_prices(
                         4,
                     )
                     price.currency = currency
-
     return prices
 
 
