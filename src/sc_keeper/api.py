@@ -775,7 +775,6 @@ def search_servers(
     if compliance_framework:
         query = query.join(Vendor.compliance_framework_links)
         query = query.join(VendorComplianceLink.compliance_framework)
-        query = query.distinct()
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
@@ -827,6 +826,10 @@ def search_servers(
             query = query.order_by(order_field)
         else:
             query = query.order_by(order_field.desc())
+
+    if compliance_framework:
+        # avoid duplicate rows introduced by the many-to-many relationships
+        query = query.distinct()
 
     # count all records to be returned in header
     if add_total_count_header:
@@ -904,7 +907,6 @@ def search_server_prices(
     if compliance_framework:
         query = query.join(Vendor.compliance_framework_links)
         query = query.join(VendorComplianceLink.compliance_framework)
-        query = query.distinct()
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
@@ -973,6 +975,10 @@ def search_server_prices(
             query = query.order_by(order_field)
         else:
             query = query.order_by(order_field.desc())
+
+    if compliance_framework:
+        # avoid duplicate rows introduced by the many-to-many relationships
+        query = query.distinct()
 
     # count all records to be returned in header
     if add_total_count_header:
