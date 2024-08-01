@@ -42,7 +42,6 @@ from .logger import LogMiddleware, get_request_id
 from .lookups import min_server_price
 from .query import max_score_per_server
 
-
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
 
