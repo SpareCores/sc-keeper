@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from enum import Enum, StrEnum
+from os import environ
 from textwrap import dedent
 from types import SimpleNamespace
 from typing import Annotated, List, Optional
@@ -40,6 +41,14 @@ from .database import session
 from .logger import LogMiddleware, get_request_id
 from .lookups import min_server_price
 from .query import max_score_per_server
+
+if environ.get("SENTRY_DSN"):
+    import sentry_sdk
+
+    sentry_sdk.init(
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
 
 
 def get_db():
