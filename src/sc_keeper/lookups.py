@@ -15,7 +15,7 @@ def dummy_hash(*args, **kwargs):
     return True
 
 
-@cachier(stale_after=timedelta(minutes=10), hash_func=dummy_hash)
+@cachier(stale_after=timedelta(minutes=10), hash_func=dummy_hash, backend="memory")
 def min_server_prices(db: Session) -> List[dict]:
     """Generate lookup table for the lowest price (USD) of all vendors/servers."""
     query = select(
