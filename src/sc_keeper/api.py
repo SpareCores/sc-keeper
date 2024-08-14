@@ -16,7 +16,9 @@ from sc_crawler.table_bases import (
     RegionBase,
     ServerBase,
     ServerPriceBase,
+    StoragePriceBase,
     VendorBase,
+    StorageBase,
     ZoneBase,
 )
 from sc_crawler.table_fields import Allocation, CpuArchitecture, Status, StorageType
@@ -29,6 +31,7 @@ from sc_crawler.tables import (
     Server,
     ServerPrice,
     Storage,
+    StoragePrice,
     Vendor,
     VendorComplianceLink,
     Zone,
@@ -95,6 +98,9 @@ ComplianceFrameworks = StrEnum(
         for m in db.exec(select(ComplianceFramework)).all()
     },
 )
+Storages = StrEnum(
+    "Storages", {m.storage_id: m.storage_id for m in db.exec(select(Storage)).all()}
+)
 
 
 class NameAndDescription(BaseModel):
@@ -154,6 +160,10 @@ class ServerPriceWithPKs(ServerPriceBase):
     zone: ZoneBase
     server: ServerWithScore
 
+class StoragePriceWithPKs(StoragePriceBase):
+    region: RegionBaseWithPKs
+    vendor: VendorBase
+    storage: StorageBase
 
 class OrderDir(Enum):
     ASC = "asc"
@@ -578,6 +588,52 @@ def table_server(db: Session = Depends(get_db)) -> List[Server]:
 def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
     """Return the Storage table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Storage)).all()
+
+@app.get("/storage_prices")
+def table_storage_prices(
+    vendor: Annotated[
+        Optional[List[Vendors]],
+        Query(
+            title="Vendor id",
+            description="Identifier of the cloud provider vendor.",
+            json_schema_extra={
+                "category_id": FilterCategories.VENDOR,
+                "enum": [m.value for m in Vendors],
+            },
+        ),
+    ] = None,
+    storage_id: Annotated[
+        Optional[List[Storages]],
+        Query(
+            title="Storage id",
+            description="Identifier of the storage type.",
+            json_schema_extra={
+                "category_id": FilterCategories.STORAGE,
+                "enum": [m.value for m in Storages],
+            },
+        ),
+    ] = None,
+    limit: options.limit = 50,
+    page: options.page = None,
+    order_by: options.order_by = "price",
+    order_dir: options.order_dir = OrderDir.ASC,
+    db: Session = Depends(get_db)) -> List[StoragePriceWithPKs]:
+    query = (select(StoragePrice).join(StoragePrice.vendor).join(StoragePrice.storage))
+
+    if vendor:
+        query = query.where(StoragePrice.vendor_id.in_(vendor))
+
+    if storage_id:
+        query = query.where(StoragePrice.storage_id.in_(storage_id))
+
+    # pagination
+    if limit > 0:
+        query = query.limit(limit)
+    # only apply if limit is set
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
+
+    return db.exec(query).all() 
 
 
 def _get_category(server_column_name: str) -> str:
