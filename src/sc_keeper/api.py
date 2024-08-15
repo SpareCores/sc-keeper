@@ -296,7 +296,10 @@ app.add_middleware(LogMiddleware)
 
 # CORS: allows all origins, without spec headers and without auth
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], expose_headers=["X-Total-Count"]
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_headers=["sentry-trace", "baggage"],
+    expose_headers=["X-Total-Count"],
 )
 
 # aggressive compression
