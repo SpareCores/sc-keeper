@@ -35,7 +35,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            SENTRY_RELEASE=${{ GITHUB_SHA }}
+            SENTRY_RELEASE=${{ env.GITHUB_SHA }}
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
