@@ -506,8 +506,9 @@ options = SimpleNamespace(
         ),
     ],
     limit=Annotated[
-        int, Query(description="Maximum number of results. Set to -1 for unlimited")
+        int, Query(description="Maximum number of results. Set to -1 for unlimited.")
     ],
+    limit250=Annotated[int, Query(description="Maximum number of results.", le=250)],
     page=Annotated[Optional[int], Query(description="Page number.")],
     order_by=Annotated[str, Query(description="Order by column.")],
     order_dir=Annotated[OrderDir, Query(description="Order direction.")],
@@ -892,7 +893,7 @@ def search_server_prices(
     gpu_min: options.gpu_min = None,
     gpu_memory_min: options.gpu_memory_min = None,
     gpu_memory_total: options.gpu_memory_total = None,
-    limit: options.limit = 50,
+    limit: options.limit250 = 50,
     page: options.page = None,
     order_by: options.order_by = "price",
     order_dir: options.order_dir = OrderDir.ASC,
