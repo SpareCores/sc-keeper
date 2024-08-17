@@ -29,10 +29,10 @@ jobs:
       - name: Sentry release
         run: |
           curl -sL https://sentry.io/get-cli/ | bash
-          VERSION=`sentry-cli releases propose-version`
-          sentry-cli releases new "$VERSION"
-          sentry-cli releases set-commits "$VERSION" --auto
-          sentry-cli releases finalize "$VERSION"
+          SENTRY_RELEASE=`sentry-cli releases propose-version`
+          sentry-cli releases new "$SENTRY_RELEASE"
+          sentry-cli releases set-commits "$SENTRY_RELEASE" --auto
+          sentry-cli releases finalize "$SENTRY_RELEASE"
           echo "SENTRY_RELEASE=${VERSION}" >> "$GITHUB_ENV"
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
