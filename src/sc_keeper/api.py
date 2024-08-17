@@ -337,7 +337,7 @@ options = SimpleNamespace(
             title="Minimum vCPUs",
             description="Minimum number of virtual CPUs.",
             ge=1,
-            le=128,
+            le=256,
             json_schema_extra={
                 "category_id": FilterCategories.PROCESSOR,
                 "unit": "vCPUs",
