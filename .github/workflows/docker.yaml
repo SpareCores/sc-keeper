@@ -26,6 +26,14 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      - name: Sentry release
+        run: |
+          curl -sL https://sentry.io/get-cli/ | bash
+          VERSION=`sentry-cli releases propose-version`
+          sentry-cli releases new "$VERSION"
+          sentry-cli releases set-commits "$VERSION" --auto
+          sentry-cli releases finalize "$VERSION"
+          echo "SENTRY_RELEASE=${VERSION}" >> "$GITHUB_ENV"
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -35,7 +43,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            SENTRY_RELEASE=${{ env.GITHUB_SHA }}
+            SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
