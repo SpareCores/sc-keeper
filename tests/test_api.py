@@ -12,4 +12,4 @@ def test_healthcheck():
     assert response.status_code == 200
     # updated recently
     assert response.json()["database_last_updated"] > time() - 60
-    assert response.json()["database_last_updated"] < time() - 60
+    assert response.json()["database_last_updated"] < time()
