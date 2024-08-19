@@ -33,6 +33,7 @@ from sc_crawler.tables import (
     VendorComplianceLink,
     Zone,
 )
+from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, func, or_, select
 
 from .ai import openai_extract_filters
@@ -902,28 +903,15 @@ def search_server_prices(
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
     max_scores = max_score_per_server()
-    query = (
-        select(ServerPrice, max_scores.c.score)
-        .where(ServerPrice.status == Status.ACTIVE)
-        .join(ServerPrice.vendor)
-        .join(ServerPrice.region)
-        .join(ServerPrice.zone)
-        .join(ServerPrice.server)
-        .join(
-            max_scores,
-            (ServerPrice.vendor_id == max_scores.c.vendor_id)
-            & (ServerPrice.server_id == max_scores.c.server_id),
-            isouter=True,
-        )
-    )
 
-    if compliance_framework:
-        query = query.join(Vendor.compliance_framework_links)
-        query = query.join(VendorComplianceLink.compliance_framework)
+    # keep track of tables to be joins and filter conditions
+    joins = set()
+    conditions = set()
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
-        query = query.where(
+        joins.add(ServerPrice.server)
+        conditions.add(
             or_(
                 ServerPrice.server_id.ilike(ilike),
                 Server.name.ilike(ilike),
@@ -935,42 +923,106 @@ def search_server_prices(
     if price_max:
         if currency != "USD":
             price_max = currency_converter.convert(price_max, currency, "USD")
-        query = query.where(ServerPrice.price <= price_max)
+        conditions.add(ServerPrice.price <= price_max)
 
     if vcpus_min:
-        query = query.where(Server.vcpus >= vcpus_min)
+        joins.add(ServerPrice.server)
+        conditions.add(Server.vcpus >= vcpus_min)
     if architecture:
-        query = query.where(Server.cpu_architecture.in_(architecture))
+        joins.add(ServerPrice.server)
+        conditions.add(Server.cpu_architecture.in_(architecture))
     if benchmark_score_stressng_cpu_min:
-        query = query.where(max_scores.c.score > benchmark_score_stressng_cpu_min)
+        conditions.add(max_scores.c.score > benchmark_score_stressng_cpu_min)
     if memory_min:
-        query = query.where(Server.memory_amount >= memory_min * 1024)
+        joins.add(ServerPrice.server)
+        conditions.add(Server.memory_amount >= memory_min * 1024)
     if storage_size:
-        query = query.where(Server.storage_size >= storage_size)
+        joins.add(ServerPrice.server)
+        conditions.add(Server.storage_size >= storage_size)
     if gpu_min:
-        query = query.where(Server.gpu_count >= gpu_min)
+        joins.add(ServerPrice.server)
+        conditions.add(Server.gpu_count >= gpu_min)
     if gpu_memory_min:
-        query = query.where(Server.gpu_memory_min >= gpu_memory_min * 1024)
+        joins.add(ServerPrice.server)
+        conditions.add(Server.gpu_memory_min >= gpu_memory_min * 1024)
     if gpu_memory_total:
-        query = query.where(Server.gpu_memory_total >= gpu_memory_total * 1024)
+        joins.add(ServerPrice.server)
+        conditions.add(Server.gpu_memory_total >= gpu_memory_total * 1024)
     if only_active:
-        query = query.where(Server.status == Status.ACTIVE)
+        joins.add(ServerPrice.server)
+        conditions.add(Server.status == Status.ACTIVE)
     if green_energy:
-        query = query.where(Region.green_energy == green_energy)
+        joins.add(ServerPrice.region)
+        conditions.add(Region.green_energy == green_energy)
     if allocation:
-        query = query.where(ServerPrice.allocation == allocation)
+        conditions.add(ServerPrice.allocation == allocation)
     if storage_type:
-        query = query.where(Server.storage_type.in_(storage_type))
+        joins.add(ServerPrice.server)
+        conditions.add(Server.storage_type.in_(storage_type))
     if vendor:
-        query = query.where(Server.vendor_id.in_(vendor))
+        conditions.add(ServerPrice.vendor_id.in_(vendor))
     if compliance_framework:
-        query = query.where(
+        joins.add(Vendor.compliance_framework_links)
+        joins.add(VendorComplianceLink.compliance_framework)
+        conditions.add(
             VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
         )
     if regions:
-        query = query.where(ServerPrice.region_id.in_(regions))
+        conditions.add(ServerPrice.region_id.in_(regions))
     if countries:
-        query = query.where(Region.country_id.in_(countries))
+        joins.add(ServerPrice.region)
+        conditions.add(Region.country_id.in_(countries))
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        query = select(func.count()).select_from(ServerPrice)
+        for j in joins:
+            query = query.join(j)
+        if benchmark_score_stressng_cpu_min:
+            query = query.join(
+                max_scores,
+                (ServerPrice.vendor_id == max_scores.c.vendor_id)
+                & (ServerPrice.server_id == max_scores.c.server_id),
+                isouter=True,
+            )
+        for condition in conditions:
+            query = query.where(condition)
+        if compliance_framework:
+            # avoid duplicate rows introduced by the many-to-many relationships
+            query = query.distinct()
+        response.headers["X-Total-Count"] = str(db.exec(query).one())
+
+    # actual query
+    query = select(ServerPrice, max_scores.c.score)
+    joins.update(
+        [
+            ServerPrice.vendor,
+            ServerPrice.region,
+            Region.country,
+            ServerPrice.zone,
+            ServerPrice.server,
+        ]
+    )
+    for j in joins:
+        query = query.join(j)
+    query = query.join(
+        max_scores,
+        (ServerPrice.vendor_id == max_scores.c.vendor_id)
+        & (ServerPrice.server_id == max_scores.c.server_id),
+        isouter=True,
+    )
+    query = query.options(contains_eager(ServerPrice.vendor))
+    query = query.options(
+        contains_eager(ServerPrice.region).contains_eager(Region.country)
+    )
+    query = query.options(contains_eager(ServerPrice.zone))
+    query = query.options(contains_eager(ServerPrice.server))
+    for condition in conditions:
+        query = query.where(condition)
+
+    if compliance_framework:
+        # avoid duplicate rows introduced by the many-to-many relationships
+        query = query.distinct()
 
     # ordering
     if order_by:
@@ -989,21 +1041,13 @@ def search_server_prices(
         else:
             query = query.order_by(order_field.desc())
 
-    if compliance_framework:
-        # avoid duplicate rows introduced by the many-to-many relationships
-        query = query.distinct()
-
-    # count all records to be returned in header
-    if add_total_count_header:
-        count_query = select(func.count()).select_from(query.alias("subquery"))
-        response.headers["X-Total-Count"] = str(db.exec(count_query).one())
-
     # pagination
     if limit > 0:
         query = query.limit(limit)
     # only apply if limit is set
     if page and limit > 0:
         query = query.offset((page - 1) * limit)
+
     results = db.exec(query).all()
 
     # unpack score
