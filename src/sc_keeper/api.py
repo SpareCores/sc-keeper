@@ -904,6 +904,17 @@ def search_server_prices(
 ) -> List[ServerPriceWithPKs]:
     max_scores = max_score_per_server()
 
+    # compliance frameworks are defined at the vendor level,
+    # let's filter for vendors instead of exploding the prices table
+    if compliance_framework:
+        if not vendor:
+            vendor = db.exec(select(Vendor.vendor_id)).all()
+        query = select(VendorComplianceLink.vendor_id).where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+        compliant_vendors = db.exec(query).all()
+        vendor = list(set(vendor or []) & set(compliant_vendors))
+
     # keep track of tables to be joins and filter conditions
     joins = set()
     conditions = set()
@@ -961,12 +972,6 @@ def search_server_prices(
         conditions.add(Server.storage_type.in_(storage_type))
     if vendor:
         conditions.add(ServerPrice.vendor_id.in_(vendor))
-    if compliance_framework:
-        joins.add(Vendor.compliance_framework_links)
-        joins.add(VendorComplianceLink.compliance_framework)
-        conditions.add(
-            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
-        )
     if regions:
         conditions.add(ServerPrice.region_id.in_(regions))
     if countries:
@@ -987,9 +992,6 @@ def search_server_prices(
             )
         for condition in conditions:
             query = query.where(condition)
-        if compliance_framework:
-            # avoid duplicate rows introduced by the many-to-many relationships
-            query = query.distinct()
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     # actual query
@@ -1003,6 +1005,7 @@ def search_server_prices(
             ServerPrice.server,
         ]
     )
+
     for j in joins:
         query = query.join(j)
     query = query.join(
@@ -1019,10 +1022,6 @@ def search_server_prices(
     query = query.options(contains_eager(ServerPrice.server))
     for condition in conditions:
         query = query.where(condition)
-
-    if compliance_framework:
-        # avoid duplicate rows introduced by the many-to-many relationships
-        query = query.distinct()
 
     # ordering
     if order_by:
