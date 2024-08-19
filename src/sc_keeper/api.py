@@ -4,7 +4,7 @@ from enum import Enum, StrEnum
 from os import environ
 from textwrap import dedent
 from types import SimpleNamespace
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -749,6 +749,71 @@ def get_server(
     res.score_per_price = res.score / res.price if res.price and res.score else None
 
     return res
+
+
+@app.get("/server/{vendor}/{server}/similar_servers/{by}", tags=["Query Resources"])
+def get_similar_servers(
+    vendor: Annotated[str, Path(description="Vendor ID.")],
+    server: Annotated[str, Path(description="Server ID or API reference.")],
+    by: Annotated[
+        Literal["specs", "score"],
+        Path(description="Algorithm to look for similar servers."),
+    ],
+    db: Session = Depends(get_db),
+) -> List[ServerPKs]:
+    """Query similar servers compared to the provided server.
+
+    The "specs" approach will prioritize the number of GPUs, then CPUs, lastly the amount of memory, while the "score method will find the servers with the closest performance using the multi-core SCore.
+    """
+    # TODO DRY with /servers
+    serverobj = db.exec(
+        select(Server)
+        .where(Server.vendor_id == vendor)
+        .where((Server.server_id == server) | (Server.api_reference == server))
+    ).all()
+    if not serverobj:
+        raise HTTPException(status_code=404, detail="Server not found")
+    serverobj = serverobj[0]
+
+    if by == "specs":
+        query = select(Server).order_by(
+            func.abs(Server.gpu_count - serverobj.gpu_count) * 10e6
+            + func.abs(Server.vcpus - serverobj.vcpus) * 10e3
+            + func.abs(Server.memory_amount - serverobj.memory_amount) / 1e03
+        )
+        return db.exec(query.limit(5)).all()
+
+    if by == "score":
+        max_scores = max_score_per_server()
+        max_score = db.exec(
+            select(max_scores.c.score)
+            .where(max_scores.c.vendor_id == serverobj.vendor_id)
+            .where(max_scores.c.server_id == serverobj.server_id)
+        ).one()
+        query = (
+            select(Server, max_scores.c.score)
+            .join(
+                max_scores,
+                (Server.vendor_id == max_scores.c.vendor_id)
+                & (Server.server_id == max_scores.c.server_id),
+                isouter=True,
+            )
+            .order_by(func.abs(max_scores.c.score - max_score))
+        )
+
+    serverlist = []
+    servers = db.exec(query.limit(5)).all()
+    for server in servers:
+        serveri = ServerPKs.from_orm(server[0])
+        serveri.score = server[1]
+        try:
+            serveri.price = min_server_price(db, serveri.vendor_id, serveri.server_id)
+            serveri.score_per_price = serveri.score / serveri.price
+        except Exception:
+            serveri.score_per_price = None
+        serverlist.append(serveri)
+
+    return serverlist
 
 
 @app.get("/servers", tags=["Query Resources"])
