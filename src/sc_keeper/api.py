@@ -876,7 +876,7 @@ def search_servers(
 def search_server_prices(
     response: Response,
     partial_name_or_id: options.partial_name_or_id = None,
-    vcpus_min: options.vcpus_min = 1,
+    vcpus_min: options.vcpus_min = None,
     architecture: options.architecture = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
