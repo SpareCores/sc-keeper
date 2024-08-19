@@ -2,8 +2,11 @@ from os import environ
 from os.path import abspath
 from time import time
 
+from duckdb import default_connection
 from sc_data import db
 from sqlmodel import Session, create_engine
+
+default_connection.execute("INSTALL sqlite")
 
 
 class Database:
