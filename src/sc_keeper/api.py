@@ -1106,7 +1106,7 @@ def search_server_prices(
         isouter=True,
     )
     # join Region with alias so that we can look up country referring to that
-    region_alias = Region
+    region_alias = aliased(Region)
     query = query.join(ServerPrice.region.of_type(region_alias))
     # avoid n+1 queries
     query = query.options(contains_eager(ServerPrice.vendor))
