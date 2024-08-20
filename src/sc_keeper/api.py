@@ -688,6 +688,17 @@ def search_regions(
     return db.exec(query).all()
 
 
+def get_server_base(vendor: str, server: str) -> ServerBase:
+    res = db.exec(
+        select(Server)
+        .where(Server.vendor_id == vendor)
+        .where((Server.server_id == server) | (Server.api_reference == server))
+    ).all()
+    if not res:
+        raise HTTPException(status_code=404, detail="Server not found")
+    return res[0]
+
+
 @app.get("/server/{vendor}/{server}", tags=["Query Resources"])
 def get_server(
     vendor: Annotated[str, Path(description="Vendor ID.")],
@@ -702,14 +713,7 @@ def get_server(
     the available benchmark scores.
     """
     # TODO async
-    res = db.exec(
-        select(Server)
-        .where(Server.vendor_id == vendor)
-        .where((Server.server_id == server) | (Server.api_reference == server))
-    ).all()
-    if not res:
-        raise HTTPException(status_code=404, detail="Server not found")
-    res = res[0]
+    res = get_server_base(vendor, server)
     prices = db.exec(
         select(ServerPrice)
         .where(ServerPrice.status == Status.ACTIVE)
@@ -761,19 +765,15 @@ def get_similar_servers(
     ],
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
-    """Query similar servers compared to the provided server.
+    """Query similar servers to the provided one.
 
-    The "specs" approach will prioritize the number of GPUs, then CPUs, lastly the amount of memory, while the "score method will find the servers with the closest performance using the multi-core SCore.
+    The "specs" approach will prioritize the number of GPUs, then
+    CPUs, lastly the amount of memory, while the "score" method will
+    find the servers with the closest performance using the multi-core
+    SCore.
     """
     # TODO DRY with /servers
-    serverobj = db.exec(
-        select(Server)
-        .where(Server.vendor_id == vendor)
-        .where((Server.server_id == server) | (Server.api_reference == server))
-    ).all()
-    if not serverobj:
-        raise HTTPException(status_code=404, detail="Server not found")
-    serverobj = serverobj[0]
+    serverobj = get_server_base(vendor, server)
 
     if by == "specs":
         query = select(Server).order_by(
