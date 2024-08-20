@@ -760,19 +760,22 @@ def get_similar_servers(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
     by: Annotated[
-        Literal["specs", "score"],
+        Literal["family", "specs", "score"],
         Path(description="Algorithm to look for similar servers."),
     ],
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
-    """Query similar servers to the provided one.
+    """Search similar servers to the provided one.
 
-    The "specs" approach will prioritize the number of GPUs, then
-    CPUs, lastly the amount of memory, while the "score" method will
-    find the servers with the closest performance using the multi-core
-    SCore.
+    The "family" method returns all servers from the same family of
+    the same vendor.
+
+    The "specs" approach will prioritize the number of
+    GPUs, then CPUs, lastly the amount of memory.
+
+    The "score" method will find the servers with the closest
+    performance using the multi-core SCore.
     """
-    # TODO DRY with /servers
     serverobj = get_server_base(vendor, server)
 
     max_scores = max_score_per_server()
@@ -783,6 +786,14 @@ def get_similar_servers(
         isouter=True,
     )
 
+    if by == "family":
+        query = (
+            query.where(Server.vendor_id == serverobj.vendor_id)
+            .where(Server.family == serverobj.family)
+            .order_by(Server.vcpus, Server.gpu_count, Server.memory_amount)
+        )
+        servers = db.exec(query.limit(5)).all()
+
     if by == "specs":
         query = query.order_by(
             func.abs(Server.gpu_count - serverobj.gpu_count) * 10e6
@@ -790,7 +801,6 @@ def get_similar_servers(
             + func.abs(Server.memory_amount - serverobj.memory_amount) / 1e03
         )
         servers = db.exec(query.limit(5)).all()
-
     if by == "score":
         max_score = db.exec(
             select(max_scores.c.score)
