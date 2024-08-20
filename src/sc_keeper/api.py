@@ -852,24 +852,24 @@ def search_servers(
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
     max_scores = max_score_per_server()
-    query = (
-        select(Server, max_scores.c.score)
-        .join(Server.vendor)
-        .join(
-            max_scores,
-            (Server.vendor_id == max_scores.c.vendor_id)
-            & (Server.server_id == max_scores.c.server_id),
-            isouter=True,
-        )
-    )
 
+    # compliance frameworks are defined at the vendor level,
+    # let's filter for vendors instead of exploding the servers table
     if compliance_framework:
-        query = query.join(Vendor.compliance_framework_links)
-        query = query.join(VendorComplianceLink.compliance_framework)
+        if not vendor:
+            vendor = db.exec(select(Vendor.vendor_id)).all()
+        query = select(VendorComplianceLink.vendor_id).where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+        compliant_vendors = db.exec(query).all()
+        vendor = list(set(vendor or []) & set(compliant_vendors))
+
+    # keep track of filter conditions
+    conditions = set()
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
-        query = query.where(
+        conditions.add(
             or_(
                 Server.server_id.ilike(ilike),
                 Server.name.ilike(ilike),
@@ -879,31 +879,54 @@ def search_servers(
         )
 
     if vcpus_min:
-        query = query.where(Server.vcpus >= vcpus_min)
+        conditions.add(Server.vcpus >= vcpus_min)
     if architecture:
-        query = query.where(Server.cpu_architecture.in_(architecture))
+        conditions.add(Server.cpu_architecture.in_(architecture))
     if benchmark_score_stressng_cpu_min:
-        query = query.where(max_scores.c.score > benchmark_score_stressng_cpu_min)
+        conditions.add(max_scores.c.score > benchmark_score_stressng_cpu_min)
     if memory_min:
-        query = query.where(Server.memory_amount >= memory_min * 1024)
+        conditions.add(Server.memory_amount >= memory_min * 1024)
     if storage_size:
-        query = query.where(Server.storage_size >= storage_size)
+        conditions.add(Server.storage_size >= storage_size)
     if gpu_min:
-        query = query.where(Server.gpu_count >= gpu_min)
+        conditions.add(Server.gpu_count >= gpu_min)
     if gpu_memory_min:
-        query = query.where(Server.gpu_memory_min >= gpu_memory_min * 1024)
+        conditions.add(Server.gpu_memory_min >= gpu_memory_min * 1024)
     if gpu_memory_total:
-        query = query.where(Server.gpu_memory_total >= gpu_memory_total * 1024)
+        conditions.add(Server.gpu_memory_total >= gpu_memory_total * 1024)
     if only_active:
-        query = query.where(Server.status == Status.ACTIVE)
+        conditions.add(Server.status == Status.ACTIVE)
     if storage_type:
-        query = query.where(Server.storage_type.in_(storage_type))
+        conditions.add(Server.storage_type.in_(storage_type))
     if vendor:
-        query = query.where(Server.vendor_id.in_(vendor))
-    if compliance_framework:
-        query = query.where(
-            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
-        )
+        conditions.add(Server.vendor_id.in_(vendor))
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        query = select(func.count()).select_from(Server)
+        if benchmark_score_stressng_cpu_min:
+            query = query.join(
+                max_scores,
+                (Server.vendor_id == max_scores.c.vendor_id)
+                & (Server.server_id == max_scores.c.server_id),
+                isouter=True,
+            )
+        for condition in conditions:
+            query = query.where(condition)
+        response.headers["X-Total-Count"] = str(db.exec(query).one())
+
+    # actual query
+    query = select(Server, max_scores.c.score)
+    query = query.join(Server.vendor)
+    query = query.join(
+        max_scores,
+        (Server.vendor_id == max_scores.c.vendor_id)
+        & (Server.server_id == max_scores.c.server_id),
+        isouter=True,
+    )
+    query = query.options(contains_eager(Server.vendor))
+    for condition in conditions:
+        query = query.where(condition)
 
     # ordering
     if order_by:
@@ -917,15 +940,6 @@ def search_servers(
             query = query.order_by(order_field)
         else:
             query = query.order_by(order_field.desc())
-
-    if compliance_framework:
-        # avoid duplicate rows introduced by the many-to-many relationships
-        query = query.distinct()
-
-    # count all records to be returned in header
-    if add_total_count_header:
-        count_query = select(func.count()).select_from(query.alias("subquery"))
-        response.headers["X-Total-Count"] = str(db.exec(count_query).one())
 
     # pagination
     if limit > 0:
