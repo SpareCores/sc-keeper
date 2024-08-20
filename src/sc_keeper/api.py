@@ -775,34 +775,32 @@ def get_similar_servers(
     # TODO DRY with /servers
     serverobj = get_server_base(vendor, server)
 
+    max_scores = max_score_per_server()
+    query = select(Server, max_scores.c.score).join(
+        max_scores,
+        (Server.vendor_id == max_scores.c.vendor_id)
+        & (Server.server_id == max_scores.c.server_id),
+        isouter=True,
+    )
+
     if by == "specs":
-        query = select(Server).order_by(
+        query = query.order_by(
             func.abs(Server.gpu_count - serverobj.gpu_count) * 10e6
             + func.abs(Server.vcpus - serverobj.vcpus) * 10e3
             + func.abs(Server.memory_amount - serverobj.memory_amount) / 1e03
         )
-        return db.exec(query.limit(5)).all()
+        servers = db.exec(query.limit(5)).all()
 
     if by == "score":
-        max_scores = max_score_per_server()
         max_score = db.exec(
             select(max_scores.c.score)
             .where(max_scores.c.vendor_id == serverobj.vendor_id)
             .where(max_scores.c.server_id == serverobj.server_id)
         ).one()
-        query = (
-            select(Server, max_scores.c.score)
-            .join(
-                max_scores,
-                (Server.vendor_id == max_scores.c.vendor_id)
-                & (Server.server_id == max_scores.c.server_id),
-                isouter=True,
-            )
-            .order_by(func.abs(max_scores.c.score - max_score))
-        )
+        query = query.order_by(func.abs(max_scores.c.score - max_score))
+        servers = db.exec(query.limit(5)).all()
 
     serverlist = []
-    servers = db.exec(query.limit(5)).all()
     for server in servers:
         serveri = ServerPKs.from_orm(server[0])
         serveri.score = server[1]
