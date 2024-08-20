@@ -755,13 +755,17 @@ def get_server(
     return res
 
 
-@app.get("/server/{vendor}/{server}/similar_servers/{by}", tags=["Query Resources"])
+@app.get("/server/{vendor}/{server}/similar_servers/{by}/{n}", tags=["Query Resources"])
 def get_similar_servers(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
     by: Annotated[
         Literal["family", "specs", "score"],
         Path(description="Algorithm to look for similar servers."),
+    ],
+    n: Annotated[
+        int,
+        Path(description="Number of servers to get.", le=100),
     ],
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
@@ -792,7 +796,6 @@ def get_similar_servers(
             .where(Server.family == serverobj.family)
             .order_by(Server.vcpus, Server.gpu_count, Server.memory_amount)
         )
-        servers = db.exec(query.limit(5)).all()
 
     if by == "specs":
         query = query.order_by(
@@ -800,7 +803,7 @@ def get_similar_servers(
             + func.abs(Server.vcpus - serverobj.vcpus) * 10e3
             + func.abs(Server.memory_amount - serverobj.memory_amount) / 1e03
         )
-        servers = db.exec(query.limit(5)).all()
+
     if by == "score":
         max_score = db.exec(
             select(max_scores.c.score)
@@ -808,7 +811,8 @@ def get_similar_servers(
             .where(max_scores.c.server_id == serverobj.server_id)
         ).one()
         query = query.order_by(func.abs(max_scores.c.score - max_score))
-        servers = db.exec(query.limit(5)).all()
+
+    servers = db.exec(query.limit(n)).all()
 
     serverlist = []
     for server in servers:
