@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from enum import Enum, StrEnum
+from importlib.metadata import version
 from os import environ
 from textwrap import dedent
 from types import SimpleNamespace
@@ -35,7 +36,7 @@ from sc_crawler.tables import (
 )
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import contains_eager
-from sqlmodel import Session, func, and_, not_, or_, select
+from sqlmodel import Session, and_, func, not_, or_, select
 
 from .ai import openai_extract_filters
 from .currency import CurrencyConverter
@@ -43,6 +44,11 @@ from .database import session
 from .logger import LogMiddleware, get_request_id
 from .lookups import min_server_price
 from .query import max_score_per_server
+
+package_versions = {
+    pkg: version(pkg)
+    for pkg in ["sparecores-crawler", "sparecores-data", "sparecores-keeper"]
+}
 
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
@@ -531,6 +537,7 @@ options = SimpleNamespace(
 def healthcheck(db: Session = Depends(get_db)) -> dict:
     """Return database hash and last udpated timestamp."""
     return {
+        "packages": package_versions,
         "database_last_updated": session.last_updated,
         "database_hash": session.db_hash,
     }
