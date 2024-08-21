@@ -1091,7 +1091,6 @@ def search_server_prices(
         [
             ServerPrice.vendor,
             ServerPrice.region,
-            Region.country,
             ServerPrice.zone,
             ServerPrice.server,
         ]
@@ -1105,6 +1104,8 @@ def search_server_prices(
         & (ServerPrice.server_id == max_scores.c.server_id),
         isouter=True,
     )
+    region_alias = Region
+    query = query.join(region_alias.country)
     # avoid n+1 queries
     query = query.options(contains_eager(ServerPrice.vendor))
     # TODO contains_eager(ServerPrice.region).contains_eager(Region.country)
