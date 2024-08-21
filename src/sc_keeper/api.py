@@ -688,7 +688,7 @@ def search_regions(
     return db.exec(query).all()
 
 
-def get_server_base(vendor: str, server: str) -> ServerBase:
+def get_server_base(vendor: str, server: str, db: Session) -> ServerBase:
     res = db.exec(
         select(Server)
         .where(Server.vendor_id == vendor)
@@ -713,7 +713,7 @@ def get_server(
     the available benchmark scores.
     """
     # TODO async
-    res = get_server_base(vendor, server)
+    res = get_server_base(vendor, server, db)
     prices = db.exec(
         select(ServerPrice)
         .where(ServerPrice.status == Status.ACTIVE)
@@ -780,7 +780,7 @@ def get_similar_servers(
     The "score" method will find the servers with the closest
     performance using the multi-core SCore.
     """
-    serverobj = get_server_base(vendor, server)
+    serverobj = get_server_base(vendor, server, db)
 
     max_scores = max_score_per_server()
     query = select(Server, max_scores.c.score).join(
