@@ -21,8 +21,8 @@ class Database:
             self.db_hash = db.hash
             self.last_updated = time()
             self.engine = create_engine(
-                "duckdb:///" + abspath(db.path),
-                connect_args={"preload_extensions": ["sqlite"]},
+                "sqlite:///" + abspath(db.path),
+                connect_args={"check_same_thread": False},
                 echo=bool(environ.get("KEEPER_DEBUG", False)),
             )
         return Session(autocommit=False, autoflush=False, bind=self.engine)
