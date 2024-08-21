@@ -1108,7 +1108,9 @@ def search_server_prices(
     query = query.join(region_alias.country)
     # avoid n+1 queries
     query = query.options(contains_eager(ServerPrice.vendor))
-    # TODO contains_eager(ServerPrice.region).contains_eager(Region.country)
+    query = query.options(
+        contains_eager(ServerPrice.region).contains_eager(region_alias.country)
+    )
     query = query.options(contains_eager(ServerPrice.zone))
     query = query.options(contains_eager(ServerPrice.server))
     for condition in conditions:
