@@ -1090,7 +1090,6 @@ def search_server_prices(
     joins.update(
         [
             ServerPrice.vendor,
-            ServerPrice.region,
             Region.country,
             ServerPrice.zone,
             ServerPrice.server,
