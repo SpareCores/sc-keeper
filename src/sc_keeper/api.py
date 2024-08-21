@@ -693,6 +693,8 @@ def get_server_base(vendor: str, server: str, db: Session) -> ServerBase:
         select(Server)
         .where(Server.vendor_id == vendor)
         .where((Server.server_id == server) | (Server.api_reference == server))
+        .join(Server.vendor)
+        .options(contains_eager(Server.vendor))
     ).all()
     if not res:
         raise HTTPException(status_code=404, detail="Server not found")
@@ -719,6 +721,10 @@ def get_server(
         .where(ServerPrice.status == Status.ACTIVE)
         .where(ServerPrice.vendor_id == vendor)
         .where(ServerPrice.server_id == res.server_id)
+        .join(ServerPrice.zone)
+        .options(contains_eager(ServerPrice.zone))
+        .join(ServerPrice.region)
+        .options(contains_eager(ServerPrice.region))
     ).all()
     if currency:
         for price in prices:
