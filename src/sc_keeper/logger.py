@@ -52,7 +52,10 @@ class LogMiddleware(BaseHTTPMiddleware):
                 "event": "request",
                 "request_id": get_request_id(),
                 "client": {
-                    "ip": request.headers.get("X-Forwarded-For", request.client.host),
+                    "ip": request.headers.get(
+                        "X-Forwarded-For",
+                        request.client.host if request.client else "Unknown",
+                    ),
                     "ua": request.headers.get("User-Agent"),
                     "hints": {
                         "ua": request.headers.get("Sec-Ch-Ua"),
