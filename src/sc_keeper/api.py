@@ -33,7 +33,7 @@ from sc_crawler.tables import (
     VendorComplianceLink,
     Zone,
 )
-from sqlalchemy.orm import aliased, contains_eager
+from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, func, or_, select
 
 from .ai import openai_extract_filters
@@ -1090,6 +1090,7 @@ def search_server_prices(
     joins.update(
         [
             ServerPrice.vendor,
+            ServerPrice.region,
             Region.country,
             ServerPrice.zone,
             ServerPrice.server,
@@ -1104,16 +1105,10 @@ def search_server_prices(
         & (ServerPrice.server_id == max_scores.c.server_id),
         isouter=True,
     )
-    # join Region with alias so that we can look up country referring to that
-    region_alias = aliased(Region)
-    query = query.join(ServerPrice.region.of_type(region_alias))
     # avoid n+1 queries
     query = query.options(contains_eager(ServerPrice.vendor))
-    query = query.options(
-        contains_eager(ServerPrice.region, alias=region_alias).contains_eager(
-            Region.country
-        )
-    )
+    # TODO contains_eager(Region.country)
+    query = query.options(contains_eager(ServerPrice.region))
     query = query.options(contains_eager(ServerPrice.zone))
     query = query.options(contains_eager(ServerPrice.server))
     for condition in conditions:
