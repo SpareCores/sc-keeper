@@ -33,6 +33,7 @@ from sc_crawler.tables import (
     VendorComplianceLink,
     Zone,
 )
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, func, or_, select
 
