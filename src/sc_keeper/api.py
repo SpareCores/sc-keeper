@@ -689,16 +689,16 @@ def search_regions(
 
 
 def get_server_base(vendor: str, server: str, db: Session) -> ServerBase:
-    res = db.exec(
-        select(Server)
-        .where(Server.vendor_id == vendor)
-        .where((Server.server_id == server) | (Server.api_reference == server))
-        .join(Server.vendor)
-        .options(contains_eager(Server.vendor))
-    ).all()
-    if not res:
+    try:
+        return db.exec(
+            select(Server)
+            .where(Server.vendor_id == vendor)
+            .where((Server.server_id == server) | (Server.api_reference == server))
+            .join(Server.vendor)
+            .options(contains_eager(Server.vendor))
+        ).one()
+    except NoResultFound:
         raise HTTPException(status_code=404, detail="Server not found")
-    return res[0]
 
 
 @app.get("/server/{vendor}/{server}", tags=["Query Resources"])
