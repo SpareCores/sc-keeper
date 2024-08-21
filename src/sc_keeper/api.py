@@ -35,7 +35,7 @@ from sc_crawler.tables import (
 )
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import contains_eager
-from sqlmodel import Session, func, or_, select
+from sqlmodel import Session, func, and_, not_, or_, select
 
 from .ai import openai_extract_filters
 from .currency import CurrencyConverter
@@ -790,11 +790,22 @@ def get_similar_servers(
     serverobj = get_server_base(vendor, server, db)
 
     max_scores = max_score_per_server()
-    query = select(Server, max_scores.c.score).join(
-        max_scores,
-        (Server.vendor_id == max_scores.c.vendor_id)
-        & (Server.server_id == max_scores.c.server_id),
-        isouter=True,
+    query = (
+        select(Server, max_scores.c.score)
+        .join(
+            max_scores,
+            (Server.vendor_id == max_scores.c.vendor_id)
+            & (Server.server_id == max_scores.c.server_id),
+            isouter=True,
+        )
+        .where(
+            not_(
+                and_(
+                    Server.vendor_id == serverobj.vendor_id,
+                    Server.server_id == serverobj.server_id,
+                )
+            )
+        )
     )
 
     if by == "family":
