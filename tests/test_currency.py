@@ -1,4 +1,5 @@
 from pytest import approx
+
 from sc_keeper.currency import CurrencyConverter
 
 
