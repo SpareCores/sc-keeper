@@ -1271,6 +1271,8 @@ def table_storage_prices(
         .join(StoragePrice.storage)
         .options(contains_eager(StoragePrice.storage))
     )
+    for condition in conditions:
+        query = query.where(condition)
 
     # ordering
     if order_by:
