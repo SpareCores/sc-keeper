@@ -1325,3 +1325,18 @@ def assist_server_price_filters(text: str, request: Request) -> dict:
         },
     )
     return res
+
+
+@app.get("/ai/assist_storage_price_filters", tags=["AI"])
+def assist_storage_price_filters(text: str, request: Request) -> dict:
+    """Extract StoragePrice JSON filters from freetext."""
+    res = openai_extract_filters(text, endpoint="/storage_prices")
+    logging.info(
+        "openai response",
+        extra={
+            "event": "assist_filters response",
+            "res": res,
+            "request_id": get_request_id(),
+        },
+    )
+    return res
