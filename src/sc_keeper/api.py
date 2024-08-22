@@ -98,9 +98,6 @@ ComplianceFrameworks = StrEnum(
         for m in db.exec(select(ComplianceFramework)).all()
     },
 )
-Storages = StrEnum(
-    "Storages", {m.storage_id: m.storage_id for m in db.exec(select(Storage)).all()}
-)
 
 
 class NameAndDescription(BaseModel):
@@ -414,7 +411,7 @@ options = SimpleNamespace(
     regions=Annotated[
         Optional[List[Regions]],
         Query(
-            title="region id",
+            title="Region id",
             description="Identifier of the region.",
             json_schema_extra={
                 "category_id": FilterCategories.REGION,
@@ -456,6 +453,17 @@ options = SimpleNamespace(
             },
         ),
     ],
+    storage_min=Annotated[
+        Optional[int],
+        Query(
+            title="Minimum size",
+            description="Minimum Storage size in GBs.",
+            json_schema_extra={
+                "category_id": FilterCategories.STORAGE,
+                "unit": "GB",
+            },
+        ),
+    ], 
     countries=Annotated[
         Optional[List[str]],
         Query(
@@ -591,28 +599,13 @@ def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
 
 @app.get("/storage_prices")
 def table_storage_prices(
-    vendor: Annotated[
-        Optional[List[Vendors]],
-        Query(
-            title="Vendor id",
-            description="Identifier of the cloud provider vendor.",
-            json_schema_extra={
-                "category_id": FilterCategories.VENDOR,
-                "enum": [m.value for m in Vendors],
-            },
-        ),
-    ] = None,
-    storage_id: Annotated[
-        Optional[List[Storages]],
-        Query(
-            title="Storage id",
-            description="Identifier of the storage type.",
-            json_schema_extra={
-                "category_id": FilterCategories.STORAGE,
-                "enum": [m.value for m in Storages],
-            },
-        ),
-    ] = None,
+    vendor: options.vendor = None,
+    green_energy: options.green_energy = None,
+    storage_min: options.storage_min = None,
+    storage_type: options.storage_type = None,
+    compliance_framework: options.compliance_framework = None,
+    regions: options.regions = None,
+    countries: options.countries = None,
     limit: options.limit = 50,
     page: options.page = None,
     order_by: options.order_by = "price",
@@ -623,8 +616,40 @@ def table_storage_prices(
     if vendor:
         query = query.where(StoragePrice.vendor_id.in_(vendor))
 
-    if storage_id:
-        query = query.where(StoragePrice.storage_id.in_(storage_id))
+    if storage_type:
+        query = query.where(Storage.storage_type.in_(storage_type))
+
+    if storage_min:
+        query = query.where(Storage.min_size <= storage_min)
+        query = query.where(Storage.max_size >= storage_min)
+
+    if regions:
+        query = query.where(StoragePrice.region_id.in_(regions))
+
+    if countries:
+        query = query.where(Region.country_id.in_(countries))
+
+    if green_energy:
+        query = query.where(Region.green_energy == green_energy)
+
+    # compliance_framework TODO: implement after main merged and the new compliance filter is added
+
+    # ordering
+    if order_by:
+        order_obj = [
+            o
+            for o in [StoragePrice, Region, Storage]
+            if hasattr(o, order_by)
+        ]
+        if len(order_obj) == 0:
+            raise HTTPException(status_code=400, detail="Unknown order_by field.")
+        if len(order_obj) > 1:
+            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+        order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
 
     # pagination
     if limit > 0:
