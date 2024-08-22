@@ -826,8 +826,6 @@ def get_server(
 
     return res
 
-import time
-
 @app.get("/servers", tags=["Query Resources"])
 def search_servers(
     response: Response,
@@ -851,7 +849,6 @@ def search_servers(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
-    start_time = time.time()
     max_scores = max_score_per_server()
     query = (
         select(Server, max_scores.c.score)
@@ -948,9 +945,6 @@ def search_servers(
             serveri.score_per_price = None
         serverlist.append(serveri)
 
-    end_time = time.time()
-    elapsed_time = int((end_time - start_time) * 1000)
-    print(f"The function took {elapsed_time} ms to run.")
     return serverlist
 
 
