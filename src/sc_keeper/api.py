@@ -447,7 +447,7 @@ options = SimpleNamespace(
         Optional[float],
         Query(
             title="Storage Size",
-            description="Minimum amount of storage (GBs) attached to the server.",
+            description="Minimum amount of storage (GBs).",
             json_schema_extra={
                 "category_id": FilterCategories.STORAGE,
                 "step": 0.1,
@@ -463,17 +463,6 @@ options = SimpleNamespace(
             json_schema_extra={
                 "category_id": FilterCategories.STORAGE,
                 "enum": [e.value for e in StorageType],
-            },
-        ),
-    ],
-    storage_min=Annotated[
-        Optional[int],
-        Query(
-            title="Minimum size",
-            description="Minimum Storage size in GBs.",
-            json_schema_extra={
-                "category_id": FilterCategories.STORAGE,
-                "unit": "GB",
             },
         ),
     ],
@@ -617,7 +606,7 @@ def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
 def table_storage_prices(
     vendor: options.vendor = None,
     green_energy: options.green_energy = None,
-    storage_min: options.storage_min = None,
+    storage_min: options.storage_size = None,
     storage_type: options.storage_type = None,
     compliance_framework: options.compliance_framework = None,
     regions: options.regions = None,
