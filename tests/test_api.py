@@ -42,6 +42,18 @@ test_server_prices_params = test_servers_params + [
 ]
 
 
+test_storage_prices_params = [
+    {},
+    {"vendor": ["hcloud"]},
+    {"vendor": ["hcloud", "gcp"]},
+    {"storage_type": ["ssd"]},
+    {"storage_min": 100},
+    {"regions": ["us-west-2"]},
+    {"countries": ["DE"]},
+    {"green_energy": True},
+]
+
+
 @pytest.mark.parametrize("params", test_servers_params)
 def test_servers_with_params(params):
     response = client.get("/servers", params=params | {"add_total_count_header": True})
@@ -81,3 +93,18 @@ def test_server_prices_with_inactive():
         "/server_prices", params=params | {"add_total_count_header": True}
     )
     assert int(response.headers["x-total-count"]) > count
+
+
+@pytest.mark.parametrize("params", test_storage_prices_params)
+def test_storage_prices_with_params(params):
+    response = client.get("/storage_prices", params=params | {"limit": -1})
+    # expect OK status within a reasonable time
+    assert response.status_code == 200
+    assert response.elapsed.total_seconds() < 5
+    # if params is empty, this is the full count
+    if params == {}:
+        global count
+        count = len(response.json())
+    else:
+        # filtered list should have fewer items than full search
+        assert len(response.json()) < count
