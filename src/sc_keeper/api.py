@@ -617,28 +617,52 @@ def table_storage_prices(
     order_dir: options.order_dir = OrderDir.ASC,
     db: Session = Depends(get_db),
 ) -> List[StoragePriceWithPKs]:
-    query = select(StoragePrice).join(StoragePrice.vendor).join(StoragePrice.storage)
+    # compliance frameworks are defined at the vendor level,
+    # let's filter for vendors instead of exploding the storages table
+    if compliance_framework:
+        if not vendor:
+            vendor = db.exec(select(Vendor.vendor_id)).all()
+        query = select(VendorComplianceLink.vendor_id).where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+        compliant_vendors = db.exec(query).all()
+        vendor = list(set(vendor or []) & set(compliant_vendors))
+
+    # keep track of filter conditions
+    conditions = set()
 
     if vendor:
-        query = query.where(StoragePrice.vendor_id.in_(vendor))
+        conditions.add(StoragePrice.vendor_id.in_(vendor))
 
     if storage_type:
-        query = query.where(Storage.storage_type.in_(storage_type))
+        conditions.add(Storage.storage_type.in_(storage_type))
 
     if storage_min:
-        query = query.where(Storage.min_size <= storage_min)
-        query = query.where(Storage.max_size >= storage_min)
+        conditions.add(Storage.min_size <= storage_min)
+        conditions.add(Storage.max_size >= storage_min)
 
     if regions:
-        query = query.where(StoragePrice.region_id.in_(regions))
+        conditions.add(StoragePrice.region_id.in_(regions))
 
     if countries:
-        query = query.where(Region.country_id.in_(countries))
+        conditions.add(Region.country_id.in_(countries))
 
     if green_energy:
-        query = query.where(Region.green_energy == green_energy)
+        conditions.add(Region.green_energy == green_energy)
 
-    # compliance_framework TODO: implement after main merged and the new compliance filter is added
+    region_alias = Region
+    query = (
+        select(StoragePrice)
+        .join(StoragePrice.vendor)
+        .options(contains_eager(StoragePrice.vendor))
+        .join(StoragePrice.region)
+        .join(region_alias.country)
+        .options(
+            contains_eager(StoragePrice.region).contains_eager(region_alias.country)
+        )
+        .join(StoragePrice.storage)
+        .options(contains_eager(StoragePrice.storage))
+    )
 
     # ordering
     if order_by:
