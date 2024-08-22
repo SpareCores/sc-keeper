@@ -17,9 +17,9 @@ from sc_crawler.table_bases import (
     RegionBase,
     ServerBase,
     ServerPriceBase,
+    StorageBase,
     StoragePriceBase,
     VendorBase,
-    StorageBase,
     ZoneBase,
 )
 from sc_crawler.table_fields import Allocation, CpuArchitecture, Status, StorageType
