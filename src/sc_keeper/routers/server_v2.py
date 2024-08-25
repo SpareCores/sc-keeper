@@ -14,7 +14,7 @@ from ..references import ServerPKs
 router = APIRouter()
 
 
-@router.get("/server/{vendor}/{server}", tags=["Server Details (v2)"])
+@router.get("/server/{vendor}/{server}", tags=["Server Details"])
 def get_server(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
