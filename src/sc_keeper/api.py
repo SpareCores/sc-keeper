@@ -175,8 +175,8 @@ app = FastAPI(
     - SC Crawler: <https://github.com/SpareCores/sc-crawler>
     - SC Data: <https://github.com/SpareCores/sc-data>
     """),
-    # terms_of_service="TODO",
     version=version("sparecores-keeper"),
+    terms_of_service="https://sparecores.com/legal/terms-of-service",
     contact={
         "name": "Spare Cores Team",
         "email": "social@sparecores.com",
