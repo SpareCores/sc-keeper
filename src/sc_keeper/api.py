@@ -28,7 +28,7 @@ from sqlmodel import Session, and_, func, not_, or_, select
 from . import parameters as options
 from .ai import openai_extract_filters
 from .currency import CurrencyConverter
-from .database import get_db, session
+from .database import get_db
 from .helpers import get_server_base
 from .logger import LogMiddleware, get_request_id
 from .lookups import min_server_price
@@ -41,12 +41,7 @@ from .references import (
     ServerPriceWithPKs,
     ServerTableMetaData,
 )
-from .routers import server_v2
-
-package_versions = {
-    pkg: version(pkg)
-    for pkg in ["sparecores-crawler", "sparecores-data", "sparecores-keeper"]
-}
+from .routers import administrative, server_v2
 
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
@@ -188,9 +183,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(server_v2.router, prefix="/v2")
-
-
 # ##############################################################################
 # Middlewares
 
@@ -213,14 +205,8 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 # API endpoints
 
 
-@app.get("/healthcheck", tags=["Administrative endpoints"])
-def healthcheck(db: Session = Depends(get_db)) -> dict:
-    """Return database hash and last udpated timestamp."""
-    return {
-        "packages": package_versions,
-        "database_last_updated": session.last_updated,
-        "database_hash": session.db_hash,
-    }
+app.include_router(administrative.router)
+app.include_router(server_v2.router, prefix="/v2")
 
 
 @app.get("/table/benchmark", tags=["Table dumps"])
