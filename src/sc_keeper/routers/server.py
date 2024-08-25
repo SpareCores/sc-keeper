@@ -85,7 +85,7 @@ def get_server(
 
 
 @router.get("/v2/server/{vendor}/{server}")
-def get_server_v2(
+def get_server_without_relations(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
     db: Session = Depends(get_db),
