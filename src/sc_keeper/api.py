@@ -35,12 +35,12 @@ from .logger import LogMiddleware, get_request_id
 from .lookups import min_server_price
 from .query import max_score_per_server
 from .references import (
-    ServerTableMetaData,
+    OrderDir,
+    RegionPKs,
     ServerPKs,
     ServerPKsWithPrices,
-    RegionPKs,
     ServerPriceWithPKs,
-    OrderDir,
+    ServerTableMetaData,
 )
 
 package_versions = {

@@ -1,17 +1,16 @@
-from typing import Annotated, Optional, List
-from fastapi import Query
+from typing import Annotated, List, Optional
 
+from fastapi import Query
 from sc_crawler.table_fields import Allocation, CpuArchitecture, StorageType
 
 from .references import (
-    Countries,
-    Vendors,
-    Regions,
     ComplianceFrameworks,
-    OrderDir,
+    Countries,
     FilterCategories,
+    OrderDir,
+    Regions,
+    Vendors,
 )
-
 
 # ##############################################################################
 # Shared API query parameters

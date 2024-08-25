@@ -23,7 +23,6 @@ from sqlmodel import select
 
 from .database import session
 
-
 # create enums from DB values for filtering options
 with session.sessionmaker as db:
     Countries = StrEnum(
