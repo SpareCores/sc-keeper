@@ -38,7 +38,7 @@ from .references import (
     ServerPKsWithPrices,
     ServerPriceWithPKs,
 )
-from .routers import administrative, server_v2, table_metadata, tables
+from .routers import administrative, server, table_metadata, tables
 
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
@@ -204,7 +204,7 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 app.include_router(administrative.router, tags=["Administrative endpoints"])
 app.include_router(tables.router, prefix="/table", tags=["Table dumps"])
 app.include_router(table_metadata.router)
-app.include_router(server_v2.router, tags=["Server Details"])
+app.include_router(server.router, tags=["Server Details"])
 
 
 @app.get("/regions", tags=["Query Resources"])
