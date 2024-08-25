@@ -376,7 +376,7 @@ def search_regions(
     return db.exec(query).all()
 
 
-@app.get("/server/{vendor}/{server}", tags=["Query Resources"])
+@app.get("/server/{vendor}/{server}", tags=["Query Resources"], deprecated=True)
 def get_server(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
