@@ -39,9 +39,8 @@ from .references import (
     ServerPKs,
     ServerPKsWithPrices,
     ServerPriceWithPKs,
-    ServerTableMetaData,
 )
-from .routers import administrative, server_v2
+from .routers import administrative, server_v2, table_metadata, tables
 
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
@@ -206,149 +205,9 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 
 
 app.include_router(administrative.router)
+app.include_router(tables.router)
+app.include_router(table_metadata.router)
 app.include_router(server_v2.router, prefix="/v2")
-
-
-@app.get("/table/benchmark", tags=["Table dumps"])
-def table_benchmark(db: Session = Depends(get_db)) -> List[Benchmark]:
-    """Return the Benchmark table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Benchmark)).all()
-
-
-@app.get("/table/country", tags=["Table dumps"])
-def table_country(db: Session = Depends(get_db)) -> List[Country]:
-    """Return the Country table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Country)).all()
-
-
-@app.get("/table/compliance_framework", tags=["Table dumps"])
-def table_compliance_frameworks(
-    db: Session = Depends(get_db),
-) -> List[ComplianceFramework]:
-    """Return the ComplianceFramework table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(ComplianceFramework)).all()
-
-
-@app.get("/table/vendor", tags=["Table dumps"])
-def table_vendor(db: Session = Depends(get_db)) -> List[Vendor]:
-    """Return the Vendor table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Vendor)).all()
-
-
-@app.get("/table/region", tags=["Table dumps"])
-def table_region(db: Session = Depends(get_db)) -> List[Region]:
-    """Return the Region table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Region)).all()
-
-
-@app.get("/table/zone", tags=["Table dumps"])
-def table_zone(db: Session = Depends(get_db)) -> List[Zone]:
-    """Return the Zone table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Zone)).all()
-
-
-@app.get("/table/server", tags=["Table dumps"])
-def table_server(db: Session = Depends(get_db)) -> List[Server]:
-    """Return the Server table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Server)).all()
-
-
-@app.get("/table/storage", tags=["Table dumps"])
-def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
-    """Return the Storage table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Storage)).all()
-
-
-def _get_category(server_column_name: str) -> str:
-    if server_column_name not in Server.get_columns()["all"]:
-        raise KeyError("Unknown Server column name.")
-    if server_column_name in [
-        "vendor_id",
-        "server_id",
-        "name",
-        "api_reference",
-        "display_name",
-        "description",
-        "family",
-        "status",
-        "observed_at",
-    ]:
-        return "meta"
-    if server_column_name in ["vcpus", "hypervisor"] or server_column_name.startswith(
-        "cpu"
-    ):
-        return "cpu"
-    if server_column_name.startswith("memory"):
-        return "memory"
-    if server_column_name.startswith("gpu"):
-        return "gpu"
-    if server_column_name.startswith("storage"):
-        return "storage"
-    if (
-        server_column_name.endswith("_traffic")
-        or server_column_name.startswith("network")
-        or server_column_name == "ipv4"
-    ):
-        return "network"
-
-
-def _get_name(server_column_name: str) -> str:
-    # special cases
-    mapping = {
-        "vcpus": "vCPUs",
-        "cpus": "CPUs",
-        "gpus": "GPUs",
-        "ipv4": "IPv4",
-    }
-    if server_column_name in mapping:
-        return mapping[server_column_name]
-    name = server_column_name.replace("_", " ").title()
-    name = name.replace(" Id", " ID")
-    name = name.replace("Api ", "API ")
-    name = name.replace("Cpu ", "CPU ")
-    name = name.replace("Gpu ", "GPU ")
-    name = name.replace(" Ecc", " ECC")
-    return name
-
-
-def _get_unit(server_column_name: str) -> str:
-    mapping = {
-        "cpu_speed": "GHz",
-        "cpu_l1_cache": "byte",
-        "cpu_l2_cache": "byte",
-        "cpu_l3_cache": "byte",
-        "memory_amount": "MiB",
-        "memory_speed": "Mhz",
-        "gpu_memory_min": "MiB",
-        "gpu_memory_total": "MiB",
-        "storage_size": "GB",
-        "network_speed": "Gbps",
-        "inbound_traffic": "GB/month",
-        "outbound_traffic": "GB/month",
-    }
-    if server_column_name in mapping:
-        return mapping[server_column_name]
-    return None
-
-
-@app.get("/table/server/meta", tags=["Table metadata"])
-def table_metadata_server(db: Session = Depends(get_db)) -> ServerTableMetaData:
-    """Server table and column names and comments."""
-    table = {
-        "name": Server.get_table_name(),
-        "description": Server.__doc__.splitlines()[0],
-    }
-    fields = [
-        {
-            "id": k,
-            "name": _get_name(k),
-            "description": v.description,
-            "category": _get_category(k),
-            "unit": _get_unit(k),
-        }
-        for k, v in Server.model_fields.items()
-    ]
-    return {"table": table, "fields": fields}
 
 
 @app.get("/regions", tags=["Query Resources"])
