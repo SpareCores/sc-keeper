@@ -21,19 +21,19 @@ from ..database import get_db
 router = APIRouter()
 
 
-@router.get("/table/benchmark", tags=["Table dumps"])
+@router.get("/benchmark")
 def table_benchmark(db: Session = Depends(get_db)) -> List[Benchmark]:
     """Return the Benchmark table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Benchmark)).all()
 
 
-@router.get("/table/country", tags=["Table dumps"])
+@router.get("/country")
 def table_country(db: Session = Depends(get_db)) -> List[Country]:
     """Return the Country table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Country)).all()
 
 
-@router.get("/table/compliance_framework", tags=["Table dumps"])
+@router.get("/compliance_framework")
 def table_compliance_frameworks(
     db: Session = Depends(get_db),
 ) -> List[ComplianceFramework]:
@@ -41,31 +41,31 @@ def table_compliance_frameworks(
     return db.exec(select(ComplianceFramework)).all()
 
 
-@router.get("/table/vendor", tags=["Table dumps"])
+@router.get("/vendor")
 def table_vendor(db: Session = Depends(get_db)) -> List[Vendor]:
     """Return the Vendor table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Vendor)).all()
 
 
-@router.get("/table/region", tags=["Table dumps"])
+@router.get("/region")
 def table_region(db: Session = Depends(get_db)) -> List[Region]:
     """Return the Region table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Region)).all()
 
 
-@router.get("/table/zone", tags=["Table dumps"])
+@router.get("/zone")
 def table_zone(db: Session = Depends(get_db)) -> List[Zone]:
     """Return the Zone table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Zone)).all()
 
 
-@router.get("/table/server", tags=["Table dumps"])
+@router.get("/server")
 def table_server(db: Session = Depends(get_db)) -> List[Server]:
     """Return the Server table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Server)).all()
 
 
-@router.get("/table/storage", tags=["Table dumps"])
+@router.get("/storage")
 def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
     """Return the Storage table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Storage)).all()

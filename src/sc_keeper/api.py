@@ -204,8 +204,8 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 # API endpoints
 
 
-app.include_router(administrative.router)
-app.include_router(tables.router)
+app.include_router(administrative.router, tags=["Administrative endpoints"])
+app.include_router(tables.router, prefix="/table", tags=["Table dumps"])
 app.include_router(table_metadata.router)
 app.include_router(server_v2.router, prefix="/v2")
 
