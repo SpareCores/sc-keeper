@@ -3,15 +3,14 @@ from contextlib import asynccontextmanager
 from importlib.metadata import version
 from os import environ
 from textwrap import dedent
-from typing import Annotated, List, Literal
+from typing import List
 
-from fastapi import Depends, FastAPI, HTTPException, Path, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from sc_crawler.table_fields import Status
 from sc_crawler.tables import (
     Benchmark,
-    BenchmarkScore,
     ComplianceFramework,
     Country,
     Region,
@@ -23,13 +22,12 @@ from sc_crawler.tables import (
     Zone,
 )
 from sqlalchemy.orm import contains_eager
-from sqlmodel import Session, and_, func, not_, or_, select
+from sqlmodel import Session, func, or_, select
 
 from . import parameters as options
 from .ai import openai_extract_filters
-from .currency import CurrencyConverter
 from .database import get_db
-from .helpers import get_server_base
+from .helpers import currency_converter
 from .logger import LogMiddleware, get_request_id
 from .lookups import min_server_price
 from .query import max_score_per_server
@@ -52,7 +50,6 @@ if environ.get("SENTRY_DSN"):
 
 
 db = next(get_db())
-currency_converter = CurrencyConverter()
 
 
 @asynccontextmanager
@@ -207,7 +204,7 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 app.include_router(administrative.router, tags=["Administrative endpoints"])
 app.include_router(tables.router, prefix="/table", tags=["Table dumps"])
 app.include_router(table_metadata.router)
-app.include_router(server_v2.router, prefix="/v2")
+app.include_router(server_v2.router, tags=["Server Details"])
 
 
 @app.get("/regions", tags=["Query Resources"])
@@ -219,150 +216,6 @@ def search_regions(
     if vendor:
         query = query.where(Region.vendor_id.in_(vendor))
     return db.exec(query).all()
-
-
-@app.get("/server/{vendor}/{server}", tags=["Query Resources"], deprecated=True)
-def get_server(
-    vendor: Annotated[str, Path(description="Vendor ID.")],
-    server: Annotated[str, Path(description="Server ID or API reference.")],
-    currency: options.currency = None,
-    db: Session = Depends(get_db),
-) -> ServerPKsWithPrices:
-    """Query a single server by its vendor id and either the server or, or its API reference.
-
-    Return dictionary includes all server fields, along
-    with the current prices per zone, and
-    the available benchmark scores.
-    """
-    # TODO async
-    res = get_server_base(vendor, server, db)
-    prices = db.exec(
-        select(ServerPrice)
-        .where(ServerPrice.status == Status.ACTIVE)
-        .where(ServerPrice.vendor_id == vendor)
-        .where(ServerPrice.server_id == res.server_id)
-        .join(ServerPrice.zone)
-        .options(contains_eager(ServerPrice.zone))
-        .join(ServerPrice.region)
-        .options(contains_eager(ServerPrice.region))
-    ).all()
-    if currency:
-        for price in prices:
-            if hasattr(price, "price") and hasattr(price, "currency"):
-                if price.currency != currency:
-                    price.price = round(
-                        currency_converter.convert(
-                            price.price, price.currency, currency
-                        ),
-                        4,
-                    )
-                    price.currency = currency
-
-    res.prices = prices
-    benchmarks = db.exec(
-        select(BenchmarkScore)
-        .where(BenchmarkScore.status == Status.ACTIVE)
-        .where(BenchmarkScore.vendor_id == vendor)
-        .where(BenchmarkScore.server_id == res.server_id)
-    ).all()
-    res.benchmark_scores = benchmarks
-    # SCore and $Core
-    res = ServerPKsWithPrices.from_orm(res)
-    res.score = max(
-        [b.score for b in benchmarks if b.benchmark_id == "stress_ng:cpu_all"],
-        default=None,
-    )
-    try:
-        res.price = min_server_price(db, res.vendor_id, res.server_id)
-    except KeyError:
-        res.price = None
-    res.score_per_price = res.score / res.price if res.price and res.score else None
-
-    return res
-
-
-@app.get("/server/{vendor}/{server}/similar_servers/{by}/{n}", tags=["Query Resources"])
-def get_similar_servers(
-    vendor: Annotated[str, Path(description="Vendor ID.")],
-    server: Annotated[str, Path(description="Server ID or API reference.")],
-    by: Annotated[
-        Literal["family", "specs", "score"],
-        Path(description="Algorithm to look for similar servers."),
-    ],
-    n: Annotated[
-        int,
-        Path(description="Number of servers to get.", le=100),
-    ],
-    db: Session = Depends(get_db),
-) -> List[ServerPKs]:
-    """Search similar servers to the provided one.
-
-    The "family" method returns all servers from the same family of
-    the same vendor.
-
-    The "specs" approach will prioritize the number of
-    GPUs, then CPUs, lastly the amount of memory.
-
-    The "score" method will find the servers with the closest
-    performance using the multi-core SCore.
-    """
-    serverobj = get_server_base(vendor, server, db)
-
-    max_scores = max_score_per_server()
-    query = (
-        select(Server, max_scores.c.score)
-        .join(
-            max_scores,
-            (Server.vendor_id == max_scores.c.vendor_id)
-            & (Server.server_id == max_scores.c.server_id),
-            isouter=True,
-        )
-        .where(
-            not_(
-                and_(
-                    Server.vendor_id == serverobj.vendor_id,
-                    Server.server_id == serverobj.server_id,
-                )
-            )
-        )
-    )
-
-    if by == "family":
-        query = (
-            query.where(Server.vendor_id == serverobj.vendor_id)
-            .where(Server.family == serverobj.family)
-            .order_by(Server.vcpus, Server.gpu_count, Server.memory_amount)
-        )
-
-    if by == "specs":
-        query = query.order_by(
-            func.abs(Server.gpu_count - serverobj.gpu_count) * 10e6
-            + func.abs(Server.vcpus - serverobj.vcpus) * 10e3
-            + func.abs(Server.memory_amount - serverobj.memory_amount) / 1e03
-        )
-
-    if by == "score":
-        max_score = db.exec(
-            select(max_scores.c.score)
-            .where(max_scores.c.vendor_id == serverobj.vendor_id)
-            .where(max_scores.c.server_id == serverobj.server_id)
-        ).one()
-        query = query.order_by(func.abs(max_scores.c.score - max_score))
-
-    servers = db.exec(query.limit(n)).all()
-
-    serverlist = []
-    for server in servers:
-        serveri = ServerPKs.from_orm(server[0])
-        serveri.score = server[1]
-        try:
-            serveri.price = min_server_price(db, serveri.vendor_id, serveri.server_id)
-            serveri.score_per_price = serveri.score / serveri.price
-        except Exception:
-            serveri.score_per_price = None
-        serverlist.append(serveri)
-
-    return serverlist
 
 
 @app.get("/servers", tags=["Query Resources"])

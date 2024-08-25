@@ -5,6 +5,10 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, select
 
+from .currency import CurrencyConverter
+
+currency_converter = CurrencyConverter()
+
 
 def get_server_base(vendor: str, server: str, db: Session) -> ServerBase:
     try:
