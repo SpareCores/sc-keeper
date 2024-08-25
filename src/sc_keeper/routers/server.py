@@ -176,3 +176,19 @@ def get_similar_servers(
         serverlist.append(serveri)
 
     return serverlist
+
+
+@router.get("/server/{vendor_id}/{server_id}/prices")
+def get_server_prices(
+    vendor_id: Annotated[str, Path(description="Vendor ID.")],
+    server_id: Annotated[str, Path(description="Server ID.")],
+    db: Session = Depends(get_db),
+) -> List[ServerPrice]:
+    """Query the current prices of a single server by its vendor id and server id."""
+    prices = db.exec(
+        select(ServerPrice)
+        .where(ServerPrice.status == Status.ACTIVE)
+        .where(ServerPrice.vendor_id == vendor_id)
+        .where(ServerPrice.server_id == server_id)
+    ).all()
+    return prices
