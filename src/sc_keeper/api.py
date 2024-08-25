@@ -25,6 +25,7 @@ from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, func, or_, select
 
 from . import parameters as options
+from . import routers
 from .ai import openai_extract_filters
 from .database import get_db
 from .helpers import currency_converter
@@ -38,7 +39,6 @@ from .references import (
     ServerPKsWithPrices,
     ServerPriceWithPKs,
 )
-from .routers import administrative, server, table_metadata, tables
 
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
@@ -201,10 +201,10 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 # API endpoints
 
 
-app.include_router(administrative.router, tags=["Administrative endpoints"])
-app.include_router(tables.router, prefix="/table", tags=["Table dumps"])
-app.include_router(table_metadata.router)
-app.include_router(server.router, tags=["Server Details"])
+app.include_router(routers.administrative.router, tags=["Administrative endpoints"])
+app.include_router(routers.tables.router, prefix="/table", tags=["Table dumps"])
+app.include_router(routers.table_metadata.router)
+app.include_router(routers.server.router, tags=["Server Details"])
 
 
 @app.get("/regions", tags=["Query Resources"])
