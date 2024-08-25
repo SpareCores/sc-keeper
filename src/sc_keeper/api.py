@@ -8,7 +8,6 @@ from typing import Annotated, List, Literal
 from fastapi import Depends, FastAPI, HTTPException, Path, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from sc_crawler.table_bases import ServerBase
 from sc_crawler.table_fields import Status
 from sc_crawler.tables import (
     Benchmark,
@@ -23,14 +22,14 @@ from sc_crawler.tables import (
     VendorComplianceLink,
     Zone,
 )
-from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, and_, func, not_, or_, select
 
 from . import parameters as options
 from .ai import openai_extract_filters
 from .currency import CurrencyConverter
-from .database import session
+from .database import get_db, session
+from .helpers import get_server_base
 from .logger import LogMiddleware, get_request_id
 from .lookups import min_server_price
 from .query import max_score_per_server
@@ -42,6 +41,7 @@ from .references import (
     ServerPriceWithPKs,
     ServerTableMetaData,
 )
+from .routers import server_v2
 
 package_versions = {
     pkg: version(pkg)
@@ -57,14 +57,6 @@ if environ.get("SENTRY_DSN"):
     )
 
 
-def get_db():
-    db = session.sessionmaker
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 db = next(get_db())
 currency_converter = CurrencyConverter()
 
@@ -77,13 +69,9 @@ async def lifespan(app: FastAPI):
     pass
 
 
-# make sure we have a fresh database
-session.updated.wait()
-
 # ##############################################################################
-# Helper classes
+# Load examples for the API docs
 
-# load examples for the docs
 example_data = {
     "benchmark": db.exec(
         select(Benchmark).where(Benchmark.benchmark_id == "geekbench:hdr")
@@ -199,6 +187,9 @@ app = FastAPI(
     },
     lifespan=lifespan,
 )
+
+app.include_router(server_v2.router, prefix="/v2")
+
 
 # ##############################################################################
 # Middlewares
@@ -383,19 +374,6 @@ def search_regions(
     if vendor:
         query = query.where(Region.vendor_id.in_(vendor))
     return db.exec(query).all()
-
-
-def get_server_base(vendor: str, server: str, db: Session) -> ServerBase:
-    try:
-        return db.exec(
-            select(Server)
-            .where(Server.vendor_id == vendor)
-            .where((Server.server_id == server) | (Server.api_reference == server))
-            .join(Server.vendor)
-            .options(contains_eager(Server.vendor))
-        ).one()
-    except NoResultFound:
-        raise HTTPException(status_code=404, detail="Server not found")
 
 
 @app.get("/server/{vendor}/{server}", tags=["Query Resources"])

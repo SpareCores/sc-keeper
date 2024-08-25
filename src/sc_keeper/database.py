@@ -29,3 +29,11 @@ class Database:
 
 
 session = Database()
+
+
+def get_db():
+    db = session.sessionmaker
+    try:
+        yield db
+    finally:
+        db.close()
