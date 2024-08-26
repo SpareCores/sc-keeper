@@ -12,8 +12,6 @@ dependencies = [
   "fastapi",
   "uvicorn",
   "currencyconverter",
-  "duckdb",
-  "duckdb-engine",
 ]
 authors = [
   { name="Attila Nagy" },
