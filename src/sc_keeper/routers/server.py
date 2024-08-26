@@ -160,7 +160,9 @@ def get_similar_servers(
             .where(max_scores.c.vendor_id == serverobj.vendor_id)
             .where(max_scores.c.server_id == serverobj.server_id)
         ).one()
-        query = query.order_by(func.abs(max_scores.c.score - max_score))
+        query = query.where(max_scores.c.score != None).order_by(
+            func.abs(max_scores.c.score - max_score)
+        )
 
     servers = db.exec(query.limit(n)).all()
 
