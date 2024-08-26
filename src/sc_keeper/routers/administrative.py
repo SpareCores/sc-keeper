@@ -19,7 +19,7 @@ package_versions = {
 
 @router.get("/healthcheck")
 def healthcheck(db: Session = Depends(get_db)) -> dict:
-    """Return database hash and last udpated timestamp."""
+    """Return database hash and last updated timestamp."""
     return {
         "packages": package_versions,
         "database_last_updated": session.last_updated,
