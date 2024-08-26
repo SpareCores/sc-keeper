@@ -1,3 +1,4 @@
+from json import dumps
 from time import time
 
 import pytest
@@ -6,6 +7,11 @@ from fastapi.testclient import TestClient
 from sc_keeper.api import app
 
 client = TestClient(app)
+
+
+def params_id_func(param):
+    """Used to convert param1, param2 etc nodeids to human-readable ids."""
+    return dumps(param, sort_keys=True, separators=(",", ":"))
 
 
 def test_healthcheck():
@@ -42,7 +48,7 @@ test_server_prices_params = test_servers_params + [
 ]
 
 
-@pytest.mark.parametrize("params", test_servers_params)
+@pytest.mark.parametrize("params", test_servers_params, ids=params_id_func)
 def test_servers_with_params(params):
     response = client.get("/servers", params=params | {"add_total_count_header": True})
     # expect OK status within a reasonable time
@@ -57,7 +63,7 @@ def test_servers_with_params(params):
         assert int(response.headers["x-total-count"]) < count
 
 
-@pytest.mark.parametrize("params", test_server_prices_params)
+@pytest.mark.parametrize("params", test_server_prices_params, ids=params_id_func)
 def test_server_prices_with_params(params):
     response = client.get(
         "/server_prices", params=params | {"add_total_count_header": True}
