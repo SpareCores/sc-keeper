@@ -81,3 +81,36 @@ def test_server_prices_with_inactive():
         "/server_prices", params=params | {"add_total_count_header": True}
     )
     assert int(response.headers["x-total-count"]) > count
+
+
+def test_server_v2():
+    response = client.get("/v2/server/aws/t3.nano")
+    # expect OK status within a reasonable time
+    assert response.status_code == 200
+    assert response.elapsed.total_seconds() < 1
+    # make sure expected fields are (not) returned
+    assert response.json()["vendor_id"]
+    with pytest.raises(KeyError):
+        assert response.json()["vendor"]
+
+
+def test_server_prices():
+    response = client.get("/server/aws/t3.nano/prices")
+    # expect OK status within a reasonable time
+    assert response.status_code == 200
+    assert response.elapsed.total_seconds() < 1
+    # make sure expected fields are (not) returned
+    assert len(response.json()) > 10
+    assert response.json()[1]["zone_id"]
+    with pytest.raises(KeyError):
+        assert response.json()[1]["zone"]
+
+
+def test_server_benchmarks():
+    response = client.get("/server/aws/t3.nano/benchmarks")
+    # expect OK status within a reasonable time
+    assert response.status_code == 200
+    assert response.elapsed.total_seconds() < 1
+    # make sure expected fields are (not) returned
+    assert len(response.json()) > 10
+    assert response.json()[1]["benchmark_id"]
