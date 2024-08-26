@@ -63,10 +63,10 @@ for mix in [
     ]
 
 
-@pytest.mark.parametrize("params", test_servers_params, ids=params_id_func)
 @pytest.mark.parametrize(
     "totals", [False, True], ids=lambda t: params_id_func(bool_total_header(t))
 )
+@pytest.mark.parametrize("params", test_servers_params, ids=params_id_func)
 def test_servers_with_params(params, totals):
     response = client.get("/servers", params=params | bool_total_header(totals))
     # expect OK status within a reasonable time
@@ -82,10 +82,10 @@ def test_servers_with_params(params, totals):
             assert int(response.headers["x-total-count"]) < count
 
 
-@pytest.mark.parametrize("params", test_server_prices_params, ids=params_id_func)
 @pytest.mark.parametrize(
     "totals", [False, True], ids=lambda t: params_id_func(bool_total_header(t))
 )
+@pytest.mark.parametrize("params", test_server_prices_params, ids=params_id_func)
 def test_server_prices_with_params(params, totals):
     response = client.get("/server_prices", params=params | bool_total_header(totals))
     # expect OK status within a reasonable time
