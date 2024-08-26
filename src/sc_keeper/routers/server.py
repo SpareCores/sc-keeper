@@ -5,6 +5,7 @@ from fastapi import (
     Depends,
     Path,
 )
+from sc_crawler.table_bases import ServerBase
 from sc_crawler.table_fields import Status
 from sc_crawler.tables import (
     BenchmarkScore,
@@ -16,7 +17,7 @@ from sqlmodel import Session, and_, func, not_, select
 
 from .. import parameters as options
 from ..database import get_db
-from ..helpers import currency_converter, get_server_base
+from ..helpers import currency_converter, get_server_base, get_server_pks
 from ..lookups import min_server_price
 from ..query import max_score_per_server
 from ..references import ServerPKs, ServerPKsWithPrices
@@ -38,7 +39,7 @@ def get_server(
     the available benchmark scores.
     """
     # TODO async
-    res = get_server_base(vendor, server, db)
+    res = get_server_pks(vendor, server, db)
     prices = db.exec(
         select(ServerPrice)
         .where(ServerPrice.status == Status.ACTIVE)
@@ -89,7 +90,7 @@ def get_server_without_relations(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
     db: Session = Depends(get_db),
-) -> ServerPKs:
+) -> ServerBase:
     """Query a single server by its vendor id and either the server id or its API reference."""
     return get_server_base(vendor, server, db)
 
@@ -119,7 +120,7 @@ def get_similar_servers(
     The "score" method will find the servers with the closest
     performance using the multi-core SCore.
     """
-    serverobj = get_server_base(vendor, server, db)
+    serverobj = get_server_pks(vendor, server, db)
 
     max_scores = max_score_per_server()
     query = (

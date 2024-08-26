@@ -132,6 +132,7 @@ ServerPKsWithPrices.model_config["json_schema_extra"] = {
         }
     ]
 }
+# ServerPrices.model_config["json_schema_extra"]
 ServerPriceWithPKs.model_config["json_schema_extra"] = {
     "examples": [
         example_data["prices"][0].model_dump()
