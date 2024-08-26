@@ -1,5 +1,6 @@
 from collections import ChainMap
 from json import dumps
+from statistics import stdev
 from time import time
 
 import pytest
@@ -151,3 +152,45 @@ def test_server_benchmarks():
     # make sure expected fields are (not) returned
     assert len(response.json()) > 10
     assert response.json()[1]["benchmark_id"]
+
+
+def test_server_similar_family():
+    response = client.get("/server/aws/t3.nano/similar_servers/family/3")
+    # expect OK status within a reasonable time
+    assert response.status_code == 200
+    assert response.elapsed.total_seconds() < 1
+    # make sure expected fields are (not) returned
+    data = response.json()
+    assert len(data) == 3
+    for i in range(2):
+        assert data[i]["server_id"]
+        assert data[i]["vendor_id"] == data[2]["vendor_id"]
+        assert data[i]["family"] == data[2]["family"]
+        assert data[i]["server_id"] != data[2]["server_id"]
+
+
+def test_server_similar_specs():
+    response = client.get("/server/aws/t3.nano/similar_servers/specs/5")
+    # expect OK status within a reasonable time
+    assert response.status_code == 200
+    assert response.elapsed.total_seconds() < 1
+    # make sure expected fields are (not) returned
+    data = response.json()
+    assert len(data) == 5
+    for i in range(5):
+        assert data[i]["server_id"]
+        assert data[i]["score"]
+
+
+def test_server_similar_score():
+    response = client.get("/server/aws/t3.nano/similar_servers/score/10")
+    # expect OK status within a reasonable time
+    assert response.status_code == 200
+    assert response.elapsed.total_seconds() < 1
+    # make sure expected fields are (not) returned
+    data = response.json()
+    assert len(data) == 10
+    for i in range(10):
+        assert data[i]["server_id"]
+        assert data[i]["score"]
+    assert stdev([data[i]["score"] for i in range(10)]) < 100
