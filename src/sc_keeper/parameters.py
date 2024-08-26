@@ -258,3 +258,14 @@ add_total_count_header = Annotated[
         description="Add the X-Total-Count header to the response with the overall number of items (without paging). Note that it might reduce response times."
     ),
 ]
+
+benchmark_id = Annotated[
+    str,
+    Query(description="Benchmark id to use as the main score for the server."),
+]
+benchmark_config = Annotated[
+    Optional[str],
+    Query(
+        description="Optional benchmark config dict JSON to filter results of a benchmark_id."
+    ),
+]

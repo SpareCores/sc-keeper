@@ -107,6 +107,8 @@ def get_similar_servers(
         int,
         Path(description="Number of servers to get.", le=100),
     ],
+    benchmark_id: options.benchmark_id = "stress_ng:cpu_all",
+    benchmark_config: options.benchmark_id = "",
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
     """Search similar servers to the provided one.
@@ -122,7 +124,7 @@ def get_similar_servers(
     """
     serverobj = get_server_pks(vendor, server, db)
 
-    max_scores = max_score_per_server()
+    max_scores = max_score_per_server(benchmark_id, benchmark_config)
     query = (
         select(Server, max_scores.c.score)
         .join(
