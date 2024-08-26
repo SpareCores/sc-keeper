@@ -1,8 +1,9 @@
 from typing import Annotated, List, Optional
 
-from fastapi import Query
+from fastapi import Depends, Path, Query
 from sc_crawler.table_fields import Allocation, CpuArchitecture, StorageType
 
+from .helpers import get_server_dict
 from .references import (
     ComplianceFrameworks,
     Countries,
@@ -269,3 +270,13 @@ benchmark_config = Annotated[
         description="Optional benchmark config dict JSON to filter results of a benchmark_id."
     ),
 ]
+
+
+def server_args_tuple(
+    vendor: Annotated[str, Path(description="A Vendor's ID.")],
+    server: Annotated[str, Path(description="A Server's ID or API reference.")],
+):
+    return vendor, get_server_dict(vendor, server)["server_id"]
+
+
+server_args = Annotated[tuple[str, str], Depends(server_args_tuple)]

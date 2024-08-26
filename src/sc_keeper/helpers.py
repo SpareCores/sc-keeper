@@ -1,14 +1,34 @@
+from functools import cache
+
 from fastapi import HTTPException
 from sc_crawler.table_bases import ServerBase
 from sc_crawler.tables import Server
+from sc_crawler.utils import nesteddefaultdict
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, select
 
 from .currency import CurrencyConverter
+from .database import get_db
 from .references import ServerPKs
 
 currency_converter = CurrencyConverter()
+
+
+@cache
+def get_all_server():
+    with next(get_db()) as db:
+        server_rows = db.exec(select(Server)).all()
+    servers = nesteddefaultdict()
+    for server_row in server_rows:
+        serverobj = server_row.model_dump()
+        servers[server_row.vendor_id][server_row.server_id] = serverobj
+        servers[server_row.vendor_id][server_row.api_reference] = serverobj
+    return servers
+
+
+def get_server_dict(vendor: str, server: str):
+    return get_all_server()[vendor][server]
 
 
 def get_server_base(vendor_id: str, server_id: str, db: Session) -> ServerBase:

@@ -87,12 +87,12 @@ def get_server(
 
 @router.get("/v2/server/{vendor}/{server}")
 def get_server_without_relations(
-    vendor: Annotated[str, Path(description="Vendor ID.")],
-    server: Annotated[str, Path(description="Server ID or API reference.")],
+    server_args: options.server_args,
     db: Session = Depends(get_db),
 ) -> ServerBase:
     """Query a single server by its vendor id and either the server id or its API reference."""
-    return get_server_base(vendor, server, db)
+    vendor_id, server_id = server_args
+    return get_server_base(vendor_id, server_id, db)
 
 
 @router.get("/server/{vendor}/{server}/similar_servers/{by}/{n}")
@@ -181,13 +181,13 @@ def get_similar_servers(
     return serverlist
 
 
-@router.get("/server/{vendor_id}/{server_id}/prices")
+@router.get("/server/{vendor}/{server}/prices")
 def get_server_prices(
-    vendor_id: Annotated[str, Path(description="Vendor ID.")],
-    server_id: Annotated[str, Path(description="Server ID.")],
+    server_args: options.server_args,
     db: Session = Depends(get_db),
 ) -> List[ServerPrice]:
     """Query the current prices of a single server by its vendor id and server id."""
+    vendor_id, server_id = server_args
     prices = db.exec(
         select(ServerPrice)
         .where(ServerPrice.status == Status.ACTIVE)
@@ -197,13 +197,13 @@ def get_server_prices(
     return prices
 
 
-@router.get("/server/{vendor_id}/{server_id}/benchmarks")
+@router.get("/server/{vendor}/{server}/benchmarks")
 def get_server_benchmarks(
-    vendor_id: Annotated[str, Path(description="Vendor ID.")],
-    server_id: Annotated[str, Path(description="Server ID.")],
+    server_args: options.server_args,
     db: Session = Depends(get_db),
 ) -> List[BenchmarkScore]:
     """Query the current benchmark scores of a single server."""
+    vendor_id, server_id = server_args
     return db.exec(
         select(BenchmarkScore)
         .where(BenchmarkScore.status == Status.ACTIVE)
