@@ -71,7 +71,7 @@ def get_server(
     ).all()
     res.benchmark_scores = benchmarks
     # SCore and $Core
-    res = ServerPKsWithPrices.from_orm(res)
+    res = ServerPKsWithPrices.model_validate(res)
     res.score = max(
         [b.score for b in benchmarks if b.benchmark_id == "stress_ng:cpu_all"],
         default=None,
@@ -169,7 +169,7 @@ def get_similar_servers(
 
     serverlist = []
     for server in servers:
-        serveri = ServerPKs.from_orm(server[0])
+        serveri = ServerPKs.model_validate(server[0])
         serveri.score = server[1]
         try:
             serveri.price = min_server_price(db, serveri.vendor_id, serveri.server_id)

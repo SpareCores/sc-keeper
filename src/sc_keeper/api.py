@@ -343,7 +343,7 @@ def search_servers(
     # unpack score
     serverlist = []
     for server in servers:
-        serveri = ServerPKs.from_orm(server[0])
+        serveri = ServerPKs.model_validate(server[0])
         serveri.score = server[1]
         try:
             serveri.price = min_server_price(db, serveri.vendor_id, serveri.server_id)
@@ -536,7 +536,7 @@ def search_server_prices(
     # unpack score
     prices = []
     for result in results:
-        price = ServerPriceWithPKs.from_orm(result[0])
+        price = ServerPriceWithPKs.model_validate(result[0])
         price.server.score = result[1]
         try:
             price.server.price = min_server_price(
