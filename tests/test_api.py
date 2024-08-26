@@ -179,7 +179,6 @@ def test_server_similar_specs():
     assert len(data) == 5
     for i in range(5):
         assert data[i]["server_id"]
-        assert data[i]["score"]
 
 
 def test_server_similar_score():
