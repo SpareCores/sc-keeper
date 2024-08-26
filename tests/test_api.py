@@ -15,6 +15,10 @@ def params_id_func(param):
     return dumps(param, sort_keys=True, separators=(",", ":"))
 
 
+def bool_total_header(b):
+    return {"add_total_count_header": b}
+
+
 def test_healthcheck():
     response = client.get("/healthcheck")
     assert response.status_code == 200
@@ -60,35 +64,41 @@ for mix in [
 
 
 @pytest.mark.parametrize("params", test_servers_params, ids=params_id_func)
-def test_servers_with_params(params):
-    response = client.get("/servers", params=params | {"add_total_count_header": True})
+@pytest.mark.parametrize(
+    "totals", [False, True], ids=lambda t: params_id_func(bool_total_header(t))
+)
+def test_servers_with_params(params, totals):
+    response = client.get("/servers", params=params | bool_total_header(totals))
     # expect OK status within a reasonable time
     assert response.status_code == 200
     assert response.elapsed.total_seconds() < 1
-    # if params is empty, this is the full count
-    if params == {}:
-        global count
-        count = int(response.headers["x-total-count"])
-    else:
-        # filtered list should have fewer items than full search
-        assert int(response.headers["x-total-count"]) < count
+    if totals:
+        # if params is empty, this is the full count
+        if params == {}:
+            global count
+            count = int(response.headers["x-total-count"])
+        else:
+            # filtered list should have fewer items than full search
+            assert int(response.headers["x-total-count"]) < count
 
 
 @pytest.mark.parametrize("params", test_server_prices_params, ids=params_id_func)
-def test_server_prices_with_params(params):
-    response = client.get(
-        "/server_prices", params=params | {"add_total_count_header": True}
-    )
+@pytest.mark.parametrize(
+    "totals", [False, True], ids=lambda t: params_id_func(bool_total_header(t))
+)
+def test_server_prices_with_params(params, totals):
+    response = client.get("/server_prices", params=params | bool_total_header(totals))
     # expect OK status within a reasonable time
     assert response.status_code == 200
     assert response.elapsed.total_seconds() < 2
-    # if params is empty, this is the full count
-    if params == {}:
-        global count
-        count = int(response.headers["x-total-count"])
-    else:
-        # filtered list should have fewer items than full search
-        assert int(response.headers["x-total-count"]) < count
+    if totals:
+        # if params is empty, this is the full count
+        if params == {}:
+            global count
+            count = int(response.headers["x-total-count"])
+        else:
+            # filtered list should have fewer items than full search
+            assert int(response.headers["x-total-count"]) < count
 
 
 def test_server_prices_with_inactive():
