@@ -195,3 +195,18 @@ def get_server_prices(
         .where(ServerPrice.server_id == server_id)
     ).all()
     return prices
+
+
+@router.get("/server/{vendor_id}/{server_id}/benchmarks")
+def get_server_benchmarks(
+    vendor_id: Annotated[str, Path(description="Vendor ID.")],
+    server_id: Annotated[str, Path(description="Server ID.")],
+    db: Session = Depends(get_db),
+) -> List[BenchmarkScore]:
+    """Query the current benchmark scores of a single server."""
+    return db.exec(
+        select(BenchmarkScore)
+        .where(BenchmarkScore.status == Status.ACTIVE)
+        .where(BenchmarkScore.vendor_id == vendor_id)
+        .where(BenchmarkScore.server_id == server_id)
+    ).all()
