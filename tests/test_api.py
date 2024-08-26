@@ -110,6 +110,16 @@ def test_server_prices_with_inactive():
     assert int(response.headers["x-total-count"]) > count
 
 
+def test_server_v1():
+    response = client.get("/server/aws/t3.nano")
+    # expect OK status within a reasonable time
+    assert response.status_code == 200
+    assert response.elapsed.total_seconds() < 3  # slow with duckdb
+    # make sure expected fields are (not) returned
+    assert response.json()["vendor_id"]
+    assert response.json()["vendor"]
+
+
 def test_server_v2():
     response = client.get("/v2/server/aws/t3.nano")
     # expect OK status within a reasonable time
