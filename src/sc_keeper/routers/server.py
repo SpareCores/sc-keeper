@@ -17,7 +17,12 @@ from sqlmodel import Session, and_, func, not_, select
 
 from .. import parameters as options
 from ..database import get_db
-from ..helpers import currency_converter, get_server_base, get_server_pks
+from ..helpers import (
+    currency_converter,
+    get_server_base,
+    get_server_dict,
+    get_server_pks,
+)
 from ..lookups import min_server_price
 from ..query import max_score_per_server
 from ..references import ServerPKs, ServerPKsWithPrices
@@ -86,13 +91,10 @@ def get_server(
 
 
 @router.get("/v2/server/{vendor}/{server}")
-def get_server_without_relations(
-    server_args: options.server_args,
-    db: Session = Depends(get_db),
-) -> ServerBase:
+def get_server_without_relations(server_args: options.server_args) -> ServerBase:
     """Query a single server by its vendor id and either the server id or its API reference."""
     vendor_id, server_id = server_args
-    return get_server_base(vendor_id, server_id, db)
+    return get_server_dict(vendor_id, server_id)
 
 
 @router.get("/server/{vendor}/{server}/similar_servers/{by}/{n}")

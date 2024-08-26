@@ -16,7 +16,7 @@ currency_converter = CurrencyConverter()
 
 
 @cache
-def get_all_server():
+def get_server_dicts():
     with next(get_db()) as db:
         server_rows = db.exec(select(Server)).all()
     servers = nesteddefaultdict()
@@ -28,7 +28,7 @@ def get_all_server():
 
 
 def get_server_dict(vendor: str, server: str):
-    return get_all_server()[vendor][server]
+    return get_server_dicts()[vendor][server]
 
 
 def get_server_base(vendor_id: str, server_id: str, db: Session) -> ServerBase:
