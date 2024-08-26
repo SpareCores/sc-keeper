@@ -1,3 +1,4 @@
+from collections import ChainMap
 from json import dumps
 from time import time
 
@@ -46,6 +47,16 @@ test_server_prices_params = test_servers_params + [
     {"regions": ["us-west-2"]},
     {"countries": ["DE"]},
 ]
+# merge some params together for more complex queries
+for mix in [
+    [2, 5, 6],
+    [3, 4, 7, 10, 17],
+    [2, 4, 6, 8, 10, 12, 14],
+    list(range(1, len(test_server_prices_params))),
+]:
+    test_server_prices_params += [
+        dict(ChainMap(*[test_server_prices_params[m] for m in mix]))
+    ]
 
 
 @pytest.mark.parametrize("params", test_servers_params, ids=params_id_func)
@@ -53,7 +64,7 @@ def test_servers_with_params(params):
     response = client.get("/servers", params=params | {"add_total_count_header": True})
     # expect OK status within a reasonable time
     assert response.status_code == 200
-    assert response.elapsed.total_seconds() < 5
+    assert response.elapsed.total_seconds() < 1
     # if params is empty, this is the full count
     if params == {}:
         global count
@@ -70,7 +81,7 @@ def test_server_prices_with_params(params):
     )
     # expect OK status within a reasonable time
     assert response.status_code == 200
-    assert response.elapsed.total_seconds() < 5
+    assert response.elapsed.total_seconds() < 2
     # if params is empty, this is the full count
     if params == {}:
         global count
