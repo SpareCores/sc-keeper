@@ -359,7 +359,9 @@ def search_servers(
 def search_server_prices(
     response: Response,
     partial_name_or_id: options.partial_name_or_id = None,
-    vcpus_min: options.vcpus_min = None,
+    # although it's relatively expensive to set a dummy filter,
+    # but this is needed not to mess on the frontend (slider without value)
+    vcpus_min: options.vcpus_min = 1,
     architecture: options.architecture = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
