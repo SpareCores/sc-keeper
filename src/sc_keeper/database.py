@@ -29,6 +29,7 @@ class Database:
                     "CREATE INDEX IF NOT EXISTS server_price_idx_6f0ddbb8 ON server_price(vendor_id, server_id, price)",
                     "CREATE INDEX IF NOT EXISTS server_price_idx_3902126d ON server_price(server_id, vendor_id, region_id)",
                     "CREATE INDEX IF NOT EXISTS server_price_idx_f4994df3 ON server_price(allocation, vendor_id, server_id)",
+                    "CREATE INDEX IF NOT EXISTS server_idx_447dcc29 ON server(status, vcpus)",
                     "CREATE INDEX IF NOT EXISTS server_idx_68282de9 ON server(status, server_id, vendor_id)",
                     "CREATE INDEX IF NOT EXISTS benchmark_score_idx_979d2124 ON benchmark_score(benchmark_id, vendor_id, server_id)",
                     "VACUUM",

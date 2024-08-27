@@ -132,8 +132,11 @@ def test_server_v2():
         assert response.json()["vendor"]
 
 
-def test_server_prices():
-    response = client.get("/server/aws/t3.nano/prices")
+@pytest.mark.parametrize("currency", [None, "USD", "EUR"])
+def test_server_prices(currency):
+    response = client.get(
+        "/server/aws/t3.nano/prices", params={"currency": currency} if currency else {}
+    )
     # expect OK status within a reasonable time
     assert response.status_code == 200
     assert response.elapsed.total_seconds() < 1
@@ -142,6 +145,8 @@ def test_server_prices():
     assert response.json()[1]["zone_id"]
     with pytest.raises(KeyError):
         assert response.json()[1]["zone"]
+    if currency:
+        assert response.json()[1]["currency"] == currency
 
 
 def test_server_benchmarks():
