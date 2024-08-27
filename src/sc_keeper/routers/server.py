@@ -184,6 +184,7 @@ def get_similar_servers(
 def get_server_prices(
     server_args: options.server_args,
     db: Session = Depends(get_db),
+    currency: options.currency = None,
 ) -> List[ServerPrice]:
     """Query the current prices of a single server by its vendor id and server id."""
     vendor_id, server_id = server_args
@@ -193,6 +194,17 @@ def get_server_prices(
         .where(ServerPrice.vendor_id == vendor_id)
         .where(ServerPrice.server_id == server_id)
     ).all()
+    if currency:
+        for price in prices:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        4,
+                    )
+                    price.currency = currency
     return prices
 
 
