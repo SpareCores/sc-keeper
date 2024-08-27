@@ -18,7 +18,6 @@ class Database:
     def sessionmaker(self):
         with self.updating:
             if not getattr(self, "engine", None) or self.db_hash != db.hash:
-                self.updating = True
                 self.db_hash = db.hash
                 self.last_updated = time()
                 self.engine = create_engine(
