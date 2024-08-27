@@ -39,6 +39,7 @@ from .references import (
     ServerPKsWithPrices,
     ServerPriceWithPKs,
 )
+from .sentry import before_send as sentry_before_send
 
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
@@ -46,6 +47,7 @@ if environ.get("SENTRY_DSN"):
     sentry_sdk.init(
         traces_sample_rate=1.0,
         profiles_sample_rate=1.0,
+        before_send=sentry_before_send,
     )
 
 
