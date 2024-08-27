@@ -1,6 +1,6 @@
 from os import environ
 from os.path import abspath
-from time import time
+from time import sleep, time
 
 from sc_data import db
 from sqlmodel import Session, create_engine, text
@@ -8,6 +8,7 @@ from sqlmodel import Session, create_engine, text
 
 class Database:
     db_hash = db.hash
+    updating = True
     updated = db.updated
     last_updated = None
     engine = None
@@ -15,6 +16,7 @@ class Database:
     @property
     def sessionmaker(self):
         if not getattr(self, "engine", None) or self.db_hash != db.hash:
+            self.updating = True
             self.db_hash = db.hash
             self.last_updated = time()
             self.engine = create_engine(
@@ -35,6 +37,10 @@ class Database:
                     "VACUUM",
                 ]:
                     conn.execute(text(index_create))
+            self.updating = False
+
+        while self.updating:
+            sleep(0.1)
 
         return Session(autocommit=False, autoflush=False, bind=self.engine)
 
