@@ -9,14 +9,14 @@ from sqlmodel import Session, create_engine, text
 
 class Database:
     db_hash = db.hash
+    updating = Lock()
     updated = db.updated
     last_updated = None
     engine = None
 
     @property
     def sessionmaker(self):
-        lock = Lock()
-        with lock:
+        with self.updating:
             if not getattr(self, "engine", None) or self.db_hash != db.hash:
                 self.updating = True
                 self.db_hash = db.hash
