@@ -1,7 +1,7 @@
 from os import environ
 from os.path import abspath
-from time import time
 from threading import Lock
+from time import time
 
 from sc_data import db
 from sqlmodel import Session, create_engine, text
