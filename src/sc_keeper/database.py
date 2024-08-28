@@ -6,6 +6,7 @@ from time import time
 from sc_data import db
 from sqlmodel import Session, create_engine, delete, insert, text
 
+from .indexes import indexes
 from .views import ServerPriceMin, server_prices_min_query
 
 
@@ -29,29 +30,20 @@ class Database:
                 )
                 with self.engine.connect() as conn:
                     # speed up some queries with indexes
-                    for index_create in [
-                        "CREATE INDEX IF NOT EXISTS server_price_idx_4be28cc1 ON server_price(vendor_id, price)",
-                        "CREATE INDEX IF NOT EXISTS server_price_idx_dd929fc9 ON server_price(vendor_id, server_id)",
-                        "CREATE INDEX IF NOT EXISTS server_price_idx_6f0ddbb8 ON server_price(vendor_id, server_id, price)",
-                        "CREATE INDEX IF NOT EXISTS server_price_idx_3902126d ON server_price(server_id, vendor_id, region_id)",
-                        "CREATE INDEX IF NOT EXISTS server_price_idx_f4994df3 ON server_price(allocation, vendor_id, server_id)",
-                        "CREATE INDEX IF NOT EXISTS server_idx_447dcc29 ON server(status, vcpus)",
-                        "CREATE INDEX IF NOT EXISTS server_idx_68282de9 ON server(status, server_id, vendor_id)",
-                        "CREATE INDEX IF NOT EXISTS benchmark_score_idx_979d2124 ON benchmark_score(benchmark_id, vendor_id, server_id)",
-                        "VACUUM",
-                    ]:
-                        conn.execute(text(index_create))
+                    for index in indexes:
+                        index.create(bind=conn, checkfirst=True)
                     # prep ~materialized views
                     for t in [ServerPriceMin]:
-                        if not self.engine.dialect.has_table(conn, t.__tablename__):
-                            t.__table__.create(self.engine)
+                        t.__table__.create(self.engine, checkfirst=True)
                     # fill ~materialized views
                     conn.execute(delete(ServerPriceMin))
                     q = insert(ServerPriceMin).from_select(
                         ServerPriceMin.get_columns()["all"], server_prices_min_query
                     )
                     conn.execute(q)
+                    # clean up and commit
                     conn.commit()
+                    conn.execute(text("VACUUM"))
 
         return Session(autocommit=False, autoflush=False, bind=self.engine)
 
