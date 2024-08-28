@@ -7,7 +7,7 @@ from sc_data import db
 from sqlmodel import Session, create_engine, delete, insert, text
 
 from .indexes import indexes
-from .views import ServerPriceMin, server_prices_min_query
+from .views import ServerPriceMin
 
 
 class Database:
@@ -32,15 +32,16 @@ class Database:
                     # speed up some queries with indexes
                     for index in indexes:
                         index.create(bind=conn, checkfirst=True)
-                    # prep ~materialized views
+                    # prep and fill ~materialized views
                     for t in [ServerPriceMin]:
                         t.__table__.create(self.engine, checkfirst=True)
-                    # fill ~materialized views
-                    conn.execute(delete(ServerPriceMin))
-                    q = insert(ServerPriceMin).from_select(
-                        ServerPriceMin.get_columns()["all"], server_prices_min_query
-                    )
-                    conn.execute(q)
+                        conn.execute(delete(ServerPriceMin))
+                        q = insert(t).from_select(
+                            t.get_columns()["all"],
+                            # need to instantiate the class to access the private attr
+                            t()._query,
+                        )
+                        conn.execute(q)
                     # clean up and commit
                     conn.commit()
                     conn.execute(text("VACUUM"))

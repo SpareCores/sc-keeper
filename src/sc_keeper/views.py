@@ -20,22 +20,24 @@ class ServerPriceMinBase(HasServerPK, HasVendorPKFK):
 class ServerPriceMin(ServerPriceMinBase, table=True):
     """Poor man's materialized view on min price of servers."""
 
-    pass
-
-
-server_prices_min_query = (
-    select(
-        ServerPrice.vendor_id,
-        ServerPrice.server_id,
-        func.min(ServerPrice.price).label("min_price"),
-        func.min(
-            case((ServerPrice.allocation == Allocation.SPOT, ServerPrice.price))
-        ).label("min_spot_price"),
-        func.min(
-            case((ServerPrice.allocation == Allocation.ONDEMAND, ServerPrice.price))
-        ).label("min_ondemand_price"),
+    _query = (
+        select(
+            ServerPrice.vendor_id,
+            ServerPrice.server_id,
+            func.min(ServerPrice.price).label("min_price"),
+            func.min(
+                case((ServerPrice.allocation == Allocation.SPOT, ServerPrice.price))
+            ).label("min_spot_price"),
+            func.min(
+                case(
+                    (
+                        ServerPrice.allocation == Allocation.ONDEMAND,
+                        ServerPrice.price,
+                    )
+                )
+            ).label("min_ondemand_price"),
+        )
+        .where(ServerPrice.status == Status.ACTIVE)
+        .group_by(ServerPrice.vendor_id, ServerPrice.server_id)
+        .order_by(ServerPrice.vendor_id, ServerPrice.server_id)
     )
-    .where(ServerPrice.status == Status.ACTIVE)
-    .group_by(ServerPrice.vendor_id, ServerPrice.server_id)
-    .order_by(ServerPrice.vendor_id, ServerPrice.server_id)
-)
