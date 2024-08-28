@@ -4,7 +4,9 @@ from threading import Lock
 from time import time
 
 from sc_data import db
-from sqlmodel import Session, create_engine, text
+from sqlmodel import Session, create_engine, delete, insert, text
+
+from .views import ServerPriceMin, server_prices_min_query
 
 
 class Database:
@@ -26,6 +28,7 @@ class Database:
                     echo=bool(environ.get("KEEPER_DEBUG", False)),
                 )
                 with self.engine.connect() as conn:
+                    # speed up some queries with indexes
                     for index_create in [
                         "CREATE INDEX IF NOT EXISTS server_price_idx_4be28cc1 ON server_price(vendor_id, price)",
                         "CREATE INDEX IF NOT EXISTS server_price_idx_dd929fc9 ON server_price(vendor_id, server_id)",
@@ -38,6 +41,17 @@ class Database:
                         "VACUUM",
                     ]:
                         conn.execute(text(index_create))
+                    # prep ~materialized views
+                    for t in [ServerPriceMin]:
+                        if not self.engine.dialect.has_table(conn, t.__tablename__):
+                            t.__table__.create(self.engine)
+                    # fill ~materialized views
+                    conn.execute(delete(ServerPriceMin))
+                    q = insert(ServerPriceMin).from_select(
+                        ServerPriceMin.get_columns()["all"], server_prices_min_query
+                    )
+                    conn.execute(q)
+                    conn.commit()
 
         return Session(autocommit=False, autoflush=False, bind=self.engine)
 
