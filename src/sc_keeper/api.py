@@ -27,8 +27,8 @@ from sqlmodel import Session, func, or_, select
 from . import parameters as options
 from . import routers
 from .ai import openai_extract_filters
+from .currency import currency_converter
 from .database import get_db
-from .helpers import currency_converter
 from .logger import LogMiddleware, get_request_id
 from .lookups import min_server_price
 from .query import max_score_per_server
