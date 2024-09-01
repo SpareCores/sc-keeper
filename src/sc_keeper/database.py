@@ -35,7 +35,7 @@ class Database:
                     # prep and fill ~materialized views
                     for t in [ServerPriceMin]:
                         t.__table__.create(self.engine, checkfirst=True)
-                        conn.execute(delete(ServerPriceMin))
+                        conn.execute(delete(t))
                         q = insert(t).from_select(
                             t.get_columns()["all"],
                             # need to instantiate the class to access the private attr
