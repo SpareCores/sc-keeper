@@ -28,7 +28,10 @@ def get_server_dicts():
 
 
 def get_server_dict(vendor: str, server: str):
-    return get_server_dicts()[vendor][server]
+    serverobj = get_server_dicts()[vendor][server]
+    if serverobj:
+        return serverobj
+    raise HTTPException(status_code=404, detail="Server not found")
 
 
 def get_server_base(vendor_id: str, server_id: str, db: Session) -> ServerBase:
