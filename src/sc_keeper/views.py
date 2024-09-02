@@ -1,13 +1,8 @@
 from typing import Optional
 
-from sc_crawler.table_bases import (
-    HasServerPK,
-    HasVendorPKFK,
-)
+from sc_crawler.table_bases import HasServerPK, HasVendorPKFK
 from sc_crawler.table_fields import Allocation, Status
-from sc_crawler.tables import (
-    ServerPrice,
-)
+from sc_crawler.tables import ServerPrice
 from sqlmodel import case, func, select
 
 
