@@ -63,6 +63,17 @@ for mix in [
         dict(ChainMap(*[test_server_prices_params[m] for m in mix]))
     ]
 
+test_storage_prices_params = [
+    {},
+    {"vendor": ["hcloud"]},
+    {"vendor": ["hcloud", "gcp"]},
+    {"storage_type": ["ssd"]},
+    {"storage_min": 100},
+    {"regions": ["us-west-2"]},
+    {"countries": ["DE"]},
+    {"green_energy": True},
+]
+
 
 @pytest.mark.parametrize(
     "totals", [False, True], ids=lambda t: params_id_func(bool_total_header(t))
@@ -198,3 +209,18 @@ def test_server_similar_score():
         assert data[i]["server_id"]
         assert data[i]["score"]
     assert stdev([data[i]["score"] for i in range(10)]) < 100
+
+
+@pytest.mark.parametrize("params", test_storage_prices_params)
+def test_storage_prices_with_params(params):
+    response = client.get("/storage_prices", params=params | {"limit": -1})
+    # expect OK status within a reasonable time
+    assert response.status_code == 200
+    assert response.elapsed.total_seconds() < 5
+    # if params is empty, this is the full count
+    if params == {}:
+        global count
+        count = len(response.json())
+    else:
+        # filtered list should have fewer items than full search
+        assert len(response.json()) < count

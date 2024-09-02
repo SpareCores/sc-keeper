@@ -17,6 +17,7 @@ from sc_crawler.tables import (
     Server,
     ServerPrice,
     Storage,
+    StoragePrice,
     Vendor,
     VendorComplianceLink,
     Zone,
@@ -38,6 +39,7 @@ from .references import (
     ServerPKs,
     ServerPKsWithPrices,
     ServerPriceWithPKs,
+    StoragePriceWithPKs,
 )
 from .sentry import before_send as sentry_before_send
 
@@ -571,6 +573,93 @@ def search_server_prices(
     return prices
 
 
+@app.get("/storage_prices", tags=["Query Resources"])
+def search_storage_prices(
+    vendor: options.vendor = None,
+    green_energy: options.green_energy = None,
+    storage_min: options.storage_size = None,
+    storage_type: options.storage_type = None,
+    compliance_framework: options.compliance_framework = None,
+    regions: options.regions = None,
+    countries: options.countries = None,
+    limit: options.limit = 50,
+    page: options.page = None,
+    order_by: options.order_by = "price",
+    order_dir: options.order_dir = OrderDir.ASC,
+    db: Session = Depends(get_db),
+) -> List[StoragePriceWithPKs]:
+    # compliance frameworks are defined at the vendor level,
+    # let's filter for vendors instead of exploding the storages table
+    if compliance_framework:
+        if not vendor:
+            vendor = db.exec(select(Vendor.vendor_id)).all()
+        query = select(VendorComplianceLink.vendor_id).where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+        compliant_vendors = db.exec(query).all()
+        vendor = list(set(vendor or []) & set(compliant_vendors))
+
+    # keep track of filter conditions
+    conditions = set()
+
+    if vendor:
+        conditions.add(StoragePrice.vendor_id.in_(vendor))
+
+    if storage_type:
+        conditions.add(Storage.storage_type.in_(storage_type))
+
+    if storage_min:
+        conditions.add(Storage.min_size <= storage_min)
+        conditions.add(Storage.max_size >= storage_min)
+
+    if regions:
+        conditions.add(StoragePrice.region_id.in_(regions))
+
+    if countries:
+        conditions.add(Region.country_id.in_(countries))
+
+    if green_energy:
+        conditions.add(Region.green_energy == green_energy)
+
+    region_alias = Region
+    query = (
+        select(StoragePrice)
+        .join(StoragePrice.vendor)
+        .options(contains_eager(StoragePrice.vendor))
+        .join(StoragePrice.region)
+        .join(region_alias.country)
+        .options(
+            contains_eager(StoragePrice.region).contains_eager(region_alias.country)
+        )
+        .join(StoragePrice.storage)
+        .options(contains_eager(StoragePrice.storage))
+    )
+    for condition in conditions:
+        query = query.where(condition)
+
+    # ordering
+    if order_by:
+        order_obj = [o for o in [StoragePrice, Region, Storage] if hasattr(o, order_by)]
+        if len(order_obj) == 0:
+            raise HTTPException(status_code=400, detail="Unknown order_by field.")
+        if len(order_obj) > 1:
+            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+        order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
+
+    # pagination
+    if limit > 0:
+        query = query.limit(limit)
+    # only apply if limit is set
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
+
+    return db.exec(query).all()
+
+
 @app.get("/ai/assist_server_filters", tags=["AI"])
 def assist_server_filters(text: str, request: Request) -> dict:
     """Extract Server JSON filters from freetext."""
@@ -590,6 +679,21 @@ def assist_server_filters(text: str, request: Request) -> dict:
 def assist_server_price_filters(text: str, request: Request) -> dict:
     """Extract ServerPrice JSON filters from freetext."""
     res = openai_extract_filters(text, endpoint="/server_prices")
+    logging.info(
+        "openai response",
+        extra={
+            "event": "assist_filters response",
+            "res": res,
+            "request_id": get_request_id(),
+        },
+    )
+    return res
+
+
+@app.get("/ai/assist_storage_price_filters", tags=["AI"])
+def assist_storage_price_filters(text: str, request: Request) -> dict:
+    """Extract StoragePrice JSON filters from freetext."""
+    res = openai_extract_filters(text, endpoint="/storage_prices")
     logging.info(
         "openai response",
         extra={
