@@ -1,9 +1,6 @@
 from importlib.metadata import version
 
-from fastapi import (
-    APIRouter,
-    Depends,
-)
+from fastapi import APIRouter, Depends
 from sqlmodel import Session, text
 
 from ..database import get_db, session

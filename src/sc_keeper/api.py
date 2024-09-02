@@ -1,11 +1,10 @@
-import logging
 from contextlib import asynccontextmanager
 from importlib.metadata import version
 from os import environ
 from textwrap import dedent
 from typing import List
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from sc_crawler.table_fields import Status
@@ -27,10 +26,9 @@ from sqlmodel import Session, func, or_, select
 
 from . import parameters as options
 from . import routers
-from .ai import openai_extract_filters
 from .database import get_db
 from .helpers import currency_converter
-from .logger import LogMiddleware, get_request_id
+from .logger import LogMiddleware
 from .lookups import min_server_price
 from .query import max_score_per_server
 from .references import (
@@ -210,6 +208,7 @@ app.include_router(routers.administrative.router, tags=["Administrative endpoint
 app.include_router(routers.tables.router, prefix="/table", tags=["Table dumps"])
 app.include_router(routers.table_metadata.router)
 app.include_router(routers.server.router, tags=["Server Details"])
+app.include_router(routers.ai.router, prefix="/ai", tags=["AI"])
 
 
 @app.get("/regions", tags=["Query Resources"])
@@ -658,48 +657,3 @@ def search_storage_prices(
         query = query.offset((page - 1) * limit)
 
     return db.exec(query).all()
-
-
-@app.get("/ai/assist_server_filters", tags=["AI"])
-def assist_server_filters(text: str, request: Request) -> dict:
-    """Extract Server JSON filters from freetext."""
-    res = openai_extract_filters(text, endpoint="/servers")
-    logging.info(
-        "openai response",
-        extra={
-            "event": "assist_filters response",
-            "res": res,
-            "request_id": get_request_id(),
-        },
-    )
-    return res
-
-
-@app.get("/ai/assist_server_price_filters", tags=["AI"])
-def assist_server_price_filters(text: str, request: Request) -> dict:
-    """Extract ServerPrice JSON filters from freetext."""
-    res = openai_extract_filters(text, endpoint="/server_prices")
-    logging.info(
-        "openai response",
-        extra={
-            "event": "assist_filters response",
-            "res": res,
-            "request_id": get_request_id(),
-        },
-    )
-    return res
-
-
-@app.get("/ai/assist_storage_price_filters", tags=["AI"])
-def assist_storage_price_filters(text: str, request: Request) -> dict:
-    """Extract StoragePrice JSON filters from freetext."""
-    res = openai_extract_filters(text, endpoint="/storage_prices")
-    logging.info(
-        "openai response",
-        extra={
-            "event": "assist_filters response",
-            "res": res,
-            "request_id": get_request_id(),
-        },
-    )
-    return res
