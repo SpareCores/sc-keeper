@@ -8,46 +8,33 @@ from ..logger import get_request_id
 router = APIRouter()
 
 
-@router.get("/assist_server_filters")
-def assist_server_filters(text: str, request: Request) -> dict:
-    """Extract Server JSON filters from freetext."""
-    res = openai_extract_filters(text, endpoint="/servers")
+def assister(text: str, endpoint: str) -> dict:
+    res = openai_extract_filters(text, endpoint=endpoint)
     logging.info(
         "openai response",
         extra={
-            "event": "assist_filters response",
+            "event": "assister response",
             "res": res,
             "request_id": get_request_id(),
         },
+        stacklevel=2,
     )
     return res
+
+
+@router.get("/assist_server_filters")
+def assist_server_filters(text: str, request: Request) -> dict:
+    """Extract Server JSON filters from freetext."""
+    return assister(text, "/servers")
 
 
 @router.get("/assist_server_price_filters")
 def assist_server_price_filters(text: str, request: Request) -> dict:
     """Extract ServerPrice JSON filters from freetext."""
-    res = openai_extract_filters(text, endpoint="/server_prices")
-    logging.info(
-        "openai response",
-        extra={
-            "event": "assist_filters response",
-            "res": res,
-            "request_id": get_request_id(),
-        },
-    )
-    return res
+    return assister(text, "/server_prices")
 
 
 @router.get("/assist_storage_price_filters")
 def assist_storage_price_filters(text: str, request: Request) -> dict:
     """Extract StoragePrice JSON filters from freetext."""
-    res = openai_extract_filters(text, endpoint="/storage_prices")
-    logging.info(
-        "openai response",
-        extra={
-            "event": "assist_filters response",
-            "res": res,
-            "request_id": get_request_id(),
-        },
-    )
-    return res
+    return assister(text, "/storage_prices")
