@@ -45,20 +45,29 @@ class ServerPriceMin(ServerPriceMinBase, table=True):
             select(
                 ServerPrice.vendor_id,
                 ServerPrice.server_id,
-                func.min(ServerPrice.price).label("min_price"),
+                func.min(ServerPrice.price * Currency.rate).label("min_price"),
                 func.min(
-                    case((ServerPrice.allocation == Allocation.SPOT, ServerPrice.price))
+                    case(
+                        (
+                            ServerPrice.allocation == Allocation.SPOT,
+                            ServerPrice.price * Currency.rate,
+                        )
+                    )
                 ).label("min_spot_price"),
                 func.min(
                     case(
                         (
                             ServerPrice.allocation == Allocation.ONDEMAND,
-                            ServerPrice.price,
+                            ServerPrice.price * Currency.rate,
                         )
                     )
                 ).label("min_ondemand_price"),
             )
             .where(ServerPrice.status == Status.ACTIVE)
+            .join(
+                Currency,
+                (ServerPrice.currency == Currency.base) & (Currency.quote == "USD"),
+            )
             .group_by(ServerPrice.vendor_id, ServerPrice.server_id)
             .order_by(ServerPrice.vendor_id, ServerPrice.server_id)
         )
