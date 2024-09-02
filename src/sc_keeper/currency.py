@@ -27,26 +27,26 @@ class CurrencyConverter(Thread):
         super().__init__(*args, **kwargs)
 
     def update(self):
-        r = get(SINGLE_DAY_ECB_URL, stream=True)
-        if (
-            200 <= r.status_code < 300
-            and (file_last_updated := r.headers.get("Last-Modified"))
-            != self.file_last_updated
-        ):
-            # delete=False due to Windows support
-            # https://stackoverflow.com/questions/15588314/cant-access-temporary-files-created-with-tempfile/15590253#15590253
-            tmpfile = NamedTemporaryFile(delete=False, suffix=".zip")
-            copyfileobj(r.raw, tmpfile)
-            tmpfile.flush()
-            with self.lock:
-                self.file_path = tmpfile.name
-                self.file_last_updated = file_last_updated
-                self.converter = CC(self.file_path)
-            close_tmpfiles(self.tmpfiles)
-            self.tmpfiles.append(tmpfile)
-            logging.debug("Updated ECB file at %s", self.file_path)
-        else:
-            logging.debug("No need to update ECB file")
+        with get(SINGLE_DAY_ECB_URL, stream=True) as r:
+            if (
+                200 <= r.status_code < 300
+                and (file_last_updated := r.headers.get("Last-Modified"))
+                != self.file_last_updated
+            ):
+                # delete=False due to Windows support
+                # https://stackoverflow.com/questions/15588314/cant-access-temporary-files-created-with-tempfile/15590253#15590253
+                tmpfile = NamedTemporaryFile(delete=False, suffix=".zip")
+                copyfileobj(r.raw, tmpfile)
+                tmpfile.flush()
+                with self.lock:
+                    self.file_path = tmpfile.name
+                    self.file_last_updated = file_last_updated
+                    self.converter = CC(self.file_path)
+                close_tmpfiles(self.tmpfiles)
+                self.tmpfiles.append(tmpfile)
+                logging.debug("Updated ECB file at %s", self.file_path)
+            else:
+                logging.debug("No need to update ECB file")
 
     def run(self):
         """Start the update thread."""
