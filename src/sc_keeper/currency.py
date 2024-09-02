@@ -17,6 +17,7 @@ class CurrencyConverter(Thread):
     """Currency converter with hourly auto-updates. Data source: ECB."""
 
     converter: CC
+    daemon = True
 
     def __init__(self, *args, **kwargs):
         self.tmpfiles = deque()
