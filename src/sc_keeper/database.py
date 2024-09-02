@@ -6,8 +6,8 @@ from time import time
 from sc_data import db
 from sqlmodel import Session, create_engine, delete, insert, text
 
-from .indexes import indexes
 from . import views
+from .indexes import indexes
 
 
 class Database:

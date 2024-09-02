@@ -1,11 +1,10 @@
 from typing import List, Optional
 
+from sc_crawler.insert import insert_items
 from sc_crawler.table_bases import HasServerPK, HasVendorPKFK, ScModel
 from sc_crawler.table_fields import Allocation, Status
 from sc_crawler.tables import ServerPrice, is_table
-from sc_crawler.insert import insert_items
 from sqlmodel import Field, Session, case, func, select
-
 
 from .currency import currency_converter as cc
 
