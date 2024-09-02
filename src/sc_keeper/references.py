@@ -1,4 +1,5 @@
 from enum import Enum, StrEnum
+from time import time
 from typing import List, Optional
 
 from pydantic import BaseModel
@@ -46,6 +47,25 @@ with session.sessionmaker as db:
             for m in db.exec(select(ComplianceFramework)).all()
         },
     )
+
+
+class HealthcheckResponse(BaseModel):
+    packages: dict
+    database_last_updated: float
+    database_hash: str
+    database_alembic_version: str
+
+
+HealthcheckResponse.model_config["json_schema_extra"] = {
+    "examples": [
+        {
+            "packages": {"sparecores-crawler": "1.0.0"},
+            "database_last_updated": time(),
+            "database_hash": "foo",
+            "database_alembic_version": "bar",
+        }
+    ]
+}
 
 
 class NameAndDescription(BaseModel):
