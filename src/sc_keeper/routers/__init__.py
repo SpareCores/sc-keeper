@@ -1,1 +1,1 @@
-from . import administrative, server, table_metadata, tables  # noqa: F401
+from . import administrative, ai, server, table_metadata, tables  # noqa: F401
