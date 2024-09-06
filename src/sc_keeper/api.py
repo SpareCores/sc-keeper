@@ -585,6 +585,7 @@ def search_storage_prices(
     page: options.page = None,
     order_by: options.order_by = "price",
     order_dir: options.order_dir = OrderDir.ASC,
+    currency: options.currency = "USD",
     db: Session = Depends(get_db),
 ) -> List[StoragePriceWithPKs]:
     # compliance frameworks are defined at the vendor level,
@@ -656,4 +657,19 @@ def search_storage_prices(
     if page and limit > 0:
         query = query.offset((page - 1) * limit)
 
-    return db.exec(query).all()
+    prices = db.exec(query).all()
+
+    # update prices to currency requested
+    for price in prices:
+        if currency:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        4,
+                    )
+                    price.currency = currency
+
+    return prices
