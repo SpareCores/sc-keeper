@@ -668,7 +668,7 @@ def search_storage_prices(
                         currency_converter.convert(
                             price.price, price.currency, currency
                         ),
-                        4,
+                        6,
                     )
                     price.currency = currency
 
