@@ -173,6 +173,18 @@ storage_type = Annotated[
     ),
 ]
 
+direction = Annotated[
+    Optional[List[str]],
+    Query(
+        title="Direction",
+        description="Direction of the Internet traffic.",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "enum": ["inbound", "outbound"],
+        },
+    ),
+]
+
 
 countries = Annotated[
     Optional[List[str]],

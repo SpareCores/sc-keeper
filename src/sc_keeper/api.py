@@ -17,6 +17,7 @@ from sc_crawler.tables import (
     ServerPrice,
     Storage,
     StoragePrice,
+    TrafficPrice,
     Vendor,
     VendorComplianceLink,
     Zone,
@@ -38,6 +39,7 @@ from .references import (
     ServerPKsWithPrices,
     ServerPriceWithPKs,
     StoragePriceWithPKs,
+    TrafficPriceWithPKs
 )
 from .sentry import before_send as sentry_before_send
 
@@ -669,6 +671,92 @@ def search_storage_prices(
                             price.price, price.currency, currency
                         ),
                         4,
+                    )
+                    price.currency = currency
+
+    return prices
+
+
+@app.get("/traffic_prices", tags=["Query Resources"])
+def search_storage_prices(
+    vendor: options.vendor = None,
+    green_energy: options.green_energy = None,
+    regions: options.regions = None,
+    countries: options.countries = None,
+    direction: options.direction = None,
+    limit: options.limit = 50,
+    page: options.page = None,
+    order_by: options.order_by = "price",
+    order_dir: options.order_dir = OrderDir.ASC,
+    currency: options.currency = "USD",
+    db: Session = Depends(get_db),
+) -> List[TrafficPriceWithPKs]:
+   
+
+    # keep track of filter conditions
+    conditions = set()
+
+    if vendor:
+        conditions.add(TrafficPrice.vendor_id.in_(vendor))
+
+    if regions:
+        conditions.add(TrafficPrice.region_id.in_(regions))
+
+    if countries:
+        conditions.add(Region.country_id.in_(countries))
+
+    if green_energy:
+        conditions.add(Region.green_energy == green_energy)
+    
+    if direction:
+        conditions.add(TrafficPrice.direction.in_(direction))
+
+    region_alias = Region
+    query = (
+        select(TrafficPrice)
+        .join(TrafficPrice.vendor)
+        .options(contains_eager(TrafficPrice.vendor))
+        .join(TrafficPrice.region)
+        .join(region_alias.country)
+        .options(
+            contains_eager(TrafficPrice.region).contains_eager(region_alias.country)
+        )
+    )
+    for condition in conditions:
+        query = query.where(condition)
+
+    # ordering
+    if order_by:
+        order_obj = [o for o in [TrafficPrice, Region] if hasattr(o, order_by)]
+        if len(order_obj) == 0:
+            raise HTTPException(status_code=400, detail="Unknown order_by field.")
+        if len(order_obj) > 1:
+            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+        order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
+
+    # pagination
+    if limit > 0:
+        query = query.limit(limit)
+    # only apply if limit is set
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
+
+    prices = db.exec(query).all()
+
+    # update prices to currency requested
+    for price in prices:
+        if currency:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        6,
                     )
                     price.currency = currency
 

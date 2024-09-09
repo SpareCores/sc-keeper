@@ -11,6 +11,7 @@ from sc_crawler.table_bases import (
     ServerPriceBase,
     StorageBase,
     StoragePriceBase,
+    TrafficPriceBase,
     VendorBase,
     ZoneBase,
 )
@@ -131,6 +132,10 @@ class StoragePriceWithPKs(StoragePriceBase):
     vendor: VendorBase
     storage: StorageBase
 
+class TrafficPriceWithPKs(TrafficPriceBase):
+    region: RegionBaseWithPKs
+    vendor: VendorBase
+
 
 class OrderDir(Enum):
     ASC = "asc"
@@ -146,3 +151,4 @@ class FilterCategories(Enum):
     VENDOR = "vendor"
     STORAGE = "storage"
     GPU = "gpu"
+    TRAFFIC = "traffic"
