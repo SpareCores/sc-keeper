@@ -1,7 +1,12 @@
 from typing import Annotated, List, Optional
 
 from fastapi import Depends, Path, Query
-from sc_crawler.table_fields import Allocation, CpuArchitecture, StorageType
+from sc_crawler.table_fields import (
+    Allocation,
+    CpuArchitecture,
+    StorageType,
+    TrafficDirection,
+)
 
 from .helpers import get_server_dict
 from .references import (
@@ -173,9 +178,33 @@ storage_type = Annotated[
     ),
 ]
 
+direction = Annotated[
+    Optional[List[TrafficDirection]],
+    Query(
+        title="Direction",
+        description="Direction of the Internet traffic.",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "enum": [e.value for e in TrafficDirection],
+        },
+    ),
+]
+
+monthly_traffic = Annotated[
+    Optional[float],
+    Query(
+        title="Monthly Overall Traffic",
+        description="Overall amount of monthly traffic (GBs).",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "unit": "GB",
+            "step": 1,
+        },
+    ),
+]
 
 countries = Annotated[
-    Optional[List[str]],
+    Optional[List[Countries]],
     Query(
         title="Countries",
         description="Filter for regions in the provided list of countries.",
