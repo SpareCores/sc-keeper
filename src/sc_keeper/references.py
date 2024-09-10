@@ -132,6 +132,7 @@ class StoragePriceWithPKs(StoragePriceBase):
     vendor: VendorBase
     storage: StorageBase
 
+
 class TrafficPriceWithPKs(TrafficPriceBase):
     region: RegionBaseWithPKs
     vendor: VendorBase
