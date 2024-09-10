@@ -39,7 +39,7 @@ from .references import (
     ServerPKsWithPrices,
     ServerPriceWithPKs,
     StoragePriceWithPKs,
-    TrafficPriceWithPKs
+    TrafficPriceWithPKs,
 )
 from .sentry import before_send as sentry_before_send
 
@@ -678,7 +678,7 @@ def search_storage_prices(
 
 
 @app.get("/traffic_prices", tags=["Query Resources"])
-def search_storage_prices(
+def search_traffic_prices(
     vendor: options.vendor = None,
     green_energy: options.green_energy = None,
     regions: options.regions = None,
@@ -691,8 +691,6 @@ def search_storage_prices(
     currency: options.currency = "USD",
     db: Session = Depends(get_db),
 ) -> List[TrafficPriceWithPKs]:
-   
-
     # keep track of filter conditions
     conditions = set()
 
@@ -707,7 +705,7 @@ def search_storage_prices(
 
     if green_energy:
         conditions.add(Region.green_energy == green_energy)
-    
+
     if direction:
         conditions.add(TrafficPrice.direction.in_(direction))
 
