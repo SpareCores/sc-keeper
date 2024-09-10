@@ -748,15 +748,19 @@ def search_traffic_prices(
 
     # update prices to currency requested
     for price in prices:
+
+        def local_price(p):
+            return round(
+                currency_converter.convert(p, price.currency, currency),
+                6,
+            )
+
         if currency:
             if hasattr(price, "price") and hasattr(price, "currency"):
                 if price.currency != currency:
-                    price.price = round(
-                        currency_converter.convert(
-                            price.price, price.currency, currency
-                        ),
-                        6,
-                    )
+                    price.price = local_price(price.price)
+                    for i, tier in enumerate(price.price_tiered):
+                        price.price_tiered[i]["price"] = local_price(tier["price"])
                     price.currency = currency
 
     return prices
