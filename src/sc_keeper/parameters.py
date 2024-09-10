@@ -190,6 +190,18 @@ direction = Annotated[
     ),
 ]
 
+monthly_traffic = Annotated[
+    Optional[float],
+    Query(
+        title="Monthly Overall Traffic",
+        description="Overall amount of monthly traffic (GBs).",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "unit": "GB",
+            "step": 1,
+        },
+    ),
+]
 
 countries = Annotated[
     Optional[List[str]],

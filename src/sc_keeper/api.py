@@ -684,6 +684,7 @@ def search_traffic_prices(
     regions: options.regions = None,
     countries: options.countries = None,
     direction: options.direction = None,
+    monthly_traffic: options.monthly_traffic = None,
     limit: options.limit = 50,
     page: options.page = None,
     order_by: options.order_by = "price",
