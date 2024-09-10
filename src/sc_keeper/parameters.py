@@ -8,7 +8,6 @@ from sc_crawler.table_fields import (
     TrafficDirection,
 )
 
-
 from .helpers import get_server_dict
 from .references import (
     ComplianceFrameworks,
