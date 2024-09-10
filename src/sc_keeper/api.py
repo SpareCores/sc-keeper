@@ -771,7 +771,7 @@ def search_traffic_prices(
             price.price_monthly_traffic = traffic_paid = 0
             for i, tier in enumerate(price.price_tiered):
                 traffic_tier = min(
-                    max(monthly_traffic - traffic_paid, 0), float(tier.upper)
+                    max(monthly_traffic - traffic_paid, 0), (float(tier.upper) - float(tier.lower))
                 )
                 price.price_monthly_traffic += tier.price * traffic_tier
                 traffic_paid += traffic_tier
