@@ -179,7 +179,7 @@ storage_type = Annotated[
 ]
 
 direction = Annotated[
-    Optional[List[str]],
+    Optional[List[TrafficDirection]],
     Query(
         title="Direction",
         description="Direction of the Internet traffic.",
@@ -204,7 +204,7 @@ monthly_traffic = Annotated[
 ]
 
 countries = Annotated[
-    Optional[List[str]],
+    Optional[List[Countries]],
     Query(
         title="Countries",
         description="Filter for regions in the provided list of countries.",
