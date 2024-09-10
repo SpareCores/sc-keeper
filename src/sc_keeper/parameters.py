@@ -1,7 +1,13 @@
 from typing import Annotated, List, Optional
 
 from fastapi import Depends, Path, Query
-from sc_crawler.table_fields import Allocation, CpuArchitecture, StorageType
+from sc_crawler.table_fields import (
+    Allocation,
+    CpuArchitecture,
+    StorageType,
+    TrafficDirection,
+)
+
 
 from .helpers import get_server_dict
 from .references import (
@@ -180,7 +186,7 @@ direction = Annotated[
         description="Direction of the Internet traffic.",
         json_schema_extra={
             "category_id": FilterCategories.TRAFFIC,
-            "enum": ["inbound", "outbound"],
+            "enum": [e.value for e in TrafficDirection],
         },
     ),
 ]
