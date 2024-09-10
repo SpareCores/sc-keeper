@@ -92,7 +92,7 @@ def get_server_without_relations(server_args: options.server_args) -> ServerBase
     return get_server_dict(vendor_id, server_id)
 
 
-@router.get("/server/{vendor}/{server}/similar_servers/{by}/{num}")
+@router.get("/server/{vendor}/{server}/similar_servers/{by}/{n}")
 def get_similar_servers(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
@@ -100,7 +100,7 @@ def get_similar_servers(
         Literal["family", "specs", "score"],
         Path(description="Algorithm to look for similar servers."),
     ],
-    num: Annotated[
+    n: Annotated[
         int,
         Path(description="Number of servers to get.", le=100),
     ],
@@ -164,7 +164,7 @@ def get_similar_servers(
             func.abs(max_scores.c.score - max_score)
         )
 
-    servers = db.exec(query.limit(num)).all()
+    servers = db.exec(query.limit(n)).all()
 
     serverlist = []
     for server in servers:
