@@ -138,6 +138,10 @@ class TrafficPriceWithPKs(TrafficPriceBase):
     vendor: VendorBase
 
 
+class TrafficPriceWithPKsWithMonthlyTraffic(TrafficPriceWithPKs):
+    price_monthly_traffic: Optional[float] = None
+
+
 class OrderDir(Enum):
     ASC = "asc"
     DESC = "desc"

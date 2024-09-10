@@ -39,7 +39,7 @@ from .references import (
     ServerPKsWithPrices,
     ServerPriceWithPKs,
     StoragePriceWithPKs,
-    TrafficPriceWithPKs,
+    TrafficPriceWithPKsWithMonthlyTraffic,
 )
 from .sentry import before_send as sentry_before_send
 
@@ -684,14 +684,14 @@ def search_traffic_prices(
     regions: options.regions = None,
     countries: options.countries = None,
     direction: options.direction = None,
-    monthly_traffic: options.monthly_traffic = None,
+    monthly_traffic: options.monthly_traffic = 1,
     limit: options.limit = 50,
     page: options.page = None,
     order_by: options.order_by = "price",
     order_dir: options.order_dir = OrderDir.ASC,
     currency: options.currency = "USD",
     db: Session = Depends(get_db),
-) -> List[TrafficPriceWithPKs]:
+) -> List[TrafficPriceWithPKsWithMonthlyTraffic]:
     # keep track of filter conditions
     conditions = set()
 
@@ -746,7 +746,11 @@ def search_traffic_prices(
 
     prices = db.exec(query).all()
 
-    # update prices to currency requested
+    # update model to include the monthly traffic price field
+    for i, p in enumerate(prices):
+        prices[i] = TrafficPriceWithPKsWithMonthlyTraffic.model_validate(p)
+
+    # update prices per tiers and to currency requested
     for price in prices:
 
         def local_price(p):
@@ -760,7 +764,18 @@ def search_traffic_prices(
                 if price.currency != currency:
                     price.price = local_price(price.price)
                     for i, tier in enumerate(price.price_tiered):
-                        price.price_tiered[i]["price"] = local_price(tier["price"])
+                        price.price_tiered[i].price = local_price(tier.price)
                     price.currency = currency
+
+        if price.price_tiered:
+            price.price_monthly_traffic = traffic_paid = 0
+            for i, tier in enumerate(price.price_tiered):
+                traffic_tier = min(
+                    max(monthly_traffic - traffic_paid, 0), float(tier.upper)
+                )
+                price.price_monthly_traffic += tier.price * traffic_tier
+                traffic_paid += traffic_tier
+        else:
+            price.price_monthly_traffic = price.price * monthly_traffic
 
     return prices
