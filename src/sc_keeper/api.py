@@ -7,7 +7,7 @@ from typing import List
 from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from sc_crawler.table_fields import Status
+from sc_crawler.table_fields import Status, TrafficDirection
 from sc_crawler.tables import (
     Benchmark,
     ComplianceFramework,
@@ -683,7 +683,7 @@ def search_traffic_prices(
     green_energy: options.green_energy = None,
     regions: options.regions = None,
     countries: options.countries = None,
-    direction: options.direction = None,
+    direction: options.direction = TrafficDirection.OUT,
     monthly_traffic: options.monthly_traffic = 1,
     limit: options.limit = 50,
     page: options.page = None,
