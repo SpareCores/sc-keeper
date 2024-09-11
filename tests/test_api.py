@@ -79,6 +79,7 @@ test_storage_prices_params = [
 ]
 
 test_traffic_prices_params = [
+    {"direction": ["inbound", "outbound"]},
     *test_general_params,
     *test_region_params,
     {"direction": ["inbound"]},
@@ -243,7 +244,7 @@ def test_traffic_prices_with_params(params):
     assert response.status_code == 200
     assert response.elapsed.total_seconds() < 5
     # if params is empty, this is the full count
-    if params == {}:
+    if params == {"direction": ["inbound", "outbound"]}:
         global count
         count = len(response.json())
     else:
