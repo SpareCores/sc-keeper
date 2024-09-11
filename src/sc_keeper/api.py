@@ -753,11 +753,11 @@ def search_traffic_prices(
     # update prices per tiers and to currency requested
     for price in prices:
 
+        def rounder(p):
+            return round(p, 6)
+
         def local_price(p):
-            return round(
-                currency_converter.convert(p, price.currency, currency),
-                6,
-            )
+            return rounder(currency_converter.convert(p, price.currency, currency))
 
         if currency:
             if hasattr(price, "price") and hasattr(price, "currency"):
@@ -774,9 +774,9 @@ def search_traffic_prices(
                     max(monthly_traffic - traffic_paid, 0),
                     (float(tier.upper) - float(tier.lower)),
                 )
-                price.price_monthly_traffic += tier.price * traffic_tier
+                price.price_monthly_traffic += rounder(tier.price * traffic_tier)
                 traffic_paid += traffic_tier
         else:
-            price.price_monthly_traffic = price.price * monthly_traffic
+            price.price_monthly_traffic = rounder(price.price * monthly_traffic)
 
     return prices
