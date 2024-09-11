@@ -38,3 +38,9 @@ def assist_server_price_filters(text: str, request: Request) -> dict:
 def assist_storage_price_filters(text: str, request: Request) -> dict:
     """Extract StoragePrice JSON filters from freetext."""
     return assister(text, "/storage_prices")
+
+
+@router.get("/assist_traffic_price_filters")
+def assist_storage_price_filters(text: str, request: Request) -> dict:
+    """Extract TrafficPrice JSON filters from freetext."""
+    return assister(text, "/traffic_prices")
