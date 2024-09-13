@@ -607,6 +607,9 @@ def search_storage_prices(
     joins = set()
     conditions = set()
 
+    # always filter for ACTIVE prices
+    conditions.add(StoragePrice.status == Status.ACTIVE)
+
     if vendor:
         conditions.add(StoragePrice.vendor_id.in_(vendor))
 
@@ -726,6 +729,9 @@ def search_traffic_prices(
     joins = set()
     conditions = set()
 
+    # always filter for ACTIVE prices
+    conditions.add(TrafficPrice.status == Status.ACTIVE)
+
     if vendor:
         conditions.add(TrafficPrice.vendor_id.in_(vendor))
 
@@ -733,11 +739,11 @@ def search_traffic_prices(
         conditions.add(TrafficPrice.region_id.in_(regions))
 
     if countries:
-        joins.add(StoragePrice.region)
+        joins.add(TrafficPrice.region)
         conditions.add(Region.country_id.in_(countries))
 
     if green_energy:
-        joins.add(StoragePrice.region)
+        joins.add(TrafficPrice.region)
         conditions.add(Region.green_energy == green_energy)
 
     if direction:
