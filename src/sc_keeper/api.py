@@ -615,6 +615,7 @@ def search_storage_prices(
         conditions.add(Storage.storage_type.in_(storage_type))
 
     if storage_min:
+        joins.add(StoragePrice.storage)
         conditions.add(Storage.min_size <= storage_min)
         conditions.add(Storage.max_size >= storage_min)
 
