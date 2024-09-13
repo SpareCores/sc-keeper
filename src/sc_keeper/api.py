@@ -576,6 +576,7 @@ def search_server_prices(
 
 @app.get("/storage_prices", tags=["Query Resources"])
 def search_storage_prices(
+    response: Response,
     vendor: options.vendor = None,
     green_energy: options.green_energy = None,
     storage_min: options.storage_size = None,
@@ -588,6 +589,7 @@ def search_storage_prices(
     order_by: options.order_by = "price",
     order_dir: options.order_dir = OrderDir.ASC,
     currency: options.currency = "USD",
+    add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[StoragePriceWithPKs]:
     # compliance frameworks are defined at the vendor level,
@@ -601,13 +603,15 @@ def search_storage_prices(
         compliant_vendors = db.exec(query).all()
         vendor = list(set(vendor or []) & set(compliant_vendors))
 
-    # keep track of filter conditions
+    # keep track of tables to be joins and filter conditions
+    joins = set()
     conditions = set()
 
     if vendor:
         conditions.add(StoragePrice.vendor_id.in_(vendor))
 
     if storage_type:
+        joins.add(StoragePrice.storage)
         conditions.add(Storage.storage_type.in_(storage_type))
 
     if storage_min:
@@ -618,10 +622,21 @@ def search_storage_prices(
         conditions.add(StoragePrice.region_id.in_(regions))
 
     if countries:
+        joins.add(StoragePrice.region)
         conditions.add(Region.country_id.in_(countries))
 
     if green_energy:
+        joins.add(StoragePrice.region)
         conditions.add(Region.green_energy == green_energy)
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        query = select(func.count()).select_from(StoragePrice)
+        for j in joins:
+            query = query.join(j)
+        for condition in conditions:
+            query = query.where(condition)
+        response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     region_alias = Region
     query = (
@@ -679,6 +694,7 @@ def search_storage_prices(
 
 @app.get("/traffic_prices", tags=["Query Resources"])
 def search_traffic_prices(
+    response: Response,
     vendor: options.vendor = None,
     green_energy: options.green_energy = None,
     compliance_framework: options.compliance_framework = None,
@@ -691,6 +707,7 @@ def search_traffic_prices(
     order_by: options.order_by = "price",
     order_dir: options.order_dir = OrderDir.ASC,
     currency: options.currency = "USD",
+    add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[TrafficPriceWithPKsWithMonthlyTraffic]:
     # compliance frameworks are defined at the vendor level,
@@ -704,7 +721,8 @@ def search_traffic_prices(
         compliant_vendors = db.exec(query).all()
         vendor = list(set(vendor or []) & set(compliant_vendors))
 
-    # keep track of filter conditions
+    # keep track of tables to be joins and filter conditions
+    joins = set()
     conditions = set()
 
     if vendor:
@@ -714,13 +732,24 @@ def search_traffic_prices(
         conditions.add(TrafficPrice.region_id.in_(regions))
 
     if countries:
+        joins.add(StoragePrice.region)
         conditions.add(Region.country_id.in_(countries))
 
     if green_energy:
+        joins.add(StoragePrice.region)
         conditions.add(Region.green_energy == green_energy)
 
     if direction:
         conditions.add(TrafficPrice.direction.in_(direction))
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        query = select(func.count()).select_from(TrafficPrice)
+        for j in joins:
+            query = query.join(j)
+        for condition in conditions:
+            query = query.where(condition)
+        response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     region_alias = Region
     query = (
