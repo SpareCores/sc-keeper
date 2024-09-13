@@ -681,6 +681,7 @@ def search_storage_prices(
 def search_traffic_prices(
     vendor: options.vendor = None,
     green_energy: options.green_energy = None,
+    compliance_framework: options.compliance_framework = None,
     regions: options.regions = None,
     countries: options.countries = None,
     direction: options.direction = [TrafficDirection.OUT],
@@ -692,6 +693,17 @@ def search_traffic_prices(
     currency: options.currency = "USD",
     db: Session = Depends(get_db),
 ) -> List[TrafficPriceWithPKsWithMonthlyTraffic]:
+    # compliance frameworks are defined at the vendor level,
+    # let's filter for vendors instead of exploding the storages table
+    if compliance_framework:
+        if not vendor:
+            vendor = db.exec(select(Vendor.vendor_id)).all()
+        query = select(VendorComplianceLink.vendor_id).where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+        compliant_vendors = db.exec(query).all()
+        vendor = list(set(vendor or []) & set(compliant_vendors))
+
     # keep track of filter conditions
     conditions = set()
 
