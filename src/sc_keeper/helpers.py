@@ -1,5 +1,6 @@
-from functools import cache
+from datetime import timedelta
 
+from cachier import cachier
 from fastapi import HTTPException
 from sc_crawler.table_bases import ServerBase
 from sc_crawler.tables import Server
@@ -15,7 +16,7 @@ from .references import ServerPKs
 currency_converter = CurrencyConverter()
 
 
-@cache
+@cachier(stale_after=timedelta(minutes=10), backend="memory")
 def get_server_dicts():
     with next(get_db()) as db:
         server_rows = db.exec(select(Server)).all()
