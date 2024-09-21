@@ -229,6 +229,7 @@ def search_servers(
     response: Response,
     partial_name_or_id: options.partial_name_or_id = None,
     vcpus_min: options.vcpus_min = 1,
+    vcpus_max: options.vcpus_max = None,
     architecture: options.architecture = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
@@ -279,6 +280,8 @@ def search_servers(
 
     if vcpus_min:
         conditions.add(Server.vcpus >= vcpus_min)
+    if vcpus_max:
+        conditions.add(Server.vcpus <= vcpus_max)
     if architecture:
         conditions.add(Server.cpu_architecture.in_(architecture))
     if benchmark_score_stressng_cpu_min:
@@ -376,6 +379,7 @@ def search_server_prices(
     # although it's relatively expensive to set a dummy filter,
     # but this is needed not to mess on the frontend (slider without value)
     vcpus_min: options.vcpus_min = 1,
+    vcpus_max: options.vcpus_max = None,
     architecture: options.architecture = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
@@ -440,6 +444,9 @@ def search_server_prices(
     if vcpus_min:
         joins.add(ServerPrice.server)
         conditions.add(Server.vcpus >= vcpus_min)
+    if vcpus_max:
+        joins.add(ServerPrice.server)
+        conditions.add(Server.vcpus <= vcpus_max)
     if architecture:
         joins.add(ServerPrice.server)
         conditions.add(Server.cpu_architecture.in_(architecture))

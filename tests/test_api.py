@@ -44,6 +44,7 @@ test_servers_params = [
     *test_general_params,
     {"partial_name_or_id": "cx"},
     {"vcpus_min": 32},
+    {"vcpus_max": 64},
     {"architecture": "x86_64"},
     {"benchmark_score_stressng_cpu_min": 5e5},
     {"memory_min": 32000},
@@ -66,9 +67,9 @@ test_server_prices_params = test_servers_params + [
 ]
 # merge some params together for more complex queries
 for mix in [
-    [2, 5, 6],
-    [3, 4, 7, 10, 17],
-    [2, 4, 6, 8, 10, 12, 14],
+    [2, 6, 7],
+    [3, 5, 8, 11, 18],
+    [2, 5, 7, 9, 11, 13, 15],
     list(range(1, len(test_server_prices_params))),
 ]:
     test_server_prices_params += [
