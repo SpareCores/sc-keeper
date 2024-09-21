@@ -19,9 +19,10 @@ from sc_crawler.tables import (
     ComplianceFramework,
     Country,
     Region,
+    Server,
     Vendor,
 )
-from sqlmodel import select
+from sqlmodel import distinct, not_, select, text
 
 from .database import session
 
@@ -46,6 +47,41 @@ with session.sessionmaker as db:
         {
             m.compliance_framework_id: m.compliance_framework_id
             for m in db.exec(select(ComplianceFramework)).all()
+        },
+    )
+    GpuManufacturers = StrEnum(
+        "GpuManufacturers",
+        {
+            m: m
+            for m in db.exec(
+                select(distinct(Server.gpu_manufacturer))
+                .where(Server.gpu_manufacturer.isnot(None))
+                .order_by(text("1"))
+            ).all()
+        },
+    )
+    GpuFamilies = StrEnum(
+        "GpuFamilies",
+        {
+            f: f
+            for f in db.exec(
+                select(distinct(Server.gpu_family))
+                .where(Server.gpu_family.isnot(None))
+                .order_by(text("1"))
+            ).all()
+        },
+    )
+    GpuModels = StrEnum(
+        "GpuModels",
+        {
+            m: m
+            for m in db.exec(
+                select(distinct(Server.gpu_model))
+                .where(Server.gpu_model.isnot(None))
+                # exclude Google TPUs for now
+                .where(not_(Server.gpu_model.like("ct%")))
+                .order_by(text("1"))
+            ).all()
         },
     )
 

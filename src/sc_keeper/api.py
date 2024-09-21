@@ -240,6 +240,9 @@ def search_servers(
     gpu_min: options.gpu_min = None,
     gpu_memory_min: options.gpu_memory_min = None,
     gpu_memory_total: options.gpu_memory_total = None,
+    gpu_manufacturer: options.gpu_manufacturer = None,
+    gpu_family: options.gpu_family = None,
+    gpu_model: options.gpu_model = None,
     limit: options.limit = 25,
     page: options.page = None,
     order_by: options.order_by = "vcpus",
@@ -290,6 +293,12 @@ def search_servers(
         conditions.add(Server.gpu_memory_min >= gpu_memory_min * 1024)
     if gpu_memory_total:
         conditions.add(Server.gpu_memory_total >= gpu_memory_total * 1024)
+    if gpu_manufacturer:
+        conditions.add(Server.gpu_manufacturer.in_(gpu_manufacturer))
+    if gpu_family:
+        conditions.add(Server.gpu_family.in_(gpu_family))
+    if gpu_model:
+        conditions.add(Server.gpu_model.in_(gpu_model))
     if only_active:
         conditions.add(Server.status == Status.ACTIVE)
     if storage_type:
@@ -383,6 +392,9 @@ def search_server_prices(
     gpu_min: options.gpu_min = None,
     gpu_memory_min: options.gpu_memory_min = None,
     gpu_memory_total: options.gpu_memory_total = None,
+    gpu_manufacturer: options.gpu_manufacturer = None,
+    gpu_family: options.gpu_family = None,
+    gpu_model: options.gpu_model = None,
     limit: options.limit250 = 25,
     page: options.page = None,
     order_by: options.order_by = "price",
@@ -448,6 +460,12 @@ def search_server_prices(
     if gpu_memory_total:
         joins.add(ServerPrice.server)
         conditions.add(Server.gpu_memory_total >= gpu_memory_total * 1024)
+    if gpu_manufacturer:
+        conditions.add(Server.gpu_manufacturer.in_(gpu_manufacturer))
+    if gpu_family:
+        conditions.add(Server.gpu_family.in_(gpu_family))
+    if gpu_model:
+        conditions.add(Server.gpu_model.in_(gpu_model))
     if only_active:
         joins.add(ServerPrice.server)
         conditions.add(Server.status == Status.ACTIVE)

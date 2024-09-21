@@ -53,6 +53,10 @@ test_servers_params = [
     {"gpu_min": 1},
     {"gpu_memory_min": 1},
     {"gpu_memory_total": 128},
+    {"gpu_manufacturer": ["NVIDIA"]},
+    {"gpu_manufacturer": ["NVIDIA", "AMD"]},
+    {"gpu_family": ["Turing"]},
+    {"gpu_model": ["A100"]},
 ]
 
 test_server_prices_params = test_servers_params + [

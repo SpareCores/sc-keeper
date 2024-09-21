@@ -13,6 +13,9 @@ from .references import (
     ComplianceFrameworks,
     Countries,
     FilterCategories,
+    GpuFamilies,
+    GpuManufacturers,
+    GpuModels,
     OrderDir,
     Regions,
     Vendors,
@@ -251,6 +254,42 @@ gpu_memory_total = Annotated[
             "category_id": FilterCategories.GPU,
             "unit": "GB",
             "step": 0.1,
+        },
+    ),
+]
+
+
+gpu_manufacturer = Annotated[
+    Optional[List[GpuManufacturers]],
+    Query(
+        title="GPU manufacturer",
+        json_schema_extra={
+            "category_id": FilterCategories.GPU,
+            "enum": [m.value for m in GpuManufacturers],
+        },
+    ),
+]
+
+
+gpu_family = Annotated[
+    Optional[List[GpuFamilies]],
+    Query(
+        title="GPU family",
+        json_schema_extra={
+            "category_id": FilterCategories.GPU,
+            "enum": [m.value for m in GpuFamilies],
+        },
+    ),
+]
+
+
+gpu_model = Annotated[
+    Optional[List[GpuModels]],
+    Query(
+        title="GPU model",
+        json_schema_extra={
+            "category_id": FilterCategories.GPU,
+            "enum": [m.value for m in GpuModels],
         },
     ),
 ]
