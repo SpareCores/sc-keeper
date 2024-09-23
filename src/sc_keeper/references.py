@@ -49,6 +49,28 @@ with session.sessionmaker as db:
             for m in db.exec(select(ComplianceFramework)).all()
         },
     )
+    CpuManufacturers = StrEnum(
+        "CpuManufacturers",
+        {
+            m: m
+            for m in db.exec(
+                select(distinct(Server.cpu_manufacturer))
+                .where(Server.cpu_manufacturer.isnot(None))
+                .order_by(text("1"))
+            ).all()
+        },
+    )
+    CpuFamilies = StrEnum(
+        "CpuFamilies",
+        {
+            m: m
+            for m in db.exec(
+                select(distinct(Server.cpu_family))
+                .where(Server.cpu_family.isnot(None))
+                .order_by(text("1"))
+            ).all()
+        },
+    )
     GpuManufacturers = StrEnum(
         "GpuManufacturers",
         {

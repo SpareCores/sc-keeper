@@ -231,6 +231,8 @@ def search_servers(
     vcpus_min: options.vcpus_min = 1,
     vcpus_max: options.vcpus_max = None,
     architecture: options.architecture = None,
+    cpu_manufacturer: options.cpu_manufacturer = None,
+    cpu_family: options.cpu_family = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     only_active: options.only_active = True,
@@ -284,6 +286,10 @@ def search_servers(
         conditions.add(Server.vcpus <= vcpus_max)
     if architecture:
         conditions.add(Server.cpu_architecture.in_(architecture))
+    if cpu_manufacturer:
+        conditions.add(Server.cpu_manufacturer.in_(cpu_manufacturer))
+    if cpu_family:
+        conditions.add(Server.cpu_family.in_(cpu_family))
     if benchmark_score_stressng_cpu_min:
         conditions.add(max_scores.c.score > benchmark_score_stressng_cpu_min)
     if memory_min:
@@ -381,6 +387,8 @@ def search_server_prices(
     vcpus_min: options.vcpus_min = 1,
     vcpus_max: options.vcpus_max = None,
     architecture: options.architecture = None,
+    cpu_manufacturer: options.cpu_manufacturer = None,
+    cpu_family: options.cpu_family = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     price_max: options.price_max = None,
@@ -450,6 +458,12 @@ def search_server_prices(
     if architecture:
         joins.add(ServerPrice.server)
         conditions.add(Server.cpu_architecture.in_(architecture))
+    if cpu_manufacturer:
+        joins.add(ServerPrice.server)
+        conditions.add(Server.cpu_manufacturer.in_(cpu_manufacturer))
+    if cpu_family:
+        joins.add(ServerPrice.server)
+        conditions.add(Server.cpu_family.in_(cpu_family))
     if benchmark_score_stressng_cpu_min:
         conditions.add(max_scores.c.score > benchmark_score_stressng_cpu_min)
     if memory_min:

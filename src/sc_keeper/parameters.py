@@ -12,6 +12,8 @@ from .helpers import get_server_dict
 from .references import (
     ComplianceFrameworks,
     Countries,
+    CpuFamilies,
+    CpuManufacturers,
     FilterCategories,
     GpuFamilies,
     GpuManufacturers,
@@ -87,6 +89,27 @@ architecture = Annotated[
     ),
 ]
 
+cpu_manufacturer = Annotated[
+    Optional[List[CpuManufacturers]],
+    Query(
+        title="Processor manufacturer",
+        json_schema_extra={
+            "category_id": FilterCategories.PROCESSOR,
+            "enum": [e.value for e in CpuManufacturers],
+        },
+    ),
+]
+
+cpu_family = Annotated[
+    Optional[List[CpuFamilies]],
+    Query(
+        title="Processor family",
+        json_schema_extra={
+            "category_id": FilterCategories.PROCESSOR,
+            "enum": [e.value for e in CpuFamilies],
+        },
+    ),
+]
 
 memory_min = Annotated[
     Optional[float],
