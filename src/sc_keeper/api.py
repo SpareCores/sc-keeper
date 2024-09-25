@@ -229,7 +229,7 @@ def search_servers(
     response: Response,
     partial_name_or_id: options.partial_name_or_id = None,
     vcpus_min: options.vcpus_min = 1,
-    vcpus_max: options.vcpus_max = None,
+    vcpus_max: options.vcpus_max = 256,
     architecture: options.architecture = None,
     cpu_manufacturer: options.cpu_manufacturer = None,
     cpu_family: options.cpu_family = None,
@@ -282,7 +282,7 @@ def search_servers(
 
     if vcpus_min:
         conditions.add(Server.vcpus >= vcpus_min)
-    if vcpus_max:
+    if vcpus_max and vcpus_max < 256:
         conditions.add(Server.vcpus <= vcpus_max)
     if architecture:
         conditions.add(Server.cpu_architecture.in_(architecture))

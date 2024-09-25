@@ -64,7 +64,7 @@ vcpus_min = Annotated[
 ]
 
 vcpus_max = Annotated[
-    Optional[int],
+    int,
     Query(
         title="Maximum vCPUs",
         description="Maximum number of virtual CPUs.",
@@ -72,7 +72,7 @@ vcpus_max = Annotated[
         le=256,
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
-            "unit": "vCPUs",
+            "unit": "vCPUs"
         },
     ),
 ]
