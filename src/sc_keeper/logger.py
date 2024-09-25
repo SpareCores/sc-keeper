@@ -87,7 +87,7 @@ class LogMiddleware(BaseHTTPMiddleware):
                 "request_id": get_request_id(),
                 "res": {
                     "status_code": response.status_code,
-                    "length": int(response.headers["content-length"]),
+                    "length": int(response.headers.get("content-length", -1)),
                 },
                 "elapsed_time": round(response_time - request_time, 4),
             },

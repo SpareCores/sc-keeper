@@ -5,6 +5,7 @@ from fastapi import (
     Depends,
     Path,
 )
+from fastapi_cache.decorator import cache
 from sc_crawler.table_bases import ServerBase
 from sc_crawler.table_fields import Status
 from sc_crawler.tables import (
@@ -93,6 +94,7 @@ def get_server_without_relations(server_args: options.server_args) -> ServerBase
 
 
 @router.get("/server/{vendor}/{server}/similar_servers/{by}/{num}")
+@cache(expire=60 * 60 * 24)
 def get_similar_servers(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],

@@ -10,6 +10,7 @@ dependencies = [
   "sparecores-crawler==0.3.0",
   "sparecores-data==0.3.0",
   "fastapi",
+  "fastapi-cache2",
   "uvicorn",
   "currencyconverter",
 ]
@@ -37,6 +38,8 @@ issues = "https://github.com/SpareCores/sc-keeper/issues"
 [project.optional-dependencies]
 testing = ["pytest", "httpx"]
 apm = ["sentry-sdk[fastapi]"]
+cache-redis = ["fastapi-cache2[redis]"]
+cache-memcached = ["fastapi-cache2[memcache]"]
 all = ["sc-keeper[testing]", "sc-keeper[apm]"]
 
 [tool.setuptools.packages.find]

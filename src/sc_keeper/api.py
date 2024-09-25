@@ -7,6 +7,8 @@ from typing import List
 from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi_cache.decorator import cache
+
 from sc_crawler.table_fields import Status, TrafficDirection
 from sc_crawler.tables import (
     Benchmark,
@@ -27,6 +29,7 @@ from sqlmodel import Session, func, or_, select
 
 from . import parameters as options
 from . import routers
+from .cache import cache_init
 from .database import get_db
 from .helpers import currency_converter
 from .logger import LogMiddleware
@@ -59,6 +62,7 @@ db = next(get_db())
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
+    cache_init()
     yield
     # shutdown
     pass
