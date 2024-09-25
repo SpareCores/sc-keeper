@@ -27,6 +27,7 @@ from sqlmodel import Session, func, or_, select
 
 from . import parameters as options
 from . import routers
+from .cache import CacheHeaderMiddleware
 from .database import get_db
 from .helpers import currency_converter
 from .logger import LogMiddleware
@@ -201,6 +202,8 @@ app.add_middleware(
 # aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
 
+# set cache control header
+app.add_middleware(CacheHeaderMiddleware)
 
 # ##############################################################################
 # API endpoints
