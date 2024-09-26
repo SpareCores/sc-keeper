@@ -60,7 +60,7 @@ vcpus_min = Annotated[
             "category_id": FilterCategories.PROCESSOR,
             "unit": "vCPUs",
             "range_min": 1,
-            "range_max": 256
+            "range_max": 256,
         },
     ),
 ]
@@ -77,7 +77,7 @@ vcpus_max = Annotated[
             "unit": "vCPUs",
             "range_min": 1,
             "range_max": 256,
-            "null_value": 256
+            "null_value": 256,
         },
     ),
 ]
