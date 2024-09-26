@@ -59,6 +59,8 @@ vcpus_min = Annotated[
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "unit": "vCPUs",
+            "range_min": 1,
+            "range_max": 256,
         },
     ),
 ]
@@ -73,6 +75,9 @@ vcpus_max = Annotated[
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "unit": "vCPUs",
+            "range_min": 1,
+            "range_max": 256,
+            "null_value": 256,
         },
     ),
 ]
