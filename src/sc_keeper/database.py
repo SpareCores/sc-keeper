@@ -59,13 +59,14 @@ class Database(Thread):
                 echo=bool(environ.get("KEEPER_DEBUG", False)),
             )
             with engine.connect() as conn:
+                # minimal gain for read ops with the below PRAGMA configs
                 conn.execute(text("PRAGMA synchronous=OFF"))
                 conn.execute(text("PRAGMA journal_mode=OFF"))
                 conn.execute(text("PRAGMA mmap_size=67108864"))  # 64 MiB
                 # speed up some queries with indexes
                 for index in indexes:
                     index.create(bind=conn, checkfirst=True)
-                    # prep and fill ~materialized views
+                # prep and fill ~materialized views
                 for t in views.views:
                     t.__table__.create(engine, checkfirst=True)
                     if hasattr(t, "insert"):
@@ -81,6 +82,7 @@ class Database(Thread):
                         conn.execute(q)
                         conn.commit()
                 conn.execute(text("VACUUM"))
+                conn.execute(text("ANALYZE"))
             logger.info(f"SQLite database updated {tmpfile}")
             with self.lock:
                 self.engine = engine
