@@ -14,9 +14,6 @@ from sqlmodel import Session, create_engine, delete, insert, text
 from . import views
 from .indexes import indexes
 
-# from sc_keeper import views
-# from sc_keeper.indexes import indexes
-
 logger = logging.getLogger(__name__)
 
 
