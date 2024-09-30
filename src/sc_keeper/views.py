@@ -37,7 +37,7 @@ class ServerPriceMinBase(HasServerPK, HasVendorPKFK):
 
 
 class ServerPriceMin(ServerPriceMinBase, table=True):
-    """Poor man's materialized view on min price of servers."""
+    """Poor man's materialized view on min price of servers standardized to USD."""
 
     @staticmethod
     def query():

@@ -76,6 +76,8 @@ class LogMiddleware(BaseHTTPMiddleware):
             },
         )
 
+        # TODO log user/sys
+        # TODO log maxRSS
         response = await call_next(request)
         response_time = time()
 
