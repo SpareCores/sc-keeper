@@ -61,6 +61,6 @@ jobs:
         env:
           CLUSTER: ${{ secrets.ECS_CLUSTER }}
           SERVICE: ${{ secrets.ECS_SERVICE }}
-          REGION: us-east-1
+          REGION: eu-central-1
         run: |
           aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment --region $REGION

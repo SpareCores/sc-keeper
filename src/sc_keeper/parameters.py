@@ -1,13 +1,23 @@
 from typing import Annotated, List, Optional
 
 from fastapi import Depends, Path, Query
-from sc_crawler.table_fields import Allocation, CpuArchitecture, StorageType
+from sc_crawler.table_fields import (
+    Allocation,
+    CpuArchitecture,
+    StorageType,
+    TrafficDirection,
+)
 
 from .helpers import get_server_dict
 from .references import (
     ComplianceFrameworks,
     Countries,
+    CpuFamilies,
+    CpuManufacturers,
     FilterCategories,
+    GpuFamilies,
+    GpuManufacturers,
+    GpuModels,
     OrderDir,
     Regions,
     Vendors,
@@ -49,10 +59,28 @@ vcpus_min = Annotated[
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "unit": "vCPUs",
+            "range_min": 1,
+            "range_max": 256,
         },
     ),
 ]
 
+vcpus_max = Annotated[
+    Optional[int],
+    Query(
+        title="Maximum vCPUs",
+        description="Maximum number of virtual CPUs.",
+        ge=1,
+        le=256,
+        json_schema_extra={
+            "category_id": FilterCategories.PROCESSOR,
+            "unit": "vCPUs",
+            "range_min": 1,
+            "range_max": 256,
+            "null_value": 256,
+        },
+    ),
+]
 
 architecture = Annotated[
     Optional[List[CpuArchitecture]],
@@ -66,6 +94,27 @@ architecture = Annotated[
     ),
 ]
 
+cpu_manufacturer = Annotated[
+    Optional[List[CpuManufacturers]],
+    Query(
+        title="Processor manufacturer",
+        json_schema_extra={
+            "category_id": FilterCategories.PROCESSOR,
+            "enum": [e.value for e in CpuManufacturers],
+        },
+    ),
+]
+
+cpu_family = Annotated[
+    Optional[List[CpuFamilies]],
+    Query(
+        title="Processor family",
+        json_schema_extra={
+            "category_id": FilterCategories.PROCESSOR,
+            "enum": [e.value for e in CpuFamilies],
+        },
+    ),
+]
 
 memory_min = Annotated[
     Optional[float],
@@ -173,9 +222,33 @@ storage_type = Annotated[
     ),
 ]
 
+direction = Annotated[
+    Optional[List[TrafficDirection]],
+    Query(
+        title="Direction",
+        description="Direction of the Internet traffic.",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "enum": [e.value for e in TrafficDirection],
+        },
+    ),
+]
+
+monthly_traffic = Annotated[
+    Optional[float],
+    Query(
+        title="Monthly Overall Traffic",
+        description="Overall amount of monthly traffic (GBs).",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "unit": "GB",
+            "step": 1,
+        },
+    ),
+]
 
 countries = Annotated[
-    Optional[List[str]],
+    Optional[List[Countries]],
     Query(
         title="Countries",
         description="Filter for regions in the provided list of countries.",
@@ -222,6 +295,42 @@ gpu_memory_total = Annotated[
             "category_id": FilterCategories.GPU,
             "unit": "GB",
             "step": 0.1,
+        },
+    ),
+]
+
+
+gpu_manufacturer = Annotated[
+    Optional[List[GpuManufacturers]],
+    Query(
+        title="GPU manufacturer",
+        json_schema_extra={
+            "category_id": FilterCategories.GPU,
+            "enum": [m.value for m in GpuManufacturers],
+        },
+    ),
+]
+
+
+gpu_family = Annotated[
+    Optional[List[GpuFamilies]],
+    Query(
+        title="GPU family",
+        json_schema_extra={
+            "category_id": FilterCategories.GPU,
+            "enum": [m.value for m in GpuFamilies],
+        },
+    ),
+]
+
+
+gpu_model = Annotated[
+    Optional[List[GpuModels]],
+    Query(
+        title="GPU model",
+        json_schema_extra={
+            "category_id": FilterCategories.GPU,
+            "enum": [m.value for m in GpuModels],
         },
     ),
 ]

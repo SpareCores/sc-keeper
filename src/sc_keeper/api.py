@@ -1,14 +1,13 @@
-import logging
 from contextlib import asynccontextmanager
 from importlib.metadata import version
 from os import environ
 from textwrap import dedent
 from typing import List
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from sc_crawler.table_fields import Status
+from sc_crawler.table_fields import Status, TrafficDirection
 from sc_crawler.tables import (
     Benchmark,
     ComplianceFramework,
@@ -17,6 +16,8 @@ from sc_crawler.tables import (
     Server,
     ServerPrice,
     Storage,
+    StoragePrice,
+    TrafficPrice,
     Vendor,
     VendorComplianceLink,
     Zone,
@@ -26,10 +27,10 @@ from sqlmodel import Session, func, or_, select
 
 from . import parameters as options
 from . import routers
-from .ai import openai_extract_filters
+from .cache import CacheHeaderMiddleware
 from .currency import currency_converter
 from .database import get_db
-from .logger import LogMiddleware, get_request_id
+from .logger import LogMiddleware
 from .lookups import min_server_price
 from .query import max_score_per_server
 from .references import (
@@ -38,6 +39,8 @@ from .references import (
     ServerPKs,
     ServerPKsWithPrices,
     ServerPriceWithPKs,
+    StoragePriceWithPKs,
+    TrafficPriceWithPKsWithMonthlyTraffic,
 )
 from .sentry import before_send as sentry_before_send
 
@@ -199,6 +202,8 @@ app.add_middleware(
 # aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
 
+# set cache control header
+app.add_middleware(CacheHeaderMiddleware)
 
 # ##############################################################################
 # API endpoints
@@ -208,6 +213,7 @@ app.include_router(routers.administrative.router, tags=["Administrative endpoint
 app.include_router(routers.tables.router, prefix="/table", tags=["Table dumps"])
 app.include_router(routers.table_metadata.router)
 app.include_router(routers.server.router, tags=["Server Details"])
+app.include_router(routers.ai.router, prefix="/ai", tags=["AI"])
 
 
 @app.get("/regions", tags=["Query Resources"])
@@ -226,7 +232,10 @@ def search_servers(
     response: Response,
     partial_name_or_id: options.partial_name_or_id = None,
     vcpus_min: options.vcpus_min = 1,
+    vcpus_max: options.vcpus_max = None,
     architecture: options.architecture = None,
+    cpu_manufacturer: options.cpu_manufacturer = None,
+    cpu_family: options.cpu_family = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     only_active: options.only_active = True,
@@ -237,7 +246,10 @@ def search_servers(
     gpu_min: options.gpu_min = None,
     gpu_memory_min: options.gpu_memory_min = None,
     gpu_memory_total: options.gpu_memory_total = None,
-    limit: options.limit = 50,
+    gpu_manufacturer: options.gpu_manufacturer = None,
+    gpu_family: options.gpu_family = None,
+    gpu_model: options.gpu_model = None,
+    limit: options.limit = 25,
     page: options.page = None,
     order_by: options.order_by = "vcpus",
     order_dir: options.order_dir = OrderDir.ASC,
@@ -273,8 +285,14 @@ def search_servers(
 
     if vcpus_min:
         conditions.add(Server.vcpus >= vcpus_min)
+    if vcpus_max:
+        conditions.add(Server.vcpus <= vcpus_max)
     if architecture:
         conditions.add(Server.cpu_architecture.in_(architecture))
+    if cpu_manufacturer:
+        conditions.add(Server.cpu_manufacturer.in_(cpu_manufacturer))
+    if cpu_family:
+        conditions.add(Server.cpu_family.in_(cpu_family))
     if benchmark_score_stressng_cpu_min:
         conditions.add(max_scores.c.score > benchmark_score_stressng_cpu_min)
     if memory_min:
@@ -287,6 +305,12 @@ def search_servers(
         conditions.add(Server.gpu_memory_min >= gpu_memory_min * 1024)
     if gpu_memory_total:
         conditions.add(Server.gpu_memory_total >= gpu_memory_total * 1024)
+    if gpu_manufacturer:
+        conditions.add(Server.gpu_manufacturer.in_(gpu_manufacturer))
+    if gpu_family:
+        conditions.add(Server.gpu_family.in_(gpu_family))
+    if gpu_model:
+        conditions.add(Server.gpu_model.in_(gpu_model))
     if only_active:
         conditions.add(Server.status == Status.ACTIVE)
     if storage_type:
@@ -364,7 +388,10 @@ def search_server_prices(
     # although it's relatively expensive to set a dummy filter,
     # but this is needed not to mess on the frontend (slider without value)
     vcpus_min: options.vcpus_min = 1,
+    vcpus_max: options.vcpus_max = None,
     architecture: options.architecture = None,
+    cpu_manufacturer: options.cpu_manufacturer = None,
+    cpu_family: options.cpu_family = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     price_max: options.price_max = None,
@@ -380,7 +407,10 @@ def search_server_prices(
     gpu_min: options.gpu_min = None,
     gpu_memory_min: options.gpu_memory_min = None,
     gpu_memory_total: options.gpu_memory_total = None,
-    limit: options.limit250 = 50,
+    gpu_manufacturer: options.gpu_manufacturer = None,
+    gpu_family: options.gpu_family = None,
+    gpu_model: options.gpu_model = None,
+    limit: options.limit250 = 25,
     page: options.page = None,
     order_by: options.order_by = "price",
     order_dir: options.order_dir = OrderDir.ASC,
@@ -425,9 +455,18 @@ def search_server_prices(
     if vcpus_min:
         joins.add(ServerPrice.server)
         conditions.add(Server.vcpus >= vcpus_min)
+    if vcpus_max:
+        joins.add(ServerPrice.server)
+        conditions.add(Server.vcpus <= vcpus_max)
     if architecture:
         joins.add(ServerPrice.server)
         conditions.add(Server.cpu_architecture.in_(architecture))
+    if cpu_manufacturer:
+        joins.add(ServerPrice.server)
+        conditions.add(Server.cpu_manufacturer.in_(cpu_manufacturer))
+    if cpu_family:
+        joins.add(ServerPrice.server)
+        conditions.add(Server.cpu_family.in_(cpu_family))
     if benchmark_score_stressng_cpu_min:
         conditions.add(max_scores.c.score > benchmark_score_stressng_cpu_min)
     if memory_min:
@@ -445,6 +484,12 @@ def search_server_prices(
     if gpu_memory_total:
         joins.add(ServerPrice.server)
         conditions.add(Server.gpu_memory_total >= gpu_memory_total * 1024)
+    if gpu_manufacturer:
+        conditions.add(Server.gpu_manufacturer.in_(gpu_manufacturer))
+    if gpu_family:
+        conditions.add(Server.gpu_family.in_(gpu_family))
+    if gpu_model:
+        conditions.add(Server.gpu_model.in_(gpu_model))
     if only_active:
         joins.add(ServerPrice.server)
         conditions.add(Server.status == Status.ACTIVE)
@@ -571,31 +616,257 @@ def search_server_prices(
     return prices
 
 
-@app.get("/ai/assist_server_filters", tags=["AI"])
-def assist_server_filters(text: str, request: Request) -> dict:
-    """Extract Server JSON filters from freetext."""
-    res = openai_extract_filters(text, endpoint="/servers")
-    logging.info(
-        "openai response",
-        extra={
-            "event": "assist_filters response",
-            "res": res,
-            "request_id": get_request_id(),
-        },
+@app.get("/storage_prices", tags=["Query Resources"])
+def search_storage_prices(
+    response: Response,
+    vendor: options.vendor = None,
+    green_energy: options.green_energy = None,
+    storage_min: options.storage_size = None,
+    storage_type: options.storage_type = None,
+    compliance_framework: options.compliance_framework = None,
+    regions: options.regions = None,
+    countries: options.countries = None,
+    limit: options.limit = 10,
+    page: options.page = None,
+    order_by: options.order_by = "price",
+    order_dir: options.order_dir = OrderDir.ASC,
+    currency: options.currency = "USD",
+    add_total_count_header: options.add_total_count_header = False,
+    db: Session = Depends(get_db),
+) -> List[StoragePriceWithPKs]:
+    # compliance frameworks are defined at the vendor level,
+    # let's filter for vendors instead of exploding the storages table
+    if compliance_framework:
+        if not vendor:
+            vendor = db.exec(select(Vendor.vendor_id)).all()
+        query = select(VendorComplianceLink.vendor_id).where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+        compliant_vendors = db.exec(query).all()
+        vendor = list(set(vendor or []) & set(compliant_vendors))
+
+    # keep track of tables to be joins and filter conditions
+    joins = set()
+    conditions = set()
+
+    # always filter for ACTIVE prices
+    conditions.add(StoragePrice.status == Status.ACTIVE)
+
+    if vendor:
+        conditions.add(StoragePrice.vendor_id.in_(vendor))
+
+    if storage_type:
+        joins.add(StoragePrice.storage)
+        conditions.add(Storage.storage_type.in_(storage_type))
+
+    if storage_min:
+        joins.add(StoragePrice.storage)
+        conditions.add(Storage.min_size <= storage_min)
+        conditions.add(Storage.max_size >= storage_min)
+
+    if regions:
+        conditions.add(StoragePrice.region_id.in_(regions))
+
+    if countries:
+        joins.add(StoragePrice.region)
+        conditions.add(Region.country_id.in_(countries))
+
+    if green_energy:
+        joins.add(StoragePrice.region)
+        conditions.add(Region.green_energy == green_energy)
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        query = select(func.count()).select_from(StoragePrice)
+        for j in joins:
+            query = query.join(j)
+        for condition in conditions:
+            query = query.where(condition)
+        response.headers["X-Total-Count"] = str(db.exec(query).one())
+
+    region_alias = Region
+    query = (
+        select(StoragePrice)
+        .join(StoragePrice.vendor)
+        .options(contains_eager(StoragePrice.vendor))
+        .join(StoragePrice.region)
+        .join(region_alias.country)
+        .options(
+            contains_eager(StoragePrice.region).contains_eager(region_alias.country)
+        )
+        .join(StoragePrice.storage)
+        .options(contains_eager(StoragePrice.storage))
     )
-    return res
+    for condition in conditions:
+        query = query.where(condition)
+
+    # ordering
+    if order_by:
+        order_obj = [o for o in [StoragePrice, Region, Storage] if hasattr(o, order_by)]
+        if len(order_obj) == 0:
+            raise HTTPException(status_code=400, detail="Unknown order_by field.")
+        if len(order_obj) > 1:
+            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+        order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
+
+    # pagination
+    if limit > 0:
+        query = query.limit(limit)
+    # only apply if limit is set
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
+
+    prices = db.exec(query).all()
+
+    # update prices to currency requested
+    for price in prices:
+        if currency:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        6,
+                    )
+                    price.currency = currency
+
+    return prices
 
 
-@app.get("/ai/assist_server_price_filters", tags=["AI"])
-def assist_server_price_filters(text: str, request: Request) -> dict:
-    """Extract ServerPrice JSON filters from freetext."""
-    res = openai_extract_filters(text, endpoint="/server_prices")
-    logging.info(
-        "openai response",
-        extra={
-            "event": "assist_filters response",
-            "res": res,
-            "request_id": get_request_id(),
-        },
+@app.get("/traffic_prices", tags=["Query Resources"])
+def search_traffic_prices(
+    response: Response,
+    vendor: options.vendor = None,
+    green_energy: options.green_energy = None,
+    compliance_framework: options.compliance_framework = None,
+    regions: options.regions = None,
+    countries: options.countries = None,
+    direction: options.direction = [TrafficDirection.OUT],
+    monthly_traffic: options.monthly_traffic = 1,
+    limit: options.limit = 10,
+    page: options.page = None,
+    order_by: options.order_by = "price",
+    order_dir: options.order_dir = OrderDir.ASC,
+    currency: options.currency = "USD",
+    add_total_count_header: options.add_total_count_header = False,
+    db: Session = Depends(get_db),
+) -> List[TrafficPriceWithPKsWithMonthlyTraffic]:
+    # compliance frameworks are defined at the vendor level,
+    # let's filter for vendors instead of exploding the storages table
+    if compliance_framework:
+        if not vendor:
+            vendor = db.exec(select(Vendor.vendor_id)).all()
+        query = select(VendorComplianceLink.vendor_id).where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+        compliant_vendors = db.exec(query).all()
+        vendor = list(set(vendor or []) & set(compliant_vendors))
+
+    # keep track of tables to be joins and filter conditions
+    joins = set()
+    conditions = set()
+
+    # always filter for ACTIVE prices
+    conditions.add(TrafficPrice.status == Status.ACTIVE)
+
+    if vendor:
+        conditions.add(TrafficPrice.vendor_id.in_(vendor))
+
+    if regions:
+        conditions.add(TrafficPrice.region_id.in_(regions))
+
+    if countries:
+        joins.add(TrafficPrice.region)
+        conditions.add(Region.country_id.in_(countries))
+
+    if green_energy:
+        joins.add(TrafficPrice.region)
+        conditions.add(Region.green_energy == green_energy)
+
+    if direction:
+        conditions.add(TrafficPrice.direction.in_(direction))
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        query = select(func.count()).select_from(TrafficPrice)
+        for j in joins:
+            query = query.join(j)
+        for condition in conditions:
+            query = query.where(condition)
+        response.headers["X-Total-Count"] = str(db.exec(query).one())
+
+    region_alias = Region
+    query = (
+        select(TrafficPrice)
+        .join(TrafficPrice.vendor)
+        .options(contains_eager(TrafficPrice.vendor))
+        .join(TrafficPrice.region)
+        .join(region_alias.country)
+        .options(
+            contains_eager(TrafficPrice.region).contains_eager(region_alias.country)
+        )
     )
-    return res
+    for condition in conditions:
+        query = query.where(condition)
+
+    # ordering
+    if order_by:
+        order_obj = [o for o in [TrafficPrice, Region] if hasattr(o, order_by)]
+        if len(order_obj) == 0:
+            raise HTTPException(status_code=400, detail="Unknown order_by field.")
+        if len(order_obj) > 1:
+            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+        order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
+
+    # pagination
+    if limit > 0:
+        query = query.limit(limit)
+    # only apply if limit is set
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
+
+    prices = db.exec(query).all()
+
+    # update model to include the monthly traffic price field
+    for i, p in enumerate(prices):
+        prices[i] = TrafficPriceWithPKsWithMonthlyTraffic.model_validate(p)
+
+    # update prices per tiers and to currency requested
+    for price in prices:
+
+        def rounder(p):
+            return round(p, 6)
+
+        def local_price(p):
+            return rounder(currency_converter.convert(p, price.currency, currency))
+
+        if currency:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    price.price = local_price(price.price)
+                    for i, tier in enumerate(price.price_tiered):
+                        price.price_tiered[i].price = local_price(tier.price)
+                    price.currency = currency
+
+        if price.price_tiered:
+            price.price_monthly_traffic = traffic_paid = 0
+            for i, tier in enumerate(price.price_tiered):
+                traffic_tier = min(
+                    max(monthly_traffic - traffic_paid, 0),
+                    (float(tier.upper) - float(tier.lower)),
+                )
+                price.price_monthly_traffic += rounder(tier.price * traffic_tier)
+                traffic_paid += traffic_tier
+        else:
+            price.price_monthly_traffic = rounder(price.price * monthly_traffic)
+
+    return prices

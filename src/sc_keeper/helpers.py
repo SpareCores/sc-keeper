@@ -1,5 +1,6 @@
-from functools import cache
+from datetime import timedelta
 
+from cachier import cachier
 from fastapi import HTTPException
 from sc_crawler.table_bases import ServerBase
 from sc_crawler.tables import Server
@@ -12,7 +13,7 @@ from .database import get_db
 from .references import ServerPKs
 
 
-@cache
+@cachier(stale_after=timedelta(minutes=10), backend="memory")
 def get_server_dicts():
     with next(get_db()) as db:
         server_rows = db.exec(select(Server)).all()
@@ -25,7 +26,10 @@ def get_server_dicts():
 
 
 def get_server_dict(vendor: str, server: str):
-    return get_server_dicts()[vendor][server]
+    serverobj = get_server_dicts()[vendor][server]
+    if serverobj:
+        return serverobj
+    raise HTTPException(status_code=404, detail="Server not found")
 
 
 def get_server_base(vendor_id: str, server_id: str, db: Session) -> ServerBase:

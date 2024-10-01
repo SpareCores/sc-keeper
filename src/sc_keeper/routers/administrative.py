@@ -1,12 +1,10 @@
 from importlib.metadata import version
 
-from fastapi import (
-    APIRouter,
-    Depends,
-)
+from fastapi import APIRouter, Depends
 from sqlmodel import Session, text
 
 from ..database import get_db, session
+from ..references import HealthcheckResponse
 
 router = APIRouter()
 
@@ -18,8 +16,8 @@ package_versions = {
 
 
 @router.get("/healthcheck")
-def healthcheck(db: Session = Depends(get_db)) -> dict:
-    """Return database hash and last updated timestamp."""
+def healthcheck(db: Session = Depends(get_db)) -> HealthcheckResponse:
+    """Quickly return package and database version information."""
     return {
         "packages": package_versions,
         "database_last_updated": session.last_updated,
