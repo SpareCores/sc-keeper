@@ -117,6 +117,7 @@ class Database(Thread):
 session = Database()
 session.start()
 safe_exit.register(session.cleanup)
+session.updated.wait()
 
 
 def get_db():
