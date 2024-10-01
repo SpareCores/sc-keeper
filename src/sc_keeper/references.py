@@ -26,9 +26,6 @@ from sqlmodel import distinct, not_, select, text
 
 from .database import session
 
-# make sure we have a fresh database
-session.updated.wait()
-
 # create enums from DB values for filtering options
 with session.sessionmaker as db:
     Countries = StrEnum(

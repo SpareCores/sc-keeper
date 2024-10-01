@@ -9,11 +9,8 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, select
 
-from .currency import CurrencyConverter
 from .database import get_db
 from .references import ServerPKs
-
-currency_converter = CurrencyConverter()
 
 
 @cachier(stale_after=timedelta(minutes=10), backend="memory")

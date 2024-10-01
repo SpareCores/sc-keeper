@@ -28,8 +28,8 @@ from sqlmodel import Session, func, or_, select
 from . import parameters as options
 from . import routers
 from .cache import CacheHeaderMiddleware
+from .currency import currency_converter
 from .database import get_db
-from .helpers import currency_converter
 from .logger import LogMiddleware
 from .lookups import min_server_price
 from .query import max_score_per_server

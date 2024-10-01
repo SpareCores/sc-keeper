@@ -16,8 +16,9 @@ from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, and_, func, not_, select
 
 from .. import parameters as options
+from ..currency import currency_converter
 from ..database import get_db
-from ..helpers import currency_converter, get_server_dict, get_server_pks
+from ..helpers import get_server_dict, get_server_pks
 from ..lookups import min_server_price
 from ..query import max_score_per_server
 from ..references import ServerPKs, ServerPKsWithPrices

@@ -6,9 +6,7 @@ from cachier import cachier
 from sc_crawler.tables import ServerPrice
 from sqlmodel import Session, func, select
 
-from .currency import CurrencyConverter
-
-currency_converter = CurrencyConverter()
+from .currency import currency_converter
 
 
 def dummy_hash(*args, **kwargs):
