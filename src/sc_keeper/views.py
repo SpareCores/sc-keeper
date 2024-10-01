@@ -19,7 +19,7 @@ class Currency(CurrencyBase, table=True):
     """Currency symbol pairs exchange rates."""
 
     @classmethod
-    def insert(self, session: Session):
+    def insert(cls, session: Session):
         currencies = cc.converter.currencies
         items = []
         for base in currencies:
@@ -27,7 +27,7 @@ class Currency(CurrencyBase, table=True):
                 items.append(
                     {"base": base, "quote": quote, "rate": cc.convert(1, base, quote)}
                 )
-        insert_items(self, items, session=session)
+        insert_items(cls, items, session=session)
 
 
 class ServerPriceMinBase(HasServerPK, HasVendorPKFK):
