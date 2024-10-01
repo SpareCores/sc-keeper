@@ -2,6 +2,7 @@ import logging
 from contextvars import ContextVar
 from json import dumps
 from logging import Formatter
+from resource import getrusage, RUSAGE_SELF
 from time import time
 from uuid import uuid4
 
@@ -32,7 +33,7 @@ class JsonFormatter(Formatter):
                 if k in record.__dict__
             },
         }
-        for nested in ["event", "request_id", "client", "req", "res", "elapsed_time"]:
+        for nested in ["event", "request_id", "client", "req", "res", "proc"]:
             if nested in record.__dict__:
                 json_record[nested] = record.__dict__[nested]
         if record.levelno == logging.ERROR and record.exc_info:
@@ -46,6 +47,7 @@ class LogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         request_id = _request_id_ctx_var.set(str(uuid4()))
         request_time = time()
+        request_resources = getrusage(RUSAGE_SELF)
         logging.info(
             "request received",
             extra={
@@ -78,8 +80,10 @@ class LogMiddleware(BaseHTTPMiddleware):
 
         # TODO log user/sys
         # TODO log maxRSS
+
         response = await call_next(request)
-        response_time = time()
+        current_time = time()
+        current_resources = getrusage(RUSAGE_SELF)
 
         response.headers["X-Request-ID"] = get_request_id()
         logging.info(
@@ -91,7 +95,16 @@ class LogMiddleware(BaseHTTPMiddleware):
                     "status_code": response.status_code,
                     "length": int(response.headers["content-length"]),
                 },
-                "elapsed_time": round(response_time - request_time, 4),
+                "proc": {
+                    "user": round(
+                        current_resources.ru_utime - request_resources.ru_utime, 2
+                    ),
+                    "sys": round(
+                        current_resources.ru_stime - request_resources.ru_stime, 2
+                    ),
+                    "real": round(current_time - request_time, 4),
+                    "maxRSS": current_resources.ru_maxrss,
+                },
             },
         )
         _request_id_ctx_var.reset(request_id)
