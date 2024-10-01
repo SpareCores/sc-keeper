@@ -91,9 +91,9 @@ class Database(Thread):
                 self.db_hash = db.hash
                 self.last_updated = time()
                 self.updated.set()
-                # keep up to 2 files so that queries can run
-                # on the old file while we update the new file
-                self.cleanup(2)
+            # keep up to 2 files so that queries can run
+            # on the old file while we update the new file
+            self.cleanup(2)
 
         else:
             logger.debug("No need to update the database yet")
