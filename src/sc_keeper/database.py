@@ -35,12 +35,13 @@ class Database(Thread):
 
     def cleanup(self, keep=0):
         """Delete all SQLite files except for the number specified to keep."""
-        while len(self.tmpfiles) > keep:
-            tmpfile = self.tmpfiles.popleft()
-            logger.debug(f"Deleting {tmpfile}")
-            unlink(tmpfile)
-        if len(self.tmpfiles) == 0:
-            self.updated.clear()
+        with self.lock:
+            while len(self.tmpfiles) > keep:
+                tmpfile = self.tmpfiles.popleft()
+                logger.debug(f"Deleting {tmpfile}")
+                unlink(tmpfile)
+            if len(self.tmpfiles) == 0:
+                self.updated.clear()
 
     def update(self, force=False):
         """Copies sc-data's most recent SQLite file, adds index and new tables."""
@@ -51,7 +52,8 @@ class Database(Thread):
             # delete=False due to Windows support
             tmpfile = NamedTemporaryFile(delete=False).name
             copyfile(db.path, tmpfile)
-            self.tmpfiles.append(tmpfile)
+            with self.lock:
+                self.tmpfiles.append(tmpfile)
             # add indexes etc
             engine = create_engine(
                 "sqlite:///" + abspath(tmpfile),
