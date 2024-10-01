@@ -114,7 +114,7 @@ class Database(Thread):
 
 session = Database()
 session.start()
-safe_exit.register(lambda _: session.cleanup(), db.tmpfiles)
+safe_exit.register(session.cleanup)
 
 
 def get_db():
