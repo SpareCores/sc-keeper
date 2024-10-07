@@ -52,6 +52,16 @@ class LogMiddleware(BaseHTTPMiddleware):
         request_cpu_times = Process().cpu_times()
         request_io = Process().io_counters()
 
+        request_info = {
+            "method": request.method,
+            "path": request.url.path,
+            "parameters": {
+                "query": request.query_params._dict,
+                "path": request.path_params,
+            },
+            "referer": request.headers.get("Referer"),
+        }
+
         logging.info(
             "request received",
             extra={
@@ -70,15 +80,7 @@ class LogMiddleware(BaseHTTPMiddleware):
                         "arch": request.headers.get("Sec-CH-UA-Arch"),
                     },
                 },
-                "req": {
-                    "method": request.method,
-                    "path": request.url.path,
-                    "parameters": {
-                        "query": request.query_params._dict,
-                        "path": request.path_params,
-                    },
-                    "referer": request.headers.get("Referer"),
-                },
+                "req": request_info,
             },
         )
 
@@ -94,6 +96,7 @@ class LogMiddleware(BaseHTTPMiddleware):
             extra={
                 "event": "response",
                 "request_id": get_request_id(),
+                "req": request_info,
                 "res": {
                     "status_code": response.status_code,
                     "length": int(response.headers["content-length"]),
