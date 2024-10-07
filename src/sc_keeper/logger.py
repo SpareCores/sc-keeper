@@ -2,6 +2,7 @@ import logging
 from contextvars import ContextVar
 from json import dumps
 from logging import Formatter
+from psutil import Process, cpu_times
 from resource import RUSAGE_SELF, getrusage
 from time import time
 from uuid import uuid4
@@ -48,6 +49,9 @@ class LogMiddleware(BaseHTTPMiddleware):
         request_id = _request_id_ctx_var.set(str(uuid4()))
         request_time = time()
         request_resources = getrusage(RUSAGE_SELF)
+        request_cpu_times = Process().cpu_times()
+        request_io = Process().io_counters()
+
         logging.info(
             "request received",
             extra={
@@ -78,12 +82,11 @@ class LogMiddleware(BaseHTTPMiddleware):
             },
         )
 
-        # TODO log user/sys
-        # TODO log maxRSS
-
         response = await call_next(request)
         current_time = time()
         current_resources = getrusage(RUSAGE_SELF)
+        current_cpu_times = Process().cpu_times()
+        current_io = Process().io_counters()
 
         response.headers["X-Request-ID"] = get_request_id()
         logging.info(
@@ -96,14 +99,19 @@ class LogMiddleware(BaseHTTPMiddleware):
                     "length": int(response.headers["content-length"]),
                 },
                 "proc": {
+                    "real": round(current_time - request_time, 4),
                     "user": round(
                         current_resources.ru_utime - request_resources.ru_utime, 2
                     ),
                     "sys": round(
                         current_resources.ru_stime - request_resources.ru_stime, 2
                     ),
-                    "real": round(current_time - request_time, 4),
-                    "maxRSS": current_resources.ru_maxrss,
+                    "iowait": round(
+                        current_cpu_times.iowait - request_cpu_times.iowait, 2
+                    ),
+                    "read_bytes": current_io.read_bytes - request_io.read_bytes,
+                    "write_bytes": current_io.write_bytes - request_io.write_bytes,
+                    "max_rss": current_resources.ru_maxrss,
                 },
             },
         )
