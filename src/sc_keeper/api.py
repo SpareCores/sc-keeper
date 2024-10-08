@@ -22,7 +22,7 @@ from sc_crawler.tables import (
     VendorComplianceLink,
     Zone,
 )
-from sqlalchemy.orm import contains_eager
+from sqlalchemy.orm import aliased, contains_eager
 from sqlmodel import Session, func, or_, select
 
 from . import parameters as options
@@ -527,14 +527,6 @@ def search_server_prices(
 
     # actual query
     query = select(ServerPrice, max_scores.c.score)
-    joins.update(
-        [
-            ServerPrice.vendor,
-            ServerPrice.region,
-            ServerPrice.zone,
-            ServerPrice.server,
-        ]
-    )
 
     for j in joins:
         query = query.join(j)
@@ -544,15 +536,7 @@ def search_server_prices(
         & (ServerPrice.server_id == max_scores.c.server_id),
         isouter=True,
     )
-    region_alias = Region
-    query = query.join(region_alias.country)
-    # avoid n+1 queries
-    query = query.options(contains_eager(ServerPrice.vendor))
-    query = query.options(
-        contains_eager(ServerPrice.region).contains_eager(region_alias.country)
-    )
-    query = query.options(contains_eager(ServerPrice.zone))
-    query = query.options(contains_eager(ServerPrice.server))
+
     for condition in conditions:
         query = query.where(condition)
 
@@ -579,6 +563,46 @@ def search_server_prices(
     # only apply if limit is set
     if page and limit > 0:
         query = query.offset((page - 1) * limit)
+
+    # load extra objects/columns _after_ the subquery filtering
+    subquery = query.subquery()
+    subquery_aliased = aliased(ServerPrice, subquery.alias("filtered_server_price"))
+    query = select(subquery_aliased, max_scores.c.score)
+    joins = [
+        subquery_aliased.vendor,
+        subquery_aliased.region,
+        subquery_aliased.zone,
+        subquery_aliased.server,
+    ]
+    for j in joins:
+        query = query.join(j, isouter=True)
+    query = query.join(
+        max_scores,
+        (subquery_aliased.vendor_id == max_scores.c.vendor_id)
+        & (subquery_aliased.server_id == max_scores.c.server_id),
+        isouter=True,
+    )
+    region_alias = Region
+    query = query.join(region_alias.country)
+    # avoid n+1 queries
+    query = query.options(contains_eager(subquery_aliased.vendor))
+    query = query.options(
+        contains_eager(subquery_aliased.region).contains_eager(region_alias.country)
+    )
+    query = query.options(contains_eager(subquery_aliased.zone))
+    query = query.options(contains_eager(subquery_aliased.server))
+    # reorder again after the above joins
+    if order_by:
+        order_obj = [
+            o
+            for o in [subquery_aliased, Server, Region, max_scores.c]
+            if hasattr(o, order_by)
+        ]
+        order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
 
     results = db.exec(query).all()
 
