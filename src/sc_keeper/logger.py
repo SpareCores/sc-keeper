@@ -2,7 +2,7 @@ import logging
 from contextvars import ContextVar
 from json import dumps
 from logging import Formatter
-from psutil import Process, cpu_times
+from psutil import Process
 from resource import RUSAGE_SELF, getrusage
 from time import time
 from uuid import uuid4
