@@ -2,11 +2,11 @@ import logging
 from contextvars import ContextVar
 from json import dumps
 from logging import Formatter
-from psutil import Process
 from resource import RUSAGE_SELF, getrusage
 from time import time
 from uuid import uuid4
 
+from psutil import Process
 from starlette.middleware.base import BaseHTTPMiddleware
 
 _request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default=None)
