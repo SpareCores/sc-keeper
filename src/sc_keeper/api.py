@@ -116,7 +116,11 @@ Server.model_config["json_schema_extra"] = {
 ServerPKs.model_config["json_schema_extra"] = Server.model_config["json_schema_extra"]
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["score"] = 42
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["price"] = 7
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price"] = 7
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price_spot"] = 7
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price_ondemand"] = 10
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["score_per_price"] = 42 / 7
+
 Storage.model_config["json_schema_extra"] = {
     "examples": [example_data["storage"].model_dump()]
 }
