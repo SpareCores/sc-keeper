@@ -386,7 +386,7 @@ def search_servers(
         with suppress(Exception):
             serveri.min_price = server[2].min_price
             serveri.min_price_spot = server[2].min_price_spot
-            serveri.min_price_ondemand = server[2].min_ondemand_price
+            serveri.min_price_ondemand = server[2].min_price_ondemand
             serveri.score_per_price = serveri.score / serveri.min_price
             serveri.price = serveri.min_price  # legacy
         serverlist.append(serveri)
