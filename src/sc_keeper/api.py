@@ -36,7 +36,6 @@ from .references import (
     OrderDir,
     RegionPKs,
     ServerPKs,
-    ServerPKsWithPrices,
     ServerPriceWithPKs,
     StoragePriceWithPKs,
     TrafficPriceWithPKsWithMonthlyTraffic,
@@ -124,24 +123,6 @@ ServerPKs.model_config["json_schema_extra"]["examples"][0]["score_per_price"] = 
 Storage.model_config["json_schema_extra"] = {
     "examples": [example_data["storage"].model_dump()]
 }
-ServerPKsWithPrices.model_config["json_schema_extra"] = {
-    "examples": [
-        ServerPKs.model_config["json_schema_extra"]["examples"][0]
-        | {
-            "vendor": example_data["vendor"].model_dump(),
-            "prices": [
-                p.model_dump()
-                | {
-                    "region": example_data["region"].model_dump(),
-                    "zone": example_data["zone"].model_dump(),
-                }
-                for p in example_data["prices"]
-            ],
-            "benchmark_scores": [example_data["benchmark"].model_dump()],
-        }
-    ]
-}
-# ServerPrices.model_config["json_schema_extra"]
 ServerPriceWithPKs.model_config["json_schema_extra"] = {
     "examples": [
         example_data["prices"][0].model_dump()
