@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from importlib.metadata import version
 from os import environ
 from textwrap import dedent
@@ -31,7 +31,6 @@ from .cache import CacheHeaderMiddleware
 from .currency import currency_converter
 from .database import get_db
 from .logger import LogMiddleware
-from .lookups import min_server_price
 from .query import max_score_per_server
 from .references import (
     OrderDir,
@@ -43,6 +42,7 @@ from .references import (
     TrafficPriceWithPKsWithMonthlyTraffic,
 )
 from .sentry import before_send as sentry_before_send
+from .views import ServerPriceMin
 
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
@@ -333,12 +333,18 @@ def search_servers(
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     # actual query
-    query = select(Server, max_scores.c.score)
+    query = select(Server, max_scores.c.score, ServerPriceMin)
     query = query.join(Server.vendor)
     query = query.join(
         max_scores,
         (Server.vendor_id == max_scores.c.vendor_id)
         & (Server.server_id == max_scores.c.server_id),
+        isouter=True,
+    )
+    query = query.join(
+        ServerPriceMin,
+        (Server.vendor_id == ServerPriceMin.vendor_id)
+        & (Server.server_id == ServerPriceMin.server_id),
         isouter=True,
     )
     query = query.options(contains_eager(Server.vendor))
@@ -347,7 +353,7 @@ def search_servers(
 
     # ordering
     if order_by:
-        order_obj = [o for o in [Server, max_scores.c] if hasattr(o, order_by)]
+        order_obj = [o for o in [Server, max_scores.c, ServerPriceMin] if hasattr(o, order_by)]
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
@@ -371,11 +377,12 @@ def search_servers(
     for server in servers:
         serveri = ServerPKs.model_validate(server[0])
         serveri.score = server[1]
-        try:
-            serveri.price = min_server_price(db, serveri.vendor_id, serveri.server_id)
-            serveri.score_per_price = serveri.score / serveri.price
-        except Exception:
-            serveri.score_per_price = None
+        with suppress(Exception):
+            serveri.min_price = server[2].min_price
+            serveri.min_price_spot = server[2].min_price_spot
+            serveri.min_price_ondemand = server[2].min_ondemand_price
+            serveri.score_per_price = serveri.score / serveri.min_price
+            serveri.price = serveri.min_price  # legacy
         serverlist.append(serveri)
 
     return serverlist
@@ -567,7 +574,7 @@ def search_server_prices(
     # load extra objects/columns _after_ the subquery filtering
     subquery = query.subquery()
     subquery_aliased = aliased(ServerPrice, subquery.alias("filtered_server_price"))
-    query = select(subquery_aliased, max_scores.c.score)
+    query = select(subquery_aliased, max_scores.c.score, ServerPriceMin)
     joins = [
         subquery_aliased.vendor,
         subquery_aliased.region,
@@ -580,6 +587,12 @@ def search_server_prices(
         max_scores,
         (subquery_aliased.vendor_id == max_scores.c.vendor_id)
         & (subquery_aliased.server_id == max_scores.c.server_id),
+        isouter=True,
+    )
+    query = query.join(
+        ServerPriceMin,
+        (subquery_aliased.vendor_id == ServerPriceMin.vendor_id)
+        & (subquery_aliased.server_id == ServerPriceMin.server_id),
         isouter=True,
     )
     region_alias = Region
@@ -595,7 +608,7 @@ def search_server_prices(
     if order_by:
         order_obj = [
             o
-            for o in [subquery_aliased, Server, Region, max_scores.c]
+            for o in [subquery_aliased, Server, Region, max_scores.c, ServerPriceMin]
             if hasattr(o, order_by)
         ]
         order_field = getattr(order_obj[0], order_by)
@@ -611,18 +624,16 @@ def search_server_prices(
     for result in results:
         price = ServerPriceWithPKs.model_validate(result[0])
         price.server.score = result[1]
-        try:
-            price.server.price = min_server_price(
-                db, price.server.vendor_id, price.server.server_id
-            )
-        except KeyError:
-            price.server.price = None
+        with suppress(Exception):
+            price.server.min_price = result[2].min_price
+            price.server.min_price_spot = result[2].min_price_spot
+            price.server.min_price_ondemand = result[2].min_price_ondemand
+            price.server.price = price.server.min_price  # legacy
         price.server.score_per_price = (
-            price.server.score / price.server.price
-            if price.server.price and price.server.score
+            price.server.score / price.server.min_price
+            if price.server.min_price and price.server.score
             else None
         )
-
         prices.append(price)
 
     # update prices to currency requested

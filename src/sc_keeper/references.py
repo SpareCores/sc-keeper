@@ -149,7 +149,10 @@ class ServerTableMetaData(TableMetaData):
 
 class ServerWithScore(ServerBase):
     score: Optional[float] = None
-    price: Optional[float] = None
+    price: Optional[float] = None  # legacy
+    min_price: Optional[float] = None
+    min_price_spot: Optional[float] = None
+    min_price_ondemand: Optional[float] = None
     score_per_price: Optional[float] = None
 
 

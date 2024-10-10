@@ -32,8 +32,8 @@ class Currency(CurrencyBase, table=True):
 
 class ServerPriceMinBase(HasServerPK, HasVendorPKFK):
     min_price: float
-    min_spot_price: Optional[float]
-    min_ondemand_price: float
+    min_price_spot: Optional[float]
+    min_price_ondemand: float
 
 
 class ServerPriceMin(ServerPriceMinBase, table=True):
@@ -53,7 +53,7 @@ class ServerPriceMin(ServerPriceMinBase, table=True):
                             ServerPrice.price * Currency.rate,
                         )
                     )
-                ).label("min_spot_price"),
+                ).label("min_price_spot"),
                 func.min(
                     case(
                         (
@@ -61,7 +61,7 @@ class ServerPriceMin(ServerPriceMinBase, table=True):
                             ServerPrice.price * Currency.rate,
                         )
                     )
-                ).label("min_ondemand_price"),
+                ).label("min_price_ondemand"),
             )
             .where(ServerPrice.status == Status.ACTIVE)
             .join(

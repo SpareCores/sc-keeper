@@ -1,3 +1,4 @@
+from contextlib import suppress
 from typing import Annotated, List, Literal
 
 from fastapi import (
@@ -14,6 +15,8 @@ from sc_crawler.tables import (
 )
 from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, and_, func, not_, select
+
+from sc_keeper.views import ServerPriceMin
 
 from .. import parameters as options
 from ..currency import currency_converter
@@ -124,11 +127,17 @@ def get_similar_servers(
 
     max_scores = max_score_per_server(benchmark_id, benchmark_config)
     query = (
-        select(Server, max_scores.c.score)
+        select(Server, max_scores.c.score, ServerPriceMin)
         .join(
             max_scores,
             (Server.vendor_id == max_scores.c.vendor_id)
             & (Server.server_id == max_scores.c.server_id),
+            isouter=True,
+        )
+        .join(
+            ServerPriceMin,
+            (Server.vendor_id == ServerPriceMin.vendor_id)
+            & (Server.server_id == ServerPriceMin.server_id),
             isouter=True,
         )
         .where(
@@ -171,11 +180,12 @@ def get_similar_servers(
     for server in servers:
         serveri = ServerPKs.model_validate(server[0])
         serveri.score = server[1]
-        try:
-            serveri.price = min_server_price(db, serveri.vendor_id, serveri.server_id)
-            serveri.score_per_price = serveri.score / serveri.price
-        except Exception:
-            serveri.score_per_price = None
+        with suppress(Exception):
+            serveri.min_price = server[2].min_price
+            serveri.min_price_spot = server[2].min_price_spot
+            serveri.min_price_ondemand = server[2].min_price_ondemand
+            serveri.price = serveri.min_price  # legacy
+            serveri.score_per_price = serveri.score / serveri.min_price
         serverlist.append(serveri)
 
     return serverlist
