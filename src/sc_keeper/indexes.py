@@ -30,6 +30,12 @@ index_defs = [
         Server.vendor_id,
     ],
     [
+        "server_idx_status_vendor_server",
+        Server.status,
+        Server.vendor_id,
+        Server.server_id,
+    ],
+    [
         "benchmark_score_idx_benchmark_vendor_server",
         BenchmarkScore.benchmark_id,
         BenchmarkScore.vendor_id,
