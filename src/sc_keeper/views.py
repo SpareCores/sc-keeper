@@ -72,12 +72,14 @@ class ServerExtra(ServerExtraBase, table=True):
             select(
                 ServerPrice.vendor_id,
                 ServerPrice.server_id,
-                func.min(ServerPrice.price * Currency.rate).label("min_price"),
+                func.round(func.min(ServerPrice.price * Currency.rate), 4).label(
+                    "min_price"
+                ),
                 func.min(
                     case(
                         (
                             ServerPrice.allocation == Allocation.SPOT,
-                            ServerPrice.price * Currency.rate,
+                            func.round(ServerPrice.price * Currency.rate, 4),
                         )
                     )
                 ).label("min_price_spot"),
@@ -85,7 +87,7 @@ class ServerExtra(ServerExtraBase, table=True):
                     case(
                         (
                             ServerPrice.allocation == Allocation.ONDEMAND,
-                            ServerPrice.price * Currency.rate,
+                            func.round(ServerPrice.price * Currency.rate, 4),
                         )
                     )
                 ).label("min_price_ondemand"),
@@ -110,8 +112,8 @@ class ServerExtra(ServerExtraBase, table=True):
             scoren.c.score,
             case(
                 (price.c.min_price.is_(None), None),
-                else_=scoren.c.score / price.c.min_price,
-            ).label("score_per_price"),  # TODO round
+                else_=func.round(scoren.c.score / price.c.min_price, 4),
+            ).label("score_per_price"),
             score1.c.score1,
             price.c.min_price,
             price.c.min_price_spot,
