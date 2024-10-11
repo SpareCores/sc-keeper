@@ -38,7 +38,7 @@ def get_similar_servers(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
     by: Annotated[
-        Literal["family", "specs", "score"],
+        Literal["family", "specs", "score", "score_per_price"],
         Path(description="Algorithm to look for similar servers."),
     ],
     num: Annotated[
@@ -59,6 +59,10 @@ def get_similar_servers(
 
     The "score" method will find the servers with the closest
     performance using the multi-core SCore.
+
+    The "score_per_price" method is similar to "score", but
+    instead of using the multi-core SCore, it uses the SCore
+    per price.
     """
     serverobj = get_server_pks(vendor, server, db)
 
@@ -95,13 +99,23 @@ def get_similar_servers(
         )
 
     if by == "score":
-        max_score = db.exec(
+        target_score = db.exec(
             select(ServerExtra.score)
             .where(ServerExtra.vendor_id == serverobj.vendor_id)
             .where(ServerExtra.server_id == serverobj.server_id)
         ).one()
         query = query.where(ServerExtra.score.isnot(None)).order_by(
-            func.abs(ServerExtra.score - max_score)
+            func.abs(ServerExtra.score - target_score)
+        )
+
+    if by == "score_per_price":
+        target_score_per_price = db.exec(
+            select(ServerExtra.score_per_price)
+            .where(ServerExtra.vendor_id == serverobj.vendor_id)
+            .where(ServerExtra.server_id == serverobj.server_id)
+        ).one()
+        query = query.where(ServerExtra.score_per_price.isnot(None)).order_by(
+            func.abs(ServerExtra.score_per_price - target_score_per_price)
         )
 
     servers = db.exec(query.limit(num)).all()
