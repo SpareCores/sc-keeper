@@ -221,6 +221,7 @@ def search_servers(
     cpu_manufacturer: options.cpu_manufacturer = None,
     cpu_family: options.cpu_family = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
+    benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     only_active: options.only_active = True,
     vendor: options.vendor = None,
@@ -277,6 +278,10 @@ def search_servers(
         conditions.add(Server.cpu_family.in_(cpu_family))
     if benchmark_score_stressng_cpu_min:
         conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
+    if benchmark_score_per_price_stressng_cpu_min:
+        conditions.add(
+            ServerExtra.score_per_price > benchmark_score_per_price_stressng_cpu_min
+        )
     if memory_min:
         conditions.add(Server.memory_amount >= memory_min * 1024)
     if storage_size:
@@ -303,7 +308,10 @@ def search_servers(
     # count all records to be returned in header
     if add_total_count_header:
         query = select(func.count()).select_from(Server)
-        if benchmark_score_stressng_cpu_min:
+        if (
+            benchmark_score_stressng_cpu_min
+            or benchmark_score_per_price_stressng_cpu_min
+        ):
             query = query.join(
                 ServerExtra,
                 (Server.vendor_id == ServerExtra.vendor_id)
@@ -376,6 +384,7 @@ def search_server_prices(
     cpu_manufacturer: options.cpu_manufacturer = None,
     cpu_family: options.cpu_family = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
+    benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     price_max: options.price_max = None,
     only_active: options.only_active = True,
@@ -450,6 +459,9 @@ def search_server_prices(
         conditions.add(Server.cpu_family.in_(cpu_family))
     if benchmark_score_stressng_cpu_min:
         conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
+    if benchmark_score_per_price_stressng_cpu_min:
+        # needs special handling in filtering
+        pass
     if memory_min:
         joins.add(ServerPrice.server)
         conditions.add(Server.memory_amount >= memory_min * 1024)
@@ -495,7 +507,10 @@ def search_server_prices(
         query = select(func.count()).select_from(ServerPrice)
         for j in joins:
             query = query.join(j)
-        if benchmark_score_stressng_cpu_min:
+        if (
+            benchmark_score_stressng_cpu_min
+            or benchmark_score_per_price_stressng_cpu_min
+        ):
             query = query.join(
                 ServerExtra,
                 (Server.vendor_id == ServerExtra.vendor_id)
@@ -504,6 +519,11 @@ def search_server_prices(
             )
         for condition in conditions:
             query = query.where(condition)
+        if benchmark_score_per_price_stressng_cpu_min:
+            query = query.where(
+                ServerExtra.score / ServerPrice.price
+                > benchmark_score_per_price_stressng_cpu_min
+            )
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     # actual query
