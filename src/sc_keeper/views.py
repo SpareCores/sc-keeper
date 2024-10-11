@@ -94,11 +94,6 @@ class ServerExtra(ServerExtraBase, table=True):
             )
             .where(ServerPrice.status == Status.ACTIVE)
             .join(
-                BenchmarkScore,
-                (ServerPrice.vendor_id == BenchmarkScore.vendor_id)
-                & (ServerPrice.server_id == BenchmarkScore.server_id),
-            )
-            .join(
                 Currency,
                 (ServerPrice.currency == Currency.base) & (Currency.quote == "USD"),
             )
