@@ -520,7 +520,7 @@ def search_server_prices(
         for condition in conditions:
             query = query.where(condition)
         if benchmark_score_per_price_stressng_cpu_min:
-            query = query.where(
+            query = query.where(ServerExtra.score.isnot(None)).where(
                 ServerExtra.score / ServerPrice.price
                 > benchmark_score_per_price_stressng_cpu_min
             )
@@ -540,6 +540,11 @@ def search_server_prices(
 
     for condition in conditions:
         query = query.where(condition)
+    if benchmark_score_per_price_stressng_cpu_min:
+        query = query.where(ServerExtra.score.isnot(None)).where(
+            ServerExtra.score / ServerPrice.price
+            > benchmark_score_per_price_stressng_cpu_min
+        )
 
     # ordering
     if order_by:
