@@ -526,9 +526,9 @@ def search_server_prices(
         # special handling for price_per_score as not being a table column
         if order_by == "score_per_price":
             if OrderDir(order_dir) == OrderDir.ASC:
-                query = query.order_by(ServerPrice.price / ServerExtra.score)
+                query = query.order_by(ServerExtra.score / ServerPrice.price)
             else:
-                query = query.order_by(ServerPrice.price / ServerExtra.score * -1)
+                query = query.order_by(ServerExtra.score / ServerPrice.price * -1)
         else:
             order_obj = [
                 o
@@ -595,9 +595,9 @@ def search_server_prices(
     if order_by:
         if order_by == "score_per_price":
             if OrderDir(order_dir) == OrderDir.ASC:
-                query = query.order_by(subquery_aliased.price / ServerExtra.score)
+                query = query.order_by(ServerExtra.score / subquery_aliased.price)
             else:
-                query = query.order_by(subquery_aliased.price / ServerExtra.score * -1)
+                query = query.order_by(ServerExtra.score / subquery_aliased.price * -1)
         else:
             order_obj = [
                 o
