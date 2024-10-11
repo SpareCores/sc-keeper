@@ -3,7 +3,7 @@ from typing import List, Optional
 from sc_crawler.insert import insert_items
 from sc_crawler.table_bases import HasServerPK, HasVendorPKFK, ScModel
 from sc_crawler.table_fields import Allocation, Status
-from sc_crawler.tables import ServerPrice, is_table
+from sc_crawler.tables import BenchmarkScore, ServerPrice, is_table
 from sqlmodel import Field, Session, case, func, select
 
 from .currency import currency_converter as cc
@@ -25,23 +25,50 @@ class Currency(CurrencyBase, table=True):
         for base in currencies:
             for quote in currencies:
                 items.append(
-                    {"base": base, "quote": quote, "rate": cc.convert(1, base, quote)}
+                    {
+                        "base": base,
+                        "quote": quote,
+                        "rate": cc.convert(1, base, quote),
+                    }
                 )
         insert_items(cls, items, session=session)
 
 
-class ServerPriceMinBase(HasServerPK, HasVendorPKFK):
-    min_price: float
+class ServerExtraBase(HasServerPK, HasVendorPKFK):
+    score: Optional[float]
+    score_per_price: Optional[float]
+    score1: Optional[float]
+    min_price: Optional[float]
     min_price_spot: Optional[float]
-    min_price_ondemand: float
+    min_price_ondemand: Optional[float]
 
 
-class ServerPriceMin(ServerPriceMinBase, table=True):
-    """Poor man's materialized view on min price of servers standardized to USD."""
+class ServerExtra(ServerExtraBase, table=True):
+    """Poor man's materialized view on the SCore and min prices of servers standardized to USD."""
 
     @staticmethod
     def query():
-        return (
+        score1 = (
+            select(
+                BenchmarkScore.vendor_id,
+                BenchmarkScore.server_id,
+                BenchmarkScore.score.label("score1"),
+            )
+            .where(BenchmarkScore.status == Status.ACTIVE)
+            .where(BenchmarkScore.benchmark_id == "stress_ng:best1")
+            .subquery()
+        )
+        scoren = (
+            select(
+                BenchmarkScore.vendor_id,
+                BenchmarkScore.server_id,
+                BenchmarkScore.score.label("score"),
+            )
+            .where(BenchmarkScore.status == Status.ACTIVE)
+            .where(BenchmarkScore.benchmark_id == "stress_ng:bestn")
+            .subquery()
+        )
+        price = (
             select(
                 ServerPrice.vendor_id,
                 ServerPrice.server_id,
@@ -65,12 +92,43 @@ class ServerPriceMin(ServerPriceMinBase, table=True):
             )
             .where(ServerPrice.status == Status.ACTIVE)
             .join(
+                BenchmarkScore,
+                (ServerPrice.vendor_id == BenchmarkScore.vendor_id)
+                & (ServerPrice.server_id == BenchmarkScore.server_id),
+            )
+            .join(
                 Currency,
                 (ServerPrice.currency == Currency.base) & (Currency.quote == "USD"),
             )
             .group_by(ServerPrice.vendor_id, ServerPrice.server_id)
             .order_by(ServerPrice.vendor_id, ServerPrice.server_id)
+            .subquery()
         )
+        query = select(
+            price.c.vendor_id,
+            price.c.server_id,
+            scoren.c.score,
+            case(
+                (price.c.min_price.is_(None), None),
+                else_=scoren.c.score / price.c.min_price,
+            ).label("score_per_price"),  # TODO round
+            score1.c.score1,
+            price.c.min_price,
+            price.c.min_price_spot,
+            price.c.min_price_ondemand,
+        ).select_from(
+            price.outerjoin(
+                score1,
+                (price.c.vendor_id == score1.c.vendor_id)
+                & (price.c.server_id == score1.c.server_id),
+            ).outerjoin(
+                scoren,
+                (price.c.vendor_id == scoren.c.vendor_id)
+                & (price.c.server_id == scoren.c.server_id),
+            )
+        )
+
+        return query
 
 
 views: List[ScModel] = [

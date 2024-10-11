@@ -15,13 +15,12 @@ from sc_crawler.tables import (
 )
 from sqlmodel import Session, and_, func, not_, select
 
-from sc_keeper.views import ServerPriceMin
+from sc_keeper.views import ServerExtra
 
 from .. import parameters as options
 from ..currency import currency_converter
 from ..database import get_db
 from ..helpers import get_server_dict, get_server_pks
-from ..query import max_score_per_server
 from ..references import ServerPKs
 
 router = APIRouter()
@@ -63,19 +62,12 @@ def get_similar_servers(
     """
     serverobj = get_server_pks(vendor, server, db)
 
-    max_scores = max_score_per_server(benchmark_id, benchmark_config)
     query = (
-        select(Server, max_scores.c.score, ServerPriceMin)
+        select(Server, ServerExtra)
         .join(
-            max_scores,
-            (Server.vendor_id == max_scores.c.vendor_id)
-            & (Server.server_id == max_scores.c.server_id),
-            isouter=True,
-        )
-        .join(
-            ServerPriceMin,
-            (Server.vendor_id == ServerPriceMin.vendor_id)
-            & (Server.server_id == ServerPriceMin.server_id),
+            ServerExtra,
+            (Server.vendor_id == ServerExtra.vendor_id)
+            & (Server.server_id == ServerExtra.server_id),
             isouter=True,
         )
         .where(
@@ -104,12 +96,12 @@ def get_similar_servers(
 
     if by == "score":
         max_score = db.exec(
-            select(max_scores.c.score)
-            .where(max_scores.c.vendor_id == serverobj.vendor_id)
-            .where(max_scores.c.server_id == serverobj.server_id)
+            select(ServerExtra.score)
+            .where(ServerExtra.vendor_id == serverobj.vendor_id)
+            .where(ServerExtra.server_id == serverobj.server_id)
         ).one()
-        query = query.where(max_scores.c.score.isnot(None)).order_by(
-            func.abs(max_scores.c.score - max_score)
+        query = query.where(ServerExtra.score.isnot(None)).order_by(
+            func.abs(ServerExtra.score - max_score)
         )
 
     servers = db.exec(query.limit(num)).all()
@@ -117,13 +109,13 @@ def get_similar_servers(
     serverlist = []
     for server in servers:
         serveri = ServerPKs.model_validate(server[0])
-        serveri.score = server[1]
         with suppress(Exception):
-            serveri.min_price = server[2].min_price
-            serveri.min_price_spot = server[2].min_price_spot
-            serveri.min_price_ondemand = server[2].min_price_ondemand
+            serveri.score = server[1].score
+            serveri.min_price = server[1].min_price
+            serveri.min_price_spot = server[1].min_price_spot
+            serveri.min_price_ondemand = server[1].min_price_ondemand
             serveri.price = serveri.min_price  # legacy
-            serveri.score_per_price = serveri.score / serveri.min_price
+            serveri.score_per_price = server[1].score_per_price
         serverlist.append(serveri)
 
     return serverlist
