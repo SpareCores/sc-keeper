@@ -300,6 +300,7 @@ def search_servers(
         conditions.add(Server.gpu_model.in_(gpu_model))
     if only_active:
         conditions.add(Server.status == Status.ACTIVE)
+        conditions.add(ServerExtra.min_price.isnot(None))
     if storage_type:
         conditions.add(Server.storage_type.in_(storage_type))
     if vendor:
@@ -309,7 +310,8 @@ def search_servers(
     if add_total_count_header:
         query = select(func.count()).select_from(Server)
         if (
-            benchmark_score_stressng_cpu_min
+            only_active
+            or benchmark_score_stressng_cpu_min
             or benchmark_score_per_price_stressng_cpu_min
         ):
             query = query.join(
