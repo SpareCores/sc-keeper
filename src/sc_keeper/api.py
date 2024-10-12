@@ -341,7 +341,7 @@ def search_servers(
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
-            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+            raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
         order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
@@ -553,7 +553,7 @@ def search_server_prices(
             if OrderDir(order_dir) == OrderDir.ASC:
                 query = query.order_by(ServerExtra.score / ServerPrice.price)
             else:
-                query = query.order_by(ServerExtra.score / ServerPrice.price * -1)
+                query = query.order_by(ServerExtra.score / ServerPrice.price).desc()
         else:
             order_obj = [
                 o
@@ -563,9 +563,7 @@ def search_server_prices(
             if len(order_obj) == 0:
                 raise HTTPException(status_code=400, detail="Unknown order_by field.")
             if len(order_obj) > 1:
-                raise HTTPException(
-                    status_code=400, detail="Unambiguous order_by field."
-                )
+                raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
             order_field = getattr(order_obj[0], order_by)
             if OrderDir(order_dir) == OrderDir.ASC:
                 query = query.order_by(order_field)
@@ -622,7 +620,9 @@ def search_server_prices(
             if OrderDir(order_dir) == OrderDir.ASC:
                 query = query.order_by(ServerExtra.score / subquery_aliased.price)
             else:
-                query = query.order_by(ServerExtra.score / subquery_aliased.price * -1)
+                query = query.order_by(
+                    ServerExtra.score / subquery_aliased.price
+                ).desc()
         else:
             order_obj = [
                 o
@@ -756,7 +756,7 @@ def search_storage_prices(
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
-            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+            raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
         order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
@@ -870,7 +870,7 @@ def search_traffic_prices(
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
-            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+            raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
         order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)

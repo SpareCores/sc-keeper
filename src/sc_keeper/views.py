@@ -24,13 +24,11 @@ class Currency(CurrencyBase, table=True):
         items = []
         for base in currencies:
             for quote in currencies:
-                items.append(
-                    {
-                        "base": base,
-                        "quote": quote,
-                        "rate": cc.convert(1, base, quote),
-                    }
-                )
+                items.append({
+                    "base": base,
+                    "quote": quote,
+                    "rate": cc.convert(1, base, quote),
+                })
         insert_items(cls, items, session=session)
 
 
@@ -76,20 +74,16 @@ class ServerExtra(ServerExtraBase, table=True):
                     "min_price"
                 ),
                 func.min(
-                    case(
-                        (
-                            ServerPrice.allocation == Allocation.SPOT,
-                            func.round(ServerPrice.price * Currency.rate, 4),
-                        )
-                    )
+                    case((
+                        ServerPrice.allocation == Allocation.SPOT,
+                        func.round(ServerPrice.price * Currency.rate, 4),
+                    ))
                 ).label("min_price_spot"),
                 func.min(
-                    case(
-                        (
-                            ServerPrice.allocation == Allocation.ONDEMAND,
-                            func.round(ServerPrice.price * Currency.rate, 4),
-                        )
-                    )
+                    case((
+                        ServerPrice.allocation == Allocation.ONDEMAND,
+                        func.round(ServerPrice.price * Currency.rate, 4),
+                    ))
                 ).label("min_price_ondemand"),
             )
             .where(ServerPrice.status == Status.ACTIVE)
@@ -106,7 +100,7 @@ class ServerExtra(ServerExtraBase, table=True):
             price.c.server_id,
             scoren.c.score,
             case(
-                (price.c.min_price.is_(None), None),
+                ((price.c.min_price.is_(None)) | (price.c.min_price == 0), None),
                 else_=func.round(scoren.c.score / price.c.min_price, 4),
             ).label("score_per_price"),
             score1.c.score1,

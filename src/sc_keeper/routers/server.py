@@ -103,7 +103,9 @@ def get_similar_servers(
             select(ServerExtra.score)
             .where(ServerExtra.vendor_id == serverobj.vendor_id)
             .where(ServerExtra.server_id == serverobj.server_id)
-        ).one()
+        ).first()
+        if target_score is None:
+            return []
         query = query.where(ServerExtra.score.isnot(None)).order_by(
             func.abs(ServerExtra.score - target_score)
         )
@@ -113,7 +115,9 @@ def get_similar_servers(
             select(ServerExtra.score_per_price)
             .where(ServerExtra.vendor_id == serverobj.vendor_id)
             .where(ServerExtra.server_id == serverobj.server_id)
-        ).one()
+        ).first()
+        if target_score_per_price is None:
+            return []
         query = query.where(ServerExtra.score_per_price.isnot(None)).order_by(
             func.abs(ServerExtra.score_per_price - target_score_per_price)
         )
