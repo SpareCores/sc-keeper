@@ -24,11 +24,13 @@ class Currency(CurrencyBase, table=True):
         items = []
         for base in currencies:
             for quote in currencies:
-                items.append({
-                    "base": base,
-                    "quote": quote,
-                    "rate": cc.convert(1, base, quote),
-                })
+                items.append(
+                    {
+                        "base": base,
+                        "quote": quote,
+                        "rate": cc.convert(1, base, quote),
+                    }
+                )
         insert_items(cls, items, session=session)
 
 
@@ -74,16 +76,20 @@ class ServerExtra(ServerExtraBase, table=True):
                     "min_price"
                 ),
                 func.min(
-                    case((
-                        ServerPrice.allocation == Allocation.SPOT,
-                        func.round(ServerPrice.price * Currency.rate, 4),
-                    ))
+                    case(
+                        (
+                            ServerPrice.allocation == Allocation.SPOT,
+                            func.round(ServerPrice.price * Currency.rate, 4),
+                        )
+                    )
                 ).label("min_price_spot"),
                 func.min(
-                    case((
-                        ServerPrice.allocation == Allocation.ONDEMAND,
-                        func.round(ServerPrice.price * Currency.rate, 4),
-                    ))
+                    case(
+                        (
+                            ServerPrice.allocation == Allocation.ONDEMAND,
+                            func.round(ServerPrice.price * Currency.rate, 4),
+                        )
+                    )
                 ).label("min_price_ondemand"),
             )
             .where(ServerPrice.status == Status.ACTIVE)
