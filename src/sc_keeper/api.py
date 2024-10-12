@@ -300,11 +300,22 @@ def search_servers(
         conditions.add(Server.gpu_model.in_(gpu_model))
     if only_active:
         conditions.add(Server.status == Status.ACTIVE)
-        conditions.add(ServerExtra.min_price.isnot(None))
     if storage_type:
         conditions.add(Server.storage_type.in_(storage_type))
     if vendor:
         conditions.add(Server.vendor_id.in_(vendor))
+
+    # hide servers without value when filtering by the related column
+    if order_by == "score_per_price":
+        conditions.add(ServerExtra.score.isnot(None))
+    if order_by == "score_per_price":
+        conditions.add(ServerExtra.score_per_price.isnot(None))
+    if order_by == "min_price":
+        conditions.add(ServerExtra.min_price.isnot(None))
+    if order_by == "min_price_ondemand":
+        conditions.add(ServerExtra.min_price_ondemand.isnot(None))
+    if order_by == "min_price_spot":
+        conditions.add(ServerExtra.min_price_spot.isnot(None))
 
     # count all records to be returned in header
     if add_total_count_header:
