@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from importlib.metadata import version
 from os import environ
 from textwrap import dedent
@@ -23,7 +23,7 @@ from sc_crawler.tables import (
     Zone,
 )
 from sqlalchemy.orm import aliased, contains_eager
-from sqlmodel import Session, func, or_, select
+from sqlmodel import Session, case, func, or_, select
 
 from . import parameters as options
 from . import routers
@@ -31,18 +31,16 @@ from .cache import CacheHeaderMiddleware
 from .currency import currency_converter
 from .database import get_db
 from .logger import LogMiddleware
-from .lookups import min_server_price
-from .query import max_score_per_server
 from .references import (
     OrderDir,
     RegionPKs,
     ServerPKs,
-    ServerPKsWithPrices,
     ServerPriceWithPKs,
     StoragePriceWithPKs,
     TrafficPriceWithPKsWithMonthlyTraffic,
 )
 from .sentry import before_send as sentry_before_send
+from .views import ServerExtra
 
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
@@ -116,28 +114,14 @@ Server.model_config["json_schema_extra"] = {
 ServerPKs.model_config["json_schema_extra"] = Server.model_config["json_schema_extra"]
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["score"] = 42
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["price"] = 7
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price"] = 7
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price_spot"] = 7
+ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price_ondemand"] = 10
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["score_per_price"] = 42 / 7
+
 Storage.model_config["json_schema_extra"] = {
     "examples": [example_data["storage"].model_dump()]
 }
-ServerPKsWithPrices.model_config["json_schema_extra"] = {
-    "examples": [
-        ServerPKs.model_config["json_schema_extra"]["examples"][0]
-        | {
-            "vendor": example_data["vendor"].model_dump(),
-            "prices": [
-                p.model_dump()
-                | {
-                    "region": example_data["region"].model_dump(),
-                    "zone": example_data["zone"].model_dump(),
-                }
-                for p in example_data["prices"]
-            ],
-            "benchmark_scores": [example_data["benchmark"].model_dump()],
-        }
-    ]
-}
-# ServerPrices.model_config["json_schema_extra"]
 ServerPriceWithPKs.model_config["json_schema_extra"] = {
     "examples": [
         example_data["prices"][0].model_dump()
@@ -237,6 +221,7 @@ def search_servers(
     cpu_manufacturer: options.cpu_manufacturer = None,
     cpu_family: options.cpu_family = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
+    benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     only_active: options.only_active = True,
     vendor: options.vendor = None,
@@ -256,8 +241,6 @@ def search_servers(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
-    max_scores = max_score_per_server()
-
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the servers table
     if compliance_framework:
@@ -294,7 +277,11 @@ def search_servers(
     if cpu_family:
         conditions.add(Server.cpu_family.in_(cpu_family))
     if benchmark_score_stressng_cpu_min:
-        conditions.add(max_scores.c.score > benchmark_score_stressng_cpu_min)
+        conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
+    if benchmark_score_per_price_stressng_cpu_min:
+        conditions.add(
+            ServerExtra.score_per_price > benchmark_score_per_price_stressng_cpu_min
+        )
     if memory_min:
         conditions.add(Server.memory_amount >= memory_min * 1024)
     if storage_size:
@@ -318,14 +305,30 @@ def search_servers(
     if vendor:
         conditions.add(Server.vendor_id.in_(vendor))
 
+    # hide servers without value when filtering by the related column
+    if order_by == "score_per_price":
+        conditions.add(ServerExtra.score.isnot(None))
+    if order_by == "score_per_price":
+        conditions.add(ServerExtra.score_per_price.isnot(None))
+    if order_by == "min_price":
+        conditions.add(ServerExtra.min_price.isnot(None))
+    if order_by == "min_price_ondemand":
+        conditions.add(ServerExtra.min_price_ondemand.isnot(None))
+    if order_by == "min_price_spot":
+        conditions.add(ServerExtra.min_price_spot.isnot(None))
+
     # count all records to be returned in header
     if add_total_count_header:
         query = select(func.count()).select_from(Server)
-        if benchmark_score_stressng_cpu_min:
+        if (
+            only_active
+            or benchmark_score_stressng_cpu_min
+            or benchmark_score_per_price_stressng_cpu_min
+        ):
             query = query.join(
-                max_scores,
-                (Server.vendor_id == max_scores.c.vendor_id)
-                & (Server.server_id == max_scores.c.server_id),
+                ServerExtra,
+                (Server.vendor_id == ServerExtra.vendor_id)
+                & (Server.server_id == ServerExtra.server_id),
                 isouter=True,
             )
         for condition in conditions:
@@ -333,12 +336,12 @@ def search_servers(
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     # actual query
-    query = select(Server, max_scores.c.score)
+    query = select(Server, ServerExtra)
     query = query.join(Server.vendor)
     query = query.join(
-        max_scores,
-        (Server.vendor_id == max_scores.c.vendor_id)
-        & (Server.server_id == max_scores.c.server_id),
+        ServerExtra,
+        (Server.vendor_id == ServerExtra.vendor_id)
+        & (Server.server_id == ServerExtra.server_id),
         isouter=True,
     )
     query = query.options(contains_eager(Server.vendor))
@@ -347,11 +350,11 @@ def search_servers(
 
     # ordering
     if order_by:
-        order_obj = [o for o in [Server, max_scores.c] if hasattr(o, order_by)]
+        order_obj = [o for o in [Server, ServerExtra] if hasattr(o, order_by)]
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
-            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+            raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
         order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
@@ -370,12 +373,13 @@ def search_servers(
     serverlist = []
     for server in servers:
         serveri = ServerPKs.model_validate(server[0])
-        serveri.score = server[1]
-        try:
-            serveri.price = min_server_price(db, serveri.vendor_id, serveri.server_id)
-            serveri.score_per_price = serveri.score / serveri.price
-        except Exception:
-            serveri.score_per_price = None
+        with suppress(Exception):
+            serveri.score = server[1].score
+            serveri.min_price = server[1].min_price
+            serveri.min_price_spot = server[1].min_price_spot
+            serveri.min_price_ondemand = server[1].min_price_ondemand
+            serveri.score_per_price = server[1].score_per_price
+            serveri.price = serveri.min_price  # legacy
         serverlist.append(serveri)
 
     return serverlist
@@ -393,6 +397,7 @@ def search_server_prices(
     cpu_manufacturer: options.cpu_manufacturer = None,
     cpu_family: options.cpu_family = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
+    benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
     price_max: options.price_max = None,
     only_active: options.only_active = True,
@@ -418,8 +423,6 @@ def search_server_prices(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
-    max_scores = max_score_per_server()
-
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the prices table
     if compliance_framework:
@@ -468,7 +471,10 @@ def search_server_prices(
         joins.add(ServerPrice.server)
         conditions.add(Server.cpu_family.in_(cpu_family))
     if benchmark_score_stressng_cpu_min:
-        conditions.add(max_scores.c.score > benchmark_score_stressng_cpu_min)
+        conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
+    if benchmark_score_per_price_stressng_cpu_min:
+        # needs special handling in filtering
+        pass
     if memory_min:
         joins.add(ServerPrice.server)
         conditions.add(Server.memory_amount >= memory_min * 1024)
@@ -514,48 +520,68 @@ def search_server_prices(
         query = select(func.count()).select_from(ServerPrice)
         for j in joins:
             query = query.join(j)
-        if benchmark_score_stressng_cpu_min:
+        if (
+            benchmark_score_stressng_cpu_min
+            or benchmark_score_per_price_stressng_cpu_min
+        ):
             query = query.join(
-                max_scores,
-                (ServerPrice.vendor_id == max_scores.c.vendor_id)
-                & (ServerPrice.server_id == max_scores.c.server_id),
+                ServerExtra,
+                (Server.vendor_id == ServerExtra.vendor_id)
+                & (Server.server_id == ServerExtra.server_id),
                 isouter=True,
             )
         for condition in conditions:
             query = query.where(condition)
+        if benchmark_score_per_price_stressng_cpu_min:
+            query = query.where(ServerExtra.score.isnot(None)).where(
+                ServerExtra.score / ServerPrice.price
+                > benchmark_score_per_price_stressng_cpu_min
+            )
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     # actual query
-    query = select(ServerPrice, max_scores.c.score)
+    query = select(ServerPrice, ServerExtra)
 
     for j in joins:
         query = query.join(j)
     query = query.join(
-        max_scores,
-        (ServerPrice.vendor_id == max_scores.c.vendor_id)
-        & (ServerPrice.server_id == max_scores.c.server_id),
+        ServerExtra,
+        (Server.vendor_id == ServerExtra.vendor_id)
+        & (Server.server_id == ServerExtra.server_id),
         isouter=True,
     )
 
     for condition in conditions:
         query = query.where(condition)
+    if benchmark_score_per_price_stressng_cpu_min:
+        query = query.where(ServerExtra.score.isnot(None)).where(
+            ServerExtra.score / ServerPrice.price
+            > benchmark_score_per_price_stressng_cpu_min
+        )
 
     # ordering
     if order_by:
-        order_obj = [
-            o
-            for o in [ServerPrice, Server, Region, max_scores.c]
-            if hasattr(o, order_by)
-        ]
-        if len(order_obj) == 0:
-            raise HTTPException(status_code=400, detail="Unknown order_by field.")
-        if len(order_obj) > 1:
-            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
-        order_field = getattr(order_obj[0], order_by)
-        if OrderDir(order_dir) == OrderDir.ASC:
-            query = query.order_by(order_field)
+        # special handling for price_per_score as not being a table column
+        if order_by == "score_per_price":
+            if OrderDir(order_dir) == OrderDir.ASC:
+                query = query.order_by(ServerExtra.score / ServerPrice.price)
+            else:
+                query = query.order_by(ServerExtra.score / ServerPrice.price).desc()
         else:
-            query = query.order_by(order_field.desc())
+            order_obj = [
+                o
+                for o in [ServerPrice, Server, Region, ServerExtra]
+                if hasattr(o, order_by)
+            ]
+            if len(order_obj) == 0:
+                raise HTTPException(status_code=400, detail="Unknown order_by field.")
+            if len(order_obj) > 1:
+                raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
+            order_field = getattr(order_obj[0], order_by)
+            if OrderDir(order_dir) == OrderDir.ASC:
+                query = query.order_by(order_field)
+            else:
+                query = query.order_by(order_field.desc())
 
     # pagination
     if limit > 0:
@@ -567,7 +593,17 @@ def search_server_prices(
     # load extra objects/columns _after_ the subquery filtering
     subquery = query.subquery()
     subquery_aliased = aliased(ServerPrice, subquery.alias("filtered_server_price"))
-    query = select(subquery_aliased, max_scores.c.score)
+    query = select(
+        subquery_aliased,
+        ServerExtra,
+        case(
+            (
+                subquery_aliased.price.isnot(None),
+                ServerExtra.score / subquery_aliased.price,
+            ),
+            else_=None,
+        ).label("price_per_score"),
+    )
     joins = [
         subquery_aliased.vendor,
         subquery_aliased.region,
@@ -577,9 +613,9 @@ def search_server_prices(
     for j in joins:
         query = query.join(j, isouter=True)
     query = query.join(
-        max_scores,
-        (subquery_aliased.vendor_id == max_scores.c.vendor_id)
-        & (subquery_aliased.server_id == max_scores.c.server_id),
+        ServerExtra,
+        (subquery_aliased.vendor_id == ServerExtra.vendor_id)
+        & (subquery_aliased.server_id == ServerExtra.server_id),
         isouter=True,
     )
     region_alias = Region
@@ -593,16 +629,24 @@ def search_server_prices(
     query = query.options(contains_eager(subquery_aliased.server))
     # reorder again after the above joins
     if order_by:
-        order_obj = [
-            o
-            for o in [subquery_aliased, Server, Region, max_scores.c]
-            if hasattr(o, order_by)
-        ]
-        order_field = getattr(order_obj[0], order_by)
-        if OrderDir(order_dir) == OrderDir.ASC:
-            query = query.order_by(order_field)
+        if order_by == "score_per_price":
+            if OrderDir(order_dir) == OrderDir.ASC:
+                query = query.order_by(ServerExtra.score / subquery_aliased.price)
+            else:
+                query = query.order_by(
+                    ServerExtra.score / subquery_aliased.price
+                ).desc()
         else:
-            query = query.order_by(order_field.desc())
+            order_obj = [
+                o
+                for o in [subquery_aliased, Server, Region, ServerExtra]
+                if hasattr(o, order_by)
+            ]
+            order_field = getattr(order_obj[0], order_by)
+            if OrderDir(order_dir) == OrderDir.ASC:
+                query = query.order_by(order_field)
+            else:
+                query = query.order_by(order_field.desc())
 
     results = db.exec(query).all()
 
@@ -610,19 +654,14 @@ def search_server_prices(
     prices = []
     for result in results:
         price = ServerPriceWithPKs.model_validate(result[0])
-        price.server.score = result[1]
-        try:
-            price.server.price = min_server_price(
-                db, price.server.vendor_id, price.server.server_id
-            )
-        except KeyError:
-            price.server.price = None
-        price.server.score_per_price = (
-            price.server.score / price.server.price
-            if price.server.price and price.server.score
-            else None
-        )
-
+        with suppress(Exception):
+            price.server.score = result[1].score
+            price.server.min_price = result[1].min_price
+            price.server.min_price_spot = result[1].min_price_spot
+            price.server.min_price_ondemand = result[1].min_price_ondemand
+            # note this is not the server's but the server price's score_per_price
+            price.server.score_per_price = round(result[2], 6)
+            price.server.price = price.server.min_price  # legacy
         prices.append(price)
 
     # update prices to currency requested
@@ -730,7 +769,7 @@ def search_storage_prices(
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
-            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+            raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
         order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
@@ -844,7 +883,7 @@ def search_traffic_prices(
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
-            raise HTTPException(status_code=400, detail="Unambiguous order_by field.")
+            raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
         order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)

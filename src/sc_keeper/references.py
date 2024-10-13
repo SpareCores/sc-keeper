@@ -4,7 +4,6 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 from sc_crawler.table_bases import (
-    BenchmarkScoreBase,
     CountryBase,
     RegionBase,
     ServerBase,
@@ -149,7 +148,10 @@ class ServerTableMetaData(TableMetaData):
 
 class ServerWithScore(ServerBase):
     score: Optional[float] = None
-    price: Optional[float] = None
+    price: Optional[float] = None  # legacy
+    min_price: Optional[float] = None
+    min_price_spot: Optional[float] = None
+    min_price_ondemand: Optional[float] = None
     score_per_price: Optional[float] = None
 
 
@@ -160,11 +162,6 @@ class ServerPKs(ServerWithScore):
 class ServerPricePKs(ServerPriceBase):
     region: RegionBase
     zone: ZoneBase
-
-
-class ServerPKsWithPrices(ServerPKs):
-    prices: List[ServerPricePKs]
-    benchmark_scores: List[BenchmarkScoreBase]
 
 
 class RegionPKs(RegionBase):

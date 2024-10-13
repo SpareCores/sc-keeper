@@ -7,6 +7,7 @@ bin/
 build/
 dist/
 *.egg-info/
+Pipfile*
 
 # Installer logs
 pip-log.txt

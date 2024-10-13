@@ -340,9 +340,22 @@ benchmark_score_stressng_cpu_min = Annotated[
     Optional[float],
     Query(
         title="SCore",
-        description="Minimum stress-ng CPU workload score.",
+        description="Minimum stress-ng div16 CPU workload score.",
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
+        },
+    ),
+]
+
+
+benchmark_score_per_price_stressng_cpu_min = Annotated[
+    Optional[float],
+    Query(
+        title="$Core",
+        description="Minimum stress-ng div16 CPU workload score per USD/hr.",
+        json_schema_extra={
+            "category_id": FilterCategories.PROCESSOR,
+            "unit": "/USD",
         },
     ),
 ]
