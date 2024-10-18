@@ -566,7 +566,7 @@ def search_server_prices(
             if OrderDir(order_dir) == OrderDir.ASC:
                 query = query.order_by(ServerExtra.score / ServerPrice.price)
             else:
-                query = query.order_by(ServerExtra.score / ServerPrice.price).desc()
+                query = query.order_by(ServerExtra.score / ServerPrice.price * -1)
         else:
             order_obj = [
                 o
@@ -633,9 +633,7 @@ def search_server_prices(
             if OrderDir(order_dir) == OrderDir.ASC:
                 query = query.order_by(ServerExtra.score / subquery_aliased.price)
             else:
-                query = query.order_by(
-                    ServerExtra.score / subquery_aliased.price
-                ).desc()
+                query = query.order_by(ServerExtra.score / subquery_aliased.price * -1)
         else:
             order_obj = [
                 o
