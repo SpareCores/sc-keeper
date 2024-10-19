@@ -220,6 +220,7 @@ def search_servers(
     architecture: options.architecture = None,
     cpu_manufacturer: options.cpu_manufacturer = None,
     cpu_family: options.cpu_family = None,
+    cpu_allocation: options.cpu_allocation = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
@@ -276,6 +277,8 @@ def search_servers(
         conditions.add(Server.cpu_manufacturer.in_(cpu_manufacturer))
     if cpu_family:
         conditions.add(Server.cpu_family.in_(cpu_family))
+    if cpu_allocation:
+        conditions.add(Server.cpu_allocation.in_(cpu_allocation))
     if benchmark_score_stressng_cpu_min:
         conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
     if benchmark_score_per_price_stressng_cpu_min:
@@ -396,6 +399,7 @@ def search_server_prices(
     architecture: options.architecture = None,
     cpu_manufacturer: options.cpu_manufacturer = None,
     cpu_family: options.cpu_family = None,
+    cpu_allocation: options.cpu_allocation = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
@@ -470,6 +474,9 @@ def search_server_prices(
     if cpu_family:
         joins.add(ServerPrice.server)
         conditions.add(Server.cpu_family.in_(cpu_family))
+    if cpu_allocation:
+        joins.add(ServerPrice.server)
+        conditions.add(Server.cpu_allocation.in_(cpu_allocation))
     if benchmark_score_stressng_cpu_min:
         conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
     if benchmark_score_per_price_stressng_cpu_min:

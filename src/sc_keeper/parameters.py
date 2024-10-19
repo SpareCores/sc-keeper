@@ -3,6 +3,7 @@ from typing import Annotated, List, Optional
 from fastapi import Depends, Path, Query
 from sc_crawler.table_fields import (
     Allocation,
+    CpuAllocation,
     CpuArchitecture,
     StorageType,
     TrafficDirection,
@@ -78,6 +79,18 @@ vcpus_max = Annotated[
             "range_min": 1,
             "range_max": 256,
             "null_value": 256,
+        },
+    ),
+]
+
+cpu_allocation = Annotated[
+    Optional[List[CpuAllocation]],
+    Query(
+        title="CPU allocation",
+        description="Processor architecture.",
+        json_schema_extra={
+            "category_id": FilterCategories.PROCESSOR,
+            "enum": [e.value for e in CpuArchitecture],
         },
     ),
 ]
