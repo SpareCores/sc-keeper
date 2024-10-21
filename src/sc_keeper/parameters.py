@@ -83,18 +83,6 @@ vcpus_max = Annotated[
     ),
 ]
 
-cpu_allocation = Annotated[
-    Optional[List[CpuAllocation]],
-    Query(
-        title="CPU allocation",
-        description="Processor architecture.",
-        json_schema_extra={
-            "category_id": FilterCategories.PROCESSOR,
-            "enum": [e.value for e in CpuArchitecture],
-        },
-    ),
-]
-
 architecture = Annotated[
     Optional[List[CpuArchitecture]],
     Query(
@@ -125,6 +113,18 @@ cpu_family = Annotated[
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "enum": [e.value for e in CpuFamilies],
+        },
+    ),
+]
+
+cpu_allocation = Annotated[
+    Optional[List[CpuAllocation]],
+    Query(
+        title="CPU allocation",
+        description="Allocation of the CPU(s) to the server, e.g. shared, burstable or dedicated.",
+        json_schema_extra={
+            "category_id": FilterCategories.PROCESSOR,
+            "enum": [e.value for e in CpuAllocation],
         },
     ),
 ]
