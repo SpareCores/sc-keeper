@@ -168,7 +168,7 @@ green_energy = Annotated[
     Optional[bool],
     Query(
         title="Green energy",
-        description="Filter for regions with kow CO2 emission only.",
+        description="Filter for regions that are 100% powered by renewable energy.",
         json_schema_extra={"category_id": FilterCategories.REGION},
     ),
 ]
