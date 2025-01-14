@@ -365,7 +365,7 @@ benchmark_score_per_price_stressng_cpu_min = Annotated[
     Optional[float],
     Query(
         title="$Core",
-        description="Minimum stress-ng div16 CPU workload score per USD/hr.",
+        description="Minimum stress-ng div16 CPU workload score per USD/hr (using the best ondemand or spot price of all zones).",
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "unit": "/USD",
