@@ -65,7 +65,7 @@ def openai_extract_filters(prompt: str, endpoint: str) -> dict:
         ) from exc
 
     json_data = {
-        "model": "gpt-3.5-turbo",
+        "model": "gpt-4o-mini",
         "response_format": {"type": "json_object"},
         "tools": [
             {
