@@ -60,13 +60,18 @@ test_servers_params = [
     {"gpu_manufacturer": ["NVIDIA", "AMD"]},
     {"gpu_family": ["Turing"]},
     {"gpu_model": ["A100"]},
+    {"benchmark_id": "bogomips", "benchmark_score_min": 5000},
 ]
 
-test_server_prices_params = test_servers_params + [
-    {"price_max": 1},
-    {"allocation": "spot"},
-    *test_region_params,
-]
+test_server_prices_params = (
+    # selected benchmark params not supported by server_prices
+    test_servers_params[:-1]
+    + [
+        {"price_max": 1},
+        {"allocation": "spot"},
+        *test_region_params,
+    ]
+)
 # merge some params together for more complex queries
 for mix in [
     [2, 4],
