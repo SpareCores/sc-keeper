@@ -31,6 +31,7 @@ from .cache import CacheHeaderMiddleware
 from .currency import currency_converter
 from .database import get_db
 from .logger import LogMiddleware
+from .queries import gen_benchmark_query
 from .references import (
     OrderDir,
     RegionPKs,
@@ -223,6 +224,10 @@ def search_servers(
     cpu_allocation: options.cpu_allocation = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
+    benchmark_id: options.benchmark_id = None,
+    benchmark_config: options.benchmark_config = None,
+    benchmark_score_min: options.benchmark_score_min = None,
+    benchmark_score_per_price_min: options.benchmark_score_per_price_min = None,
     memory_min: options.memory_min = None,
     only_active: options.only_active = True,
     vendor: options.vendor = None,
@@ -256,6 +261,14 @@ def search_servers(
     # keep track of filter conditions
     conditions = set()
 
+    # extra lookups
+    benchmark_query = gen_benchmark_query(benchmark_id, benchmark_config)
+    if (benchmark_score_min or benchmark_score_per_price_min) and not benchmark_id:
+        raise HTTPException(
+            status_code=400,
+            detail="benchmark_id is required when filtering by benchmark_score or benchmark_score_per_price",
+        )
+
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
         conditions.add(
@@ -284,6 +297,13 @@ def search_servers(
     if benchmark_score_per_price_stressng_cpu_min:
         conditions.add(
             ServerExtra.score_per_price > benchmark_score_per_price_stressng_cpu_min
+        )
+    if benchmark_score_min:
+        conditions.add(benchmark_query.c.benchmark_score >= benchmark_score_min)
+    if benchmark_score_per_price_min:
+        conditions.add(
+            benchmark_query.c.benchmark_score / ServerExtra.price
+            >= benchmark_score_per_price_min
         )
     if memory_min:
         conditions.add(Server.memory_amount >= memory_min * 1024)
@@ -319,6 +339,11 @@ def search_servers(
         conditions.add(ServerExtra.min_price_ondemand.isnot(None))
     if order_by == "min_price_spot":
         conditions.add(ServerExtra.min_price_spot.isnot(None))
+    if order_by == "selected_benchmark_score":
+        conditions.add(benchmark_query.c.benchmark_score.isnot(None))
+    if order_by == "selected_benchmark_score_per_price":
+        conditions.add(benchmark_query.c.benchmark_score.isnot(None))
+        conditions.add(ServerExtra.min_price.isnot(None))
 
     # count all records to be returned in header
     if add_total_count_header:
@@ -334,12 +359,22 @@ def search_servers(
                 & (Server.server_id == ServerExtra.server_id),
                 isouter=True,
             )
+        if benchmark_score_min or benchmark_score_per_price_min:
+            query = query.join(
+                benchmark_query,
+                (Server.vendor_id == benchmark_query.c.vendor_id)
+                & (Server.server_id == benchmark_query.c.server_id),
+                isouter=True,
+            )
         for condition in conditions:
             query = query.where(condition)
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     # actual query
-    query = select(Server, ServerExtra)
+    if benchmark_id:
+        query = select(Server, ServerExtra, benchmark_query.c.benchmark_score)
+    else:
+        query = select(Server, ServerExtra)
     query = query.join(Server.vendor)
     query = query.join(
         ServerExtra,
@@ -347,18 +382,30 @@ def search_servers(
         & (Server.server_id == ServerExtra.server_id),
         isouter=True,
     )
+    if benchmark_id:
+        query = query.join(
+            benchmark_query,
+            (Server.vendor_id == benchmark_query.c.vendor_id)
+            & (Server.server_id == benchmark_query.c.server_id),
+            isouter=True,
+        )
     query = query.options(contains_eager(Server.vendor))
     for condition in conditions:
         query = query.where(condition)
 
     # ordering
     if order_by:
-        order_obj = [o for o in [Server, ServerExtra] if hasattr(o, order_by)]
-        if len(order_obj) == 0:
-            raise HTTPException(status_code=400, detail="Unknown order_by field.")
-        if len(order_obj) > 1:
-            raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
-        order_field = getattr(order_obj[0], order_by)
+        if order_by == "selected_benchmark_score":
+            order_field = benchmark_query.c.benchmark_score
+        elif order_by == "selected_benchmark_score_per_price":
+            order_field = benchmark_query.c.benchmark_score / ServerExtra.min_price
+        else:
+            order_obj = [o for o in [Server, ServerExtra] if hasattr(o, order_by)]
+            if len(order_obj) == 0:
+                raise HTTPException(status_code=400, detail="Unknown order_by field.")
+            if len(order_obj) > 1:
+                raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
+            order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
         else:
@@ -374,16 +421,25 @@ def search_servers(
 
     # unpack score
     serverlist = []
-    for server in servers:
-        serveri = ServerPKs.model_validate(server[0])
+    for server_items in servers:
+        if benchmark_id:
+            server_data, server_extra, benchmark_score = server_items
+        else:
+            server_data, server_extra = server_items
+            benchmark_score = None
+        server = ServerPKs.model_validate(server_data)
         with suppress(Exception):
-            serveri.score = server[1].score
-            serveri.min_price = server[1].min_price
-            serveri.min_price_spot = server[1].min_price_spot
-            serveri.min_price_ondemand = server[1].min_price_ondemand
-            serveri.score_per_price = server[1].score_per_price
-            serveri.price = serveri.min_price  # legacy
-        serverlist.append(serveri)
+            server.score = server_extra.score
+            server.min_price = server_extra.min_price
+            server.min_price_spot = server_extra.min_price_spot
+            server.min_price_ondemand = server_extra.min_price_ondemand
+            server.score_per_price = server_extra.score_per_price
+            server.price = server.min_price  # legacy
+            server.selected_benchmark_score = benchmark_score
+            server.selected_benchmark_score_per_price = (
+                benchmark_score / server.min_price
+            )
+        serverlist.append(server)
 
     return serverlist
 

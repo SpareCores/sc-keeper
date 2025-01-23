@@ -352,7 +352,7 @@ gpu_model = Annotated[
 benchmark_score_stressng_cpu_min = Annotated[
     Optional[float],
     Query(
-        title="SCore",
+        title="Minimum SCore",
         description="Minimum stress-ng div16 CPU workload score.",
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
@@ -364,8 +364,50 @@ benchmark_score_stressng_cpu_min = Annotated[
 benchmark_score_per_price_stressng_cpu_min = Annotated[
     Optional[float],
     Query(
-        title="$Core",
+        title="Minimum $Core",
         description="Minimum stress-ng div16 CPU workload score per USD/hr (using the best ondemand or spot price of all zones).",
+        json_schema_extra={
+            "category_id": FilterCategories.PROCESSOR,
+            "unit": "/USD",
+        },
+    ),
+]
+
+
+benchmark_id = Annotated[
+    Optional[str],
+    Query(
+        title="Benchmark ID",
+        description="Selected benchmark ID for the min filters and ordering.",
+    ),
+]
+
+
+benchmark_config = Annotated[
+    Optional[str],
+    Query(
+        title="Benchmark config",
+        description="Selected benchmark config for the min filters and ordering.",
+    ),
+]
+
+benchmark_score_min = Annotated[
+    Optional[float],
+    Query(
+        title="Minimum benchmark score",
+        description="Minimum value of the selected benchmark score.",
+        json_schema_extra={
+            "category_id": FilterCategories.PROCESSOR,
+        },
+    ),
+]
+
+
+benchmark_score_per_price_min = Annotated[
+    Optional[float],
+    Query(
+        title="Minimum benchmark score/price",
+        description="Minimum value of the selected benchmark score per USD/hr (using the best ondemand or spot price of all zones).",
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "unit": "/USD",
