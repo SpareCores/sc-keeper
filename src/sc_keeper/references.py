@@ -209,3 +209,9 @@ class FilterCategories(Enum):
     STORAGE = "storage"
     GPU = "gpu"
     TRAFFIC = "traffic"
+
+
+class BenchmarkConfig(BaseModel):
+    benchmark_id: str
+    config: str
+

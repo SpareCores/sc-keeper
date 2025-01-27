@@ -10,6 +10,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from sc_crawler.table_fields import Status, TrafficDirection
 from sc_crawler.tables import (
     Benchmark,
+    BenchmarkScore,
     ComplianceFramework,
     Country,
     Region,
@@ -23,7 +24,7 @@ from sc_crawler.tables import (
     Zone,
 )
 from sqlalchemy.orm import aliased, contains_eager
-from sqlmodel import Session, case, func, or_, select
+from sqlmodel import Session, String, case, func, or_, select
 
 from . import parameters as options
 from . import routers
@@ -32,6 +33,7 @@ from .currency import currency_converter
 from .database import get_db
 from .logger import LogMiddleware
 from .references import (
+    BenchmarkConfig,
     OrderDir,
     RegionPKs,
     ServerPKs,
@@ -938,3 +940,19 @@ def search_traffic_prices(
             price.price_monthly_traffic = rounder(price.price * monthly_traffic)
 
     return prices
+
+
+@app.get("/benchmark_configs", tags=["Query Resources"])
+def search_benchmark_configs(
+    db: Session = Depends(get_db),
+) -> List[BenchmarkConfig]:
+    query = (
+        select(BenchmarkScore.benchmark_id, func.cast(BenchmarkScore.config, String))
+        .distinct()
+        .where(BenchmarkScore.status == Status.ACTIVE)
+        .order_by(
+            BenchmarkScore.benchmark_id,
+            func.json_extract(BenchmarkScore.config, "$.key1"),
+        )
+    )
+    return db.exec(query).all()
