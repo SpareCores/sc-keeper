@@ -1011,4 +1011,50 @@ def search_benchmark_configs(
             func.json_extract(BenchmarkScore.config, "$.key1"),
         )
     )
-    return db.exec(query).all()
+    results = db.exec(query).all()
+    for i, result in enumerate(results):
+        result = result._asdict()
+        if result["benchmark_id"] == "bogomips":
+            result["category"] = "Other"
+        if result["benchmark_id"] == "bw_mem":
+            result["category"] = "Memory bandwidth"
+        if result["benchmark_id"] == "openssl":
+            result["category"] = "OpenSSL"
+        if result["benchmark_id"].startswith("compression_text"):
+            result["category"] = "Compression algos"
+        if result["benchmark_id"].startswith("geekbench"):
+            result["category"] = "Geekbench"
+        if result["benchmark_id"].startswith("passmark"):
+            result["category"] = "Passmark"
+        if result["benchmark_id"].startswith("static_web"):
+            result["category"] = "Static web server"
+        if result["benchmark_id"].startswith("redis"):
+            result["category"] = "Redis"
+        if result["benchmark_id"].startswith("stress_ng:best"):
+            result["category"] = "stress-ng"
+        # keep original order
+        result["original_order"] = i
+        results[i] = result
+    results = [result for result in results if result.get("category")]
+
+    category_order = [
+        "stress-ng",
+        "Geekbench",
+        "Passmark",
+        "Memory bandwidth",
+        "OpenSSL",
+        "Compression algos",
+        "Static web server",
+        "Redis",
+        "Other",
+    ]
+
+    results = sorted(
+        results,
+        key=lambda x: (
+            category_order.index(x["category"]),
+            x["original_order"],
+        ),
+    )
+
+    return results

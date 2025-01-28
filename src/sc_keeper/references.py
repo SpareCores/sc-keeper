@@ -216,3 +216,4 @@ class FilterCategories(Enum):
 class BenchmarkConfig(BaseModel):
     benchmark_id: str
     config: str
+    category: Optional[str] = None
