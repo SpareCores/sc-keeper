@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager, suppress
 from importlib.metadata import version
+from json import loads as json_loads
 from os import environ
 from textwrap import dedent
 from typing import List
@@ -1048,11 +1049,25 @@ def search_benchmark_configs(
         "Redis",
         "Other",
     ]
-
+    sub_category_order = [
+        "geekbench:score",
+        "passmark:cpu_mark",
+        "passmark:memory_mark",
+    ]
     results = sorted(
         results,
         key=lambda x: (
             category_order.index(x["category"]),
+            (
+                sub_category_order.index(x["benchmark_id"])
+                if x["benchmark_id"] in sub_category_order
+                else len(sub_category_order)
+            ),
+            (
+                0
+                if json_loads(x["config"]).get("cores", "") == "Single-Core Performance"
+                else 1
+            ),
             x["original_order"],
         ),
     )
