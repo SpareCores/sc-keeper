@@ -271,6 +271,13 @@ def search_servers(
             status_code=400,
             detail="benchmark_id is required when filtering by benchmark_score or benchmark_score_per_price",
         )
+    if (
+        order_by in ["selected_benchmark_score", "selected_benchmark_score_per_price"]
+    ) and not benchmark_id:
+        raise HTTPException(
+            status_code=400,
+            detail="benchmark_id is required when ordering by benchmark_score or benchmark_score_per_price",
+        )
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
@@ -362,7 +369,10 @@ def search_servers(
                 & (Server.server_id == ServerExtra.server_id),
                 isouter=True,
             )
-        if benchmark_score_min or benchmark_score_per_price_min:
+        if (benchmark_score_min or benchmark_score_per_price_min) or (
+            order_by
+            in ["selected_benchmark_score", "selected_benchmark_score_per_price"]
+        ):
             query = query.join(
                 benchmark_query,
                 (Server.vendor_id == benchmark_query.c.vendor_id)
