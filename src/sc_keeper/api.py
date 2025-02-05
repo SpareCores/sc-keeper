@@ -312,7 +312,7 @@ def search_servers(
         conditions.add(benchmark_query.c.benchmark_score >= benchmark_score_min)
     if benchmark_score_per_price_min:
         conditions.add(
-            benchmark_query.c.benchmark_score / ServerExtra.price
+            benchmark_query.c.benchmark_score / ServerExtra.min_price
             >= benchmark_score_per_price_min
         )
     if memory_min:
@@ -362,6 +362,7 @@ def search_servers(
             only_active
             or benchmark_score_stressng_cpu_min
             or benchmark_score_per_price_stressng_cpu_min
+            or benchmark_score_per_price_min
         ):
             query = query.join(
                 ServerExtra,
