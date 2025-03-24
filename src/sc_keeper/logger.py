@@ -68,6 +68,7 @@ class LogMiddleware(BaseHTTPMiddleware):
                 "event": "request",
                 "request_id": get_request_id(),
                 "client": {
+                    "application": request.headers.get("X-Application-ID"),
                     "ip": request.headers.get(
                         "X-Forwarded-For",
                         request.client.host if request.client else "Unknown",

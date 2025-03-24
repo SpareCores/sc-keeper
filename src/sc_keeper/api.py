@@ -183,7 +183,7 @@ app.add_middleware(LogMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_headers=["sentry-trace", "baggage"],
+    allow_headers=["sentry-trace", "baggage", "x-application-id"],
     expose_headers=["X-Total-Count"],
 )
 
