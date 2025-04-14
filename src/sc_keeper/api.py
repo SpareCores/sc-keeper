@@ -1063,7 +1063,7 @@ def search_benchmark_configs(
         "Compression algos",
         "Static web server",
         "Redis",
-        "LLM Inference Speed",
+        "LLM inference speed",
         "Other",
     ]
     sub_category_order = [
