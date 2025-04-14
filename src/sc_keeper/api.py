@@ -1026,6 +1026,9 @@ def search_benchmark_configs(
     results = db.exec(query).all()
     for i, result in enumerate(results):
         result = result._asdict()
+        # store parsed config
+        result["config_parsed"] = json_loads(result["config"])
+
         if result["benchmark_id"] == "bogomips":
             result["category"] = "Other"
         if result["benchmark_id"] == "bw_mem":
@@ -1044,6 +1047,8 @@ def search_benchmark_configs(
             result["category"] = "Redis"
         if result["benchmark_id"].startswith("stress_ng:best"):
             result["category"] = "stress-ng"
+        if result["benchmark_id"].startswith("llm_speed"):
+            result["category"] = "LLM inference speed"
         # keep original order
         result["original_order"] = i
         results[i] = result
@@ -1058,29 +1063,62 @@ def search_benchmark_configs(
         "Compression algos",
         "Static web server",
         "Redis",
+        "LLM Inference Speed",
         "Other",
     ]
     sub_category_order = [
         "geekbench:score",
         "passmark:cpu_mark",
         "passmark:memory_mark",
+        "llm_speed:prompt_processing",
+        "llm_speed:text_generation",
     ]
-    results = sorted(
-        results,
-        key=lambda x: (
-            category_order.index(x["category"]),
-            (
-                sub_category_order.index(x["benchmark_id"])
-                if x["benchmark_id"] in sub_category_order
-                else len(sub_category_order)
-            ),
-            (
-                0
-                if json_loads(x["config"]).get("cores", "") == "Single-Core Performance"
-                else 1
-            ),
-            x["original_order"],
-        ),
-    )
+    model_order = [
+        "SmolLM-135M.Q4_K_M.gguf",
+        "qwen1_5-0_5b-chat-q4_k_m.gguf",
+        "gemma-2b.Q4_K_M.gguf",
+        "llama-7b.Q4_K_M.gguf",
+        "phi-4-q4.gguf",
+        "Llama-3.3-70B-Instruct-Q4_K_M.gguf",
+    ]
 
-    return results
+    def get_sort_key(item):
+        """Helper function to determine the sort order for benchmark configs"""
+        config = item["config_parsed"]
+
+        # primary sort by category
+        category_idx = category_order.index(item["category"])
+
+        # secondary sort by benchmark_id
+        if item["benchmark_id"] in sub_category_order:
+            subcategory_idx = sub_category_order.index(item["benchmark_id"])
+        else:
+            subcategory_idx = len(sub_category_order)
+
+        # then sort by cores (single-core first)
+        cores_idx = 0 if config.get("cores", "") == "Single-Core Performance" else 1
+
+        # then sort by LLM model (if present)
+        model_idx = len(model_order)
+        if "model" in config and config["model"] in model_order:
+            model_idx = model_order.index(config["model"])
+
+        # then sort by tokens (if present)
+        tokens = 0
+        if "tokens" in config:
+            try:
+                tokens = int(config["tokens"])
+            except (ValueError, TypeError):
+                pass
+
+        # finally, sort by original order
+        return (
+            category_idx,
+            subcategory_idx,
+            cores_idx,
+            model_idx,
+            tokens,
+            item["original_order"],
+        )
+
+    return sorted(results, key=get_sort_key)
