@@ -355,7 +355,7 @@ benchmark_score_stressng_cpu_min = Annotated[
         title="Minimum SCore",
         description="Minimum stress-ng div16 CPU workload score.",
         json_schema_extra={
-            "category_id": FilterCategories.PROCESSOR,
+            "category_id": FilterCategories.PERFORMANCE,
         },
     ),
 ]
@@ -367,7 +367,7 @@ benchmark_score_per_price_stressng_cpu_min = Annotated[
         title="Minimum $Core",
         description="Minimum stress-ng div16 CPU workload score per USD/hr (using the best ondemand or spot price of all zones).",
         json_schema_extra={
-            "category_id": FilterCategories.PROCESSOR,
+            "category_id": FilterCategories.PERFORMANCE,
             "unit": "/USD",
         },
     ),
@@ -397,7 +397,7 @@ benchmark_score_min = Annotated[
         title="Minimum benchmark score",
         description="Minimum value of the selected benchmark score.",
         json_schema_extra={
-            "category_id": FilterCategories.PROCESSOR,
+            "category_id": FilterCategories.PERFORMANCE,
         },
     ),
 ]
@@ -409,7 +409,7 @@ benchmark_score_per_price_min = Annotated[
         title="Minimum benchmark score/price",
         description="Minimum value of the selected benchmark score per USD/hr (using the best ondemand or spot price of all zones).",
         json_schema_extra={
-            "category_id": FilterCategories.PROCESSOR,
+            "category_id": FilterCategories.PERFORMANCE,
             "unit": "/USD",
         },
     ),

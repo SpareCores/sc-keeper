@@ -245,7 +245,7 @@ def search_servers(
     gpu_model: options.gpu_model = None,
     limit: options.limit = 25,
     page: options.page = None,
-    order_by: options.order_by = "vcpus",
+    order_by: options.order_by = "min_price",
     order_dir: options.order_dir = OrderDir.ASC,
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),

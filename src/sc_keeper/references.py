@@ -204,6 +204,7 @@ class OrderDir(Enum):
 class FilterCategories(Enum):
     BASIC = "basic"
     PRICE = "price"
+    PERFORMANCE = "performance"
     PROCESSOR = "processor"
     MEMORY = "memory"
     REGION = "region"
