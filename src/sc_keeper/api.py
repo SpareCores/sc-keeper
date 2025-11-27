@@ -8,6 +8,7 @@ from typing import List
 from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.openapi.docs import get_redoc_html
 from sc_crawler.table_fields import Status, TrafficDirection
 from sc_crawler.tables import (
     Benchmark,
@@ -172,6 +173,16 @@ app = FastAPI(
     },
     lifespan=lifespan,
 )
+
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_html():
+    return get_redoc_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " - ReDoc",
+        redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@2.5.2/bundles/redoc.standalone.js",
+    )
+
 
 # ##############################################################################
 # Middlewares
