@@ -14,6 +14,7 @@ from sc_crawler.table_bases import (
     VendorBase,
     ZoneBase,
 )
+from sc_crawler.table_fields import Status
 from sc_crawler.tables import (
     ComplianceFramework,
     Country,
@@ -52,6 +53,7 @@ with session.sessionmaker as db:
             for m in db.exec(
                 select(distinct(Server.cpu_manufacturer))
                 .where(Server.cpu_manufacturer.isnot(None))
+                .where(Server.status == Status.ACTIVE)
                 .order_by(text("1"))
             ).all()
         },
@@ -63,6 +65,7 @@ with session.sessionmaker as db:
             for m in db.exec(
                 select(distinct(Server.cpu_family))
                 .where(Server.cpu_family.isnot(None))
+                .where(Server.status == Status.ACTIVE)
                 .order_by(text("1"))
             ).all()
         },
@@ -74,6 +77,7 @@ with session.sessionmaker as db:
             for m in db.exec(
                 select(distinct(Server.gpu_manufacturer))
                 .where(Server.gpu_manufacturer.isnot(None))
+                .where(Server.status == Status.ACTIVE)
                 .order_by(text("1"))
             ).all()
         },
@@ -85,6 +89,7 @@ with session.sessionmaker as db:
             for f in db.exec(
                 select(distinct(Server.gpu_family))
                 .where(Server.gpu_family.isnot(None))
+                .where(Server.status == Status.ACTIVE)
                 .order_by(text("1"))
             ).all()
         },
@@ -96,8 +101,10 @@ with session.sessionmaker as db:
             for m in db.exec(
                 select(distinct(Server.gpu_model))
                 .where(Server.gpu_model.isnot(None))
+                .where(Server.status == Status.ACTIVE)
                 # exclude Google TPUs for now
                 .where(not_(Server.gpu_model.like("ct%")))
+                .where(not_(Server.gpu_model.like("tpu%")))
                 .order_by(text("1"))
             ).all()
         },
