@@ -90,10 +90,11 @@ def table_server_prices(
     prices = db.exec(query).all()
     if currency:
         for price in prices:
-            price.price = round(
-                currency_converter.convert(price.price, price.currency, currency),
-                4,
-            )
+            if price.currency != currency:
+                price.price = round(
+                    currency_converter.convert(price.price, price.currency, currency),
+                    4,
+                )
     return prices
 
 
