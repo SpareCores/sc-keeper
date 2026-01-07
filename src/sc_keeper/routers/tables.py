@@ -10,12 +10,16 @@ from sc_crawler.tables import (
     Country,
     Region,
     Server,
+    ServerPrice,
     Storage,
     Vendor,
     Zone,
 )
 from sqlmodel import Session, select
 
+from sc_keeper.currency import currency_converter
+
+from .. import parameters as options
 from ..database import get_db
 
 router = APIRouter()
@@ -63,6 +67,34 @@ def table_zone(db: Session = Depends(get_db)) -> List[Zone]:
 def table_server(db: Session = Depends(get_db)) -> List[Server]:
     """Return the Server table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Server)).all()
+
+
+@router.get("/server_prices")
+def table_server_prices(
+    vendor: options.vendor = None,
+    region: options.regions = None,
+    allocation: options.allocation = None,
+    currency: options.currency = None,
+    db: Session = Depends(get_db),
+) -> List[ServerPrice]:
+    """Return the ServerPrices table as-is, without relationships resolved."""
+    query = select(ServerPrice)
+    if vendor:
+        query = query.where(ServerPrice.vendor_id.in_(vendor))
+    if region:
+        query = query.where(ServerPrice.region_id.in_(region))
+    if allocation:
+        query = query.where(ServerPrice.allocation == allocation)
+    if currency:
+        query = query.where(ServerPrice.currency == currency)
+    prices = db.exec(query).all()
+    if currency:
+        for price in prices:
+            price.price = round(
+                currency_converter.convert(price.price, price.currency, currency),
+                4,
+            )
+    return prices
 
 
 @router.get("/storage")
