@@ -24,5 +24,6 @@ def get_redis_client(
     """
     import redis
 
+    # check env var at runtime instead of setting default param so that we fail then instead of at import time
     redis_url = redis_url or environ["REDIS_URL"]
     return redis.from_url(redis_url, decode_responses=True)

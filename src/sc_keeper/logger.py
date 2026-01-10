@@ -111,6 +111,7 @@ class LogMiddleware(BaseHTTPMiddleware):
         current_io = Process().io_counters()
 
         response.headers["X-Request-ID"] = get_request_id()
+        content_length = response.headers.get("content-length")
         logging.info(
             "response returned",
             extra={
@@ -119,7 +120,7 @@ class LogMiddleware(BaseHTTPMiddleware):
                 "req": request_info,
                 "res": {
                     "status_code": response.status_code,
-                    "length": int(response.headers["content-length"]),
+                    "length": int(content_length) if content_length else None,
                 },
                 "rate_limit": getattr(request.state, "rate_limit", {}),
                 "proc": {
