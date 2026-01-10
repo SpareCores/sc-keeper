@@ -240,7 +240,6 @@ def create_rate_limiter() -> Optional[InMemoryRateLimiter | RedisRateLimiter]:
 
     rate_limit_enabled = bool(environ.get("RATE_LIMIT_ENABLED", ""))
     if not rate_limit_enabled:
-        _default_limiter
         return None
 
     credits_per_minute = int(
