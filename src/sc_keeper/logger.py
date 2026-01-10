@@ -36,7 +36,15 @@ class JsonFormatter(Formatter):
                 if k in record.__dict__
             },
         }
-        for nested in ["event", "request_id", "client", "req", "res", "proc"]:
+        for nested in [
+            "event",
+            "request_id",
+            "client",
+            "req",
+            "res",
+            "rate_limit",
+            "proc",
+        ]:
             if nested in record.__dict__:
                 json_record[nested] = record.__dict__[nested]
         if record.levelno == logging.ERROR and record.exc_info:
@@ -84,7 +92,6 @@ class LogMiddleware(BaseHTTPMiddleware):
             client_info["user"] = {
                 "user_id": user.user_id,
                 "api_credits_per_minute": user.api_credits_per_minute,
-                # TODO add current credits?
             }
 
         logging.info(
@@ -114,6 +121,7 @@ class LogMiddleware(BaseHTTPMiddleware):
                     "status_code": response.status_code,
                     "length": int(response.headers["content-length"]),
                 },
+                "rate_limit": getattr(request.state, "rate_limit", {}),
                 "proc": {
                     "real": round(current_time - request_time, 4),
                     "user": round(

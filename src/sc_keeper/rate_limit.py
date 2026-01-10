@@ -35,7 +35,7 @@ class InMemoryRateLimiter:
         credits_per_minute: Optional[int] = None,
         credit_cost: int = 1,
         **kwargs,
-    ) -> bool:
+    ) -> tuple[bool, int]:
         """
         Check if request is allowed based on recent credit consumption in the last minute.
 
@@ -46,7 +46,7 @@ class InMemoryRateLimiter:
             **kwargs: Additional optional parameters (e.g., request_id, unused in in-memory implementation)
 
         Returns:
-            bool: True if allowed, False if rate limited
+            tuple[bool, int]: (allowed, remaining_credits)
         """
         limit = credits_per_minute or self.credits_per_minute
         now = time.time()
@@ -62,11 +62,13 @@ class InMemoryRateLimiter:
         # calculate total credits consumed
         total_credits = sum(credits for _, credits in self.windows[key])
         if total_credits + credit_cost > limit:
-            return False
+            remaining = max(0, limit - total_credits)
+            return False, remaining
 
         # record current request's credit consumption
         self.windows[key].append((now, credit_cost))
-        return True
+        remaining = limit - (total_credits + credit_cost)
+        return True, remaining
 
 
 class RedisRateLimiter:
@@ -86,7 +88,7 @@ class RedisRateLimiter:
         credits_per_minute: Optional[int] = None,
         credit_cost: int = 1,
         **kwargs,
-    ) -> bool:
+    ) -> tuple[bool, int]:
         """Check if request is allowed based on recent credit consumption in the last minute.
 
         Args:
@@ -96,7 +98,7 @@ class RedisRateLimiter:
             **kwargs: Additional optional parameters (e.g., request_id for uniqueness)
 
         Returns:
-            bool: True if allowed, False if rate limited
+            tuple[bool, int]: (allowed, remaining_credits)
         """
         limit = credits_per_minute or self.credits_per_minute
         now = time.time()
@@ -117,7 +119,8 @@ class RedisRateLimiter:
         total_credits = sum(int(m.split(":")[1]) for m, _ in entries if ":" in m)
 
         if total_credits + credit_cost > limit:
-            return False
+            remaining = max(0, limit - total_credits)
+            return False, remaining
 
         # record current request's credit consumption
         request_id = kwargs.get("request_id", str(uuid4()))
@@ -126,7 +129,8 @@ class RedisRateLimiter:
         pipe.zadd(redis_key, {member_id: now})
         pipe.expire(redis_key, self.window_seconds)
         pipe.execute()
-        return True
+        remaining = limit - (total_credits + credit_cost)
+        return True, remaining
 
 
 def _get_rate_limit_response_data(
@@ -189,9 +193,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # check rate limit
         rate_limit_key = get_rate_limit_key(request)
         request_id = get_request_id()
-        allowed = self.default_limiter.is_allowed(
+        allowed, remaining_credits = self.default_limiter.is_allowed(
             rate_limit_key, credits_per_minute, credit_cost, request_id=request_id
         )
+
+        # store credit info in request.state for logging by LogMiddleware
+        request.state.rate_limit = {
+            "credits_per_minute": credits_per_minute,
+            "credit_cost": credit_cost,
+            "remaining_credits": remaining_credits,
+        }
 
         if not allowed:
             data = _get_rate_limit_response_data(credits_per_minute, credit_cost)
@@ -200,13 +211,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 status_code=data["status_code"],
             )
             response.headers.update(data["headers"])
+            response.headers["X-RateLimit-Remaining"] = str(remaining_credits)
             return response
 
         response: Response = await call_next(request)
 
-        # TODO add remaining credits to response headers
         response.headers["X-RateLimit-Limit"] = str(credits_per_minute)
         response.headers["X-RateLimit-Cost"] = str(credit_cost)
+        response.headers["X-RateLimit-Remaining"] = str(remaining_credits)
         return response
 
 
