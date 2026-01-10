@@ -187,10 +187,9 @@ async def redoc_html():
 
 
 # ##############################################################################
-# Middlewares
-
-# extract user early from access token (if provided)
-app.add_middleware(AuthMiddleware)
+# Middlewares:
+# - last added runs first on the request
+# - then last added runs last on the response
 
 # CORS: allows all origins, without spec headers and without auth
 app.add_middleware(
@@ -200,19 +199,22 @@ app.add_middleware(
     expose_headers=["X-Total-Count"],
 )
 
-# aggressive compression
-app.add_middleware(GZipMiddleware, minimum_size=100)
-
-# set cache control header
-app.add_middleware(CacheHeaderMiddleware)
-
 # rate limiting (disabled by default, enabled via env vars)
 rate_limiter = create_rate_limiter()
 if rate_limiter:
     app.add_middleware(RateLimitMiddleware, default_limiter=rate_limiter)
 
+# response handler: set cache control header
+app.add_middleware(CacheHeaderMiddleware)
+
+# response handler: aggressive compression
+app.add_middleware(GZipMiddleware, minimum_size=100)
+
 # logging (added last so it wraps everything and logs even rate-limited requests)
 app.add_middleware(LogMiddleware)
+
+# extract user early from access token (if provided) and before even logging and rate limiting
+app.add_middleware(AuthMiddleware)
 
 # ##############################################################################
 # API endpoints
