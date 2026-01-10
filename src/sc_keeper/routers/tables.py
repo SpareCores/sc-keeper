@@ -4,6 +4,7 @@ from fastapi import (
     APIRouter,
     Depends,
 )
+from sc_crawler.table_fields import Status
 from sc_crawler.tables import (
     Benchmark,
     ComplianceFramework,
@@ -74,6 +75,7 @@ def table_server_prices(
     vendor: options.vendor = None,
     region: options.regions = None,
     allocation: options.allocation = None,
+    only_active: options.only_active = True,
     currency: options.currency = None,
     db: Session = Depends(get_db),
 ) -> List[ServerPrice]:
@@ -85,6 +87,8 @@ def table_server_prices(
         query = query.where(ServerPrice.region_id.in_(region))
     if allocation:
         query = query.where(ServerPrice.allocation == allocation)
+    if only_active:
+        query = query.where(ServerPrice.status == Status.ACTIVE)
     prices = db.exec(query).all()
     if currency:
         for price in prices:
