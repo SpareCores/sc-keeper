@@ -9,6 +9,8 @@ from uuid import uuid4
 from psutil import Process
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from .auth import User
+
 _request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default=None)
 
 
@@ -62,25 +64,35 @@ class LogMiddleware(BaseHTTPMiddleware):
             "referer": request.headers.get("Referer"),
         }
 
+        client_info = {
+            "application": request.headers.get("X-Application-ID"),
+            "ip": request.headers.get(
+                "X-Forwarded-For",
+                request.client.host if request.client else "Unknown",
+            ),
+            "ua": request.headers.get("User-Agent"),
+            "hints": {
+                "ua": request.headers.get("Sec-Ch-Ua"),
+                "platform": request.headers.get("Sec-Ch-Ua-Platform"),
+                "mobile": request.headers.get("Sec-CH-UA-Mobile"),
+                "arch": request.headers.get("Sec-CH-UA-Arch"),
+            },
+        }
+
+        user = getattr(request.state, "user", None)
+        if user and isinstance(user, User):
+            client_info["user"] = {
+                "user_id": user.user_id,
+                "api_credits_per_minute": user.api_credits_per_minute,
+                # TODO add current credits?
+            }
+
         logging.info(
             "request received",
             extra={
                 "event": "request",
                 "request_id": get_request_id(),
-                "client": {
-                    "application": request.headers.get("X-Application-ID"),
-                    "ip": request.headers.get(
-                        "X-Forwarded-For",
-                        request.client.host if request.client else "Unknown",
-                    ),
-                    "ua": request.headers.get("User-Agent"),
-                    "hints": {
-                        "ua": request.headers.get("Sec-Ch-Ua"),
-                        "platform": request.headers.get("Sec-Ch-Ua-Platform"),
-                        "mobile": request.headers.get("Sec-CH-UA-Mobile"),
-                        "arch": request.headers.get("Sec-CH-UA-Arch"),
-                    },
-                },
+                "client": client_info,
                 "req": request_info,
             },
         )

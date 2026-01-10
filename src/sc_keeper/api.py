@@ -30,11 +30,13 @@ from sqlmodel import Session, String, case, func, or_, select
 
 from . import parameters as options
 from . import routers
+from .auth import AuthMiddleware
 from .cache import CacheHeaderMiddleware
 from .currency import currency_converter
 from .database import get_db
 from .logger import LogMiddleware
 from .queries import gen_benchmark_query
+from .rate_limit import RateLimitMiddleware, create_rate_limiter
 from .references import (
     BenchmarkConfig,
     OrderDir,
@@ -187,6 +189,9 @@ async def redoc_html():
 # ##############################################################################
 # Middlewares
 
+# extract user early from access token (if provided)
+app.add_middleware(AuthMiddleware)
+
 # logging
 app.add_middleware(LogMiddleware)
 
@@ -203,6 +208,11 @@ app.add_middleware(GZipMiddleware, minimum_size=100)
 
 # set cache control header
 app.add_middleware(CacheHeaderMiddleware)
+
+# rate limiting (disabled by default, enabled via env vars)
+rate_limiter = create_rate_limiter()
+if rate_limiter:
+    app.add_middleware(RateLimitMiddleware, limiter=rate_limiter)
 
 # ##############################################################################
 # API endpoints
