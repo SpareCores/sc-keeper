@@ -3,6 +3,7 @@ from typing import List
 from fastapi import (
     APIRouter,
     Depends,
+    HTTPException,
 )
 from sc_crawler.table_fields import Status
 from sc_crawler.tables import (
@@ -94,10 +95,15 @@ def table_server_prices(
         for price in prices:
             if price.currency != currency:
                 db.expunge(price)
-                price.price = round(
-                    currency_converter.convert(price.price, price.currency, currency),
-                    4,
-                )
+                try:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        4,
+                    )
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Invalid currency code")
                 price.currency = currency
     return prices
 

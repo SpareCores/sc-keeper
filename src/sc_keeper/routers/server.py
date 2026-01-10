@@ -4,6 +4,7 @@ from typing import Annotated, List, Literal
 from fastapi import (
     APIRouter,
     Depends,
+    HTTPException,
     Path,
 )
 from sc_crawler.table_bases import ServerBase
@@ -158,12 +159,17 @@ def get_server_prices(
             if hasattr(price, "price") and hasattr(price, "currency"):
                 if price.currency != currency:
                     db.expunge(price)
-                    price.price = round(
-                        currency_converter.convert(
-                            price.price, price.currency, currency
-                        ),
-                        4,
-                    )
+                    try:
+                        price.price = round(
+                            currency_converter.convert(
+                                price.price, price.currency, currency
+                            ),
+                            4,
+                        )
+                    except ValueError:
+                        raise HTTPException(
+                            status_code=400, detail="Invalid currency code"
+                        )
                     price.currency = currency
     return prices
 

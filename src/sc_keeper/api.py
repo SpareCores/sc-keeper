@@ -537,7 +537,10 @@ def search_server_prices(
 
     if price_max:
         if currency != "USD":
-            price_max = currency_converter.convert(price_max, currency, "USD")
+            try:
+                price_max = currency_converter.convert(price_max, currency, "USD")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid currency code")
         conditions.add(ServerPrice.price <= price_max)
 
     if vcpus_min:
@@ -877,12 +880,17 @@ def search_storage_prices(
             if hasattr(price, "price") and hasattr(price, "currency"):
                 if price.currency != currency:
                     db.expunge(price)
-                    price.price = round(
-                        currency_converter.convert(
-                            price.price, price.currency, currency
-                        ),
-                        6,
-                    )
+                    try:
+                        price.price = round(
+                            currency_converter.convert(
+                                price.price, price.currency, currency
+                            ),
+                            6,
+                        )
+                    except ValueError:
+                        raise HTTPException(
+                            status_code=400, detail="Invalid currency code"
+                        )
                     price.currency = currency
 
     return prices
@@ -997,7 +1005,10 @@ def search_traffic_prices(
             return round(p, 6)
 
         def local_price(p):
-            return rounder(currency_converter.convert(p, price.currency, currency))
+            try:
+                return rounder(currency_converter.convert(p, price.currency, currency))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid currency code")
 
         if currency:
             if hasattr(price, "price") and hasattr(price, "currency"):
