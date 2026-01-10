@@ -10,7 +10,7 @@ from threading import Lock
 from typing import Optional
 
 import requests
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -200,7 +200,23 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """Middleware that extracts and stores user info early in the request lifecycle."""
 
     async def dispatch(self, request, call_next):
-        user = extract_user_from_request(request)
-        request.state.user = user
+        request.state.user = extract_user_from_request(request)
+        response = await call_next(request)
+        return response
+
+
+class AuthGuardMiddleware(BaseHTTPMiddleware):
+    """Middleware that returns 401 error if token was provided but validation failed."""
+
+    async def dispatch(self, request, call_next):
+        if bool(request.headers.get("Authorization")) and not bool(request.state.user):
+            return Response(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content='{"detail":"Invalid or expired token"}',
+                headers={
+                    "Content-Type": "application/json",
+                    "WWW-Authenticate": "Bearer",
+                },
+            )
         response = await call_next(request)
         return response

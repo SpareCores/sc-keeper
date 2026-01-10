@@ -30,7 +30,7 @@ from sqlmodel import Session, String, case, func, or_, select
 
 from . import parameters as options
 from . import routers
-from .auth import AuthMiddleware
+from .auth import AuthGuardMiddleware, AuthMiddleware
 from .cache import CacheHeaderMiddleware
 from .currency import currency_converter
 from .database import get_db
@@ -206,6 +206,9 @@ if rate_limiter:
 
 # response handler: set cache control header
 app.add_middleware(CacheHeaderMiddleware)
+
+# auth guard: return 401 early (but after logging) if token was provided but validation failed
+app.add_middleware(AuthGuardMiddleware)
 
 # response handler: aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
