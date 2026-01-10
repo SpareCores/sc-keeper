@@ -93,6 +93,7 @@ def table_server_prices(
                     currency_converter.convert(price.price, price.currency, currency),
                     4,
                 )
+                price.currency = currency
     return prices
 
 
