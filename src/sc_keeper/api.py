@@ -192,9 +192,6 @@ async def redoc_html():
 # extract user early from access token (if provided)
 app.add_middleware(AuthMiddleware)
 
-# logging
-app.add_middleware(LogMiddleware)
-
 # CORS: allows all origins, without spec headers and without auth
 app.add_middleware(
     CORSMiddleware,
@@ -213,6 +210,9 @@ app.add_middleware(CacheHeaderMiddleware)
 rate_limiter = create_rate_limiter()
 if rate_limiter:
     app.add_middleware(RateLimitMiddleware, default_limiter=rate_limiter)
+
+# logging (added last so it wraps everything and logs even rate-limited requests)
+app.add_middleware(LogMiddleware)
 
 # ##############################################################################
 # API endpoints
