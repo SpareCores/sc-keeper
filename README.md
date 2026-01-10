@@ -26,18 +26,26 @@ All environment variables are optional.
 - `SENTRY_DSN` - Sentry DSN for error tracking
 - `KEEPER_DEBUG` - Enable SQLAlchemy query logging (set to any truthy value)
 - `OPENAI_API_KEY` - OpenAI API key for AI features
-- `REDIS_URL` - Redis connection URL (required if `RATE_LIMIT_BACKEND=redis`, also used for token caching if authentication is enabled). Supports authentication via URL format: `redis://:password@host:port/db` or `redis://username:password@host:port/db`
+- `REDIS_URL` - Redis connection URL (required if `RATE_LIMIT_BACKEND=redis`,
+  also used for token caching if authentication is enabled). Supports
+  authentication via URL format: `redis://:password@host:port/db` or
+  `redis://username:password@host:port/db`
 
-Rate limiting is disabled by default. When enabled, it uses a credit-based system where all requests share a credit pool, with different routes consuming different amounts of credits.
+Rate limiting is disabled by default. When enabled, it uses a credit-based
+system where all requests share a credit pool, with different routes consuming
+different amounts of credits.
 
 - `RATE_LIMIT_ENABLED` - Enable rate limiting (set to any truthy value)
 - `RATE_LIMIT_CREDITS_PER_MINUTE` - Default credits per minute (default: `60`)
 - `RATE_LIMIT_DEFAULT_CREDIT_COST` - Default credit cost per request (default: `1`)
 - `RATE_LIMIT_BACKEND` - Backend to use: `memory` (default) or `redis`
 
-Custom credit costs per route can be configured in `src/sc_keeper/rate_limit.py` via the `CUSTOM_RATE_LIMIT_COSTS` dictionary. Routes not listed default to `RATE_LIMIT_DEFAULT_CREDIT_COST` credits per request.
+Custom credit costs per route can be configured in `src/sc_keeper/rate_limit.py`
+via the `CUSTOM_RATE_LIMIT_COSTS` dictionary. Routes not listed default to
+`RATE_LIMIT_DEFAULT_CREDIT_COST` credits per request.
 
-Authentication uses Zitadel (or compatible identity provider) for token validation. Token validation is automatically enabled if `ZITADEL_URL` is set.
+Authentication uses Zitadel (or compatible identity provider) for token
+validation. Token validation is automatically enabled if `ZITADEL_URL` is set.
 
 - `ZITADEL_URL` - Base URL of the identity provider API (required for token validation)
 - `ZITADEL_TOKEN_CACHE_SALT` - Optional salt for token hashing
@@ -45,7 +53,10 @@ Authentication uses Zitadel (or compatible identity provider) for token validati
 - `ZITADEL_TOKEN_CACHE_L1_MAX_SIZE` - Maximum size of L1 cache (default: `1000`)
 - `ZITADEL_TOKEN_CACHE_TTL_SECONDS` - L2 (Redis) cache TTL in seconds (default: `300`)
 
-When authentication is enabled, users can include a Bearer token (access token or PAT) in the `Authorization` header. Authenticated users' credit limits are determined by their `api_credits_per_minute` field from the identity provider (or `api_requests_per_minute` for backward compatibility), which takes precedence over the default credit limit.
+When authentication is enabled, users can include a Bearer token (access token
+or PAT) in the `Authorization` header. Authenticated users' credit limits are
+determined by their `api_credits_per_minute` field from the identity provider,
+which takes precedence over the default credit limit.
 
 ## Useful debug links
 
