@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_CREDITS_PER_MINUTE = 60  # TODO review default based on sc-www usage
 # default credit cost per request for routes not in CUSTOM_RATE_LIMIT_COSTS
 DEFAULT_CREDIT_COST = int(environ.get("RATE_LIMIT_DEFAULT_CREDIT_COST", 1))
-# custom credit costs per route (e.g., "/expensive/endpoint"=5 means it costs 5 credits)
+# custom credit costs per request path patterns, e.g.
+# "/expensive"=5 means that a request to any endpoint starting with "/expensive" costs 5 credits
 CUSTOM_RATE_LIMIT_COSTS: dict[str, int] = {"/servers": 3, "/server_prices": 5}
 
 
@@ -173,13 +174,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if self.default_limiter is None:  # disabled by default
             return await call_next(request)
 
-        # determine credit cost
-        route = request.scope.get("route")
-        route_path = getattr(route, "path", None) if route else None
-        if route_path and route_path in CUSTOM_RATE_LIMIT_COSTS:
-            credit_cost = CUSTOM_RATE_LIMIT_COSTS[route_path]
-        else:
-            credit_cost = DEFAULT_CREDIT_COST
+        # determine credit cost based on request path, as explicit request.scope.route lookup is not yet available
+        credit_cost = DEFAULT_CREDIT_COST
+        request_path = request.url.path
+        for route_path, cost in CUSTOM_RATE_LIMIT_COSTS.items():
+            # exact path or path that starts with route_path
+            if request_path == route_path or request_path.startswith(route_path):
+                credit_cost = cost
+                break
 
         # determine credit pool limit
         user = getattr(request.state, "user", None)
