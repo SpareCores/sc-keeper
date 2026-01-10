@@ -889,10 +889,10 @@ def search_storage_prices(
                             ),
                             6,
                         )
-                    except ValueError:
+                    except ValueError as e:
                         raise HTTPException(
                             status_code=400, detail="Invalid currency code"
-                        )
+                        ) from e
                     price.currency = currency
 
     return prices
@@ -1006,9 +1006,9 @@ def search_traffic_prices(
         def rounder(p):
             return round(p, 6)
 
-        def local_price(p):
+        def local_price(p, from_currency):
             try:
-                return rounder(currency_converter.convert(p, price.currency, currency))
+                return rounder(currency_converter.convert(p, from_currency, currency))
             except ValueError as e:
                 raise HTTPException(
                     status_code=400, detail="Invalid currency code"
@@ -1017,9 +1017,11 @@ def search_traffic_prices(
         if currency:
             if hasattr(price, "price") and hasattr(price, "currency"):
                 if price.currency != currency:
-                    price.price = local_price(price.price)
+                    price.price = local_price(price.price, price.currency)
                     for i, tier in enumerate(price.price_tiered):
-                        price.price_tiered[i].price = local_price(tier.price)
+                        price.price_tiered[i].price = local_price(
+                            tier.price, price.currency
+                        )
                     price.currency = currency
 
         if price.price_tiered:
