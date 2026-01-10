@@ -212,7 +212,7 @@ app.add_middleware(CacheHeaderMiddleware)
 # rate limiting (disabled by default, enabled via env vars)
 rate_limiter = create_rate_limiter()
 if rate_limiter:
-    app.add_middleware(RateLimitMiddleware, limiter=rate_limiter)
+    app.add_middleware(RateLimitMiddleware, default_limiter=rate_limiter)
 
 # ##############################################################################
 # API endpoints
