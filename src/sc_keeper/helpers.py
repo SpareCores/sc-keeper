@@ -39,8 +39,8 @@ def get_server_base(vendor_id: str, server_id: str, db: Session) -> ServerBase:
             .where(Server.vendor_id == vendor_id)
             .where(Server.server_id == server_id)
         ).one()
-    except NoResultFound:
-        raise HTTPException(status_code=404, detail="Server not found")
+    except NoResultFound as e:
+        raise HTTPException(status_code=404, detail="Server not found") from e
 
 
 def get_server_pks(vendor: str, server: str, db: Session) -> ServerPKs:
@@ -52,5 +52,5 @@ def get_server_pks(vendor: str, server: str, db: Session) -> ServerPKs:
             .join(Server.vendor)
             .options(contains_eager(Server.vendor))
         ).one()
-    except NoResultFound:
-        raise HTTPException(status_code=404, detail="Server not found")
+    except NoResultFound as e:
+        raise HTTPException(status_code=404, detail="Server not found") from e

@@ -539,8 +539,10 @@ def search_server_prices(
         if currency != "USD":
             try:
                 price_max = currency_converter.convert(price_max, currency, "USD")
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid currency code")
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=400, detail="Invalid currency code"
+                ) from e
         conditions.add(ServerPrice.price <= price_max)
 
     if vcpus_min:
@@ -1007,8 +1009,10 @@ def search_traffic_prices(
         def local_price(p):
             try:
                 return rounder(currency_converter.convert(p, price.currency, currency))
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid currency code")
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=400, detail="Invalid currency code"
+                ) from e
 
         if currency:
             if hasattr(price, "price") and hasattr(price, "currency"):

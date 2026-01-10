@@ -166,10 +166,10 @@ def get_server_prices(
                             ),
                             4,
                         )
-                    except ValueError:
+                    except ValueError as e:
                         raise HTTPException(
                             status_code=400, detail="Invalid currency code"
-                        )
+                        ) from e
                     price.currency = currency
     return prices
 
