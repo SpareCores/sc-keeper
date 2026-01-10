@@ -77,7 +77,7 @@ def table_server_prices(
     currency: options.currency = None,
     db: Session = Depends(get_db),
 ) -> List[ServerPrice]:
-    """Return the ServerPrices table as-is, without relationships resolved."""
+    """Query ServerPrices records without relationships resolved."""
     query = select(ServerPrice)
     if vendor:
         query = query.where(ServerPrice.vendor_id.in_(vendor))
@@ -89,6 +89,7 @@ def table_server_prices(
     if currency:
         for price in prices:
             if price.currency != currency:
+                db.expunge(price)
                 price.price = round(
                     currency_converter.convert(price.price, price.currency, currency),
                     4,

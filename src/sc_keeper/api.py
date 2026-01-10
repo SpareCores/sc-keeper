@@ -876,6 +876,7 @@ def search_storage_prices(
         if currency:
             if hasattr(price, "price") and hasattr(price, "currency"):
                 if price.currency != currency:
+                    db.expunge(price)
                     price.price = round(
                         currency_converter.convert(
                             price.price, price.currency, currency

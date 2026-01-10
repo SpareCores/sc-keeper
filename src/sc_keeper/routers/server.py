@@ -157,6 +157,7 @@ def get_server_prices(
         for price in prices:
             if hasattr(price, "price") and hasattr(price, "currency"):
                 if price.currency != currency:
+                    db.expunge(price)
                     price.price = round(
                         currency_converter.convert(
                             price.price, price.currency, currency
