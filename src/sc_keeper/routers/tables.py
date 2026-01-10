@@ -85,8 +85,6 @@ def table_server_prices(
         query = query.where(ServerPrice.region_id.in_(region))
     if allocation:
         query = query.where(ServerPrice.allocation == allocation)
-    if currency:
-        query = query.where(ServerPrice.currency == currency)
     prices = db.exec(query).all()
     if currency:
         for price in prices:
