@@ -44,14 +44,20 @@ Custom credit costs per route can be configured in `src/sc_keeper/rate_limit.py`
 via the `CUSTOM_RATE_LIMIT_COSTS` dictionary. Routes not listed default to
 `RATE_LIMIT_DEFAULT_CREDIT_COST` credits per request.
 
-Authentication uses Zitadel (or compatible identity provider) for token
-validation. Token validation is automatically enabled if `ZITADEL_URL` is set.
+Authentication uses OAuth 2.0 token introspection for token validation. Token
+validation is automatically enabled if `AUTH_TOKEN_INTROSPECTION_URL` is set.
+Supports any OAuth 2.0-compatible identity provider that implements token
+introspection (RFC 7662), such as ZITADEL.
 
-- `ZITADEL_URL` - Base URL of the identity provider API (required for token validation)
-- `ZITADEL_TOKEN_CACHE_SALT` - Optional salt for token hashing
-- `ZITADEL_TOKEN_CACHE_L1_TTL_SECONDS` - L1 (in-memory) cache TTL in seconds (default: `60`)
-- `ZITADEL_TOKEN_CACHE_L1_MAX_SIZE` - Maximum size of L1 cache (default: `1000`)
-- `ZITADEL_TOKEN_CACHE_TTL_SECONDS` - L2 (Redis) cache TTL in seconds (default: `300`)
+- `AUTH_TOKEN_INTROSPECTION_URL` - Full URL of the token introspection endpoint
+  (required for and enables token validation)
+- `AUTH_CLIENT_ID` - Client ID for token inspection API (basic auth)
+- `AUTH_CLIENT_SECRET` - Client secret for token inspection API (basic auth)
+- `AUTH_TOKEN_SCOPE` - Optional scope to check for in the token introspection response
+- `AUTH_TOKEN_CACHE_SALT` - Salt for token hashing
+- `AUTH_TOKEN_CACHE_L1_TTL_SECONDS` - L1 (in-memory) cache TTL in seconds (default: `60`)
+- `AUTH_TOKEN_CACHE_L1_MAX_SIZE` - Maximum size of L1 cache (default: `1000`)
+- `AUTH_TOKEN_CACHE_L2_TTL_SECONDS` - L2 (Redis) cache TTL in seconds (default: `300`)
 
 When authentication is enabled, users can include a Bearer token (access token
 or PAT) in the `Authorization` header. Authenticated users' credit limits are

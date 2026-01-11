@@ -9,9 +9,10 @@ from os import environ
 from threading import Lock
 from typing import Optional
 
-import requests
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer
+from requests import post
+from requests.auth import HTTPBasicAuth
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .redis_client import get_redis_client
@@ -23,7 +24,7 @@ security = HTTPBearer(auto_error=False)
 
 @dataclass
 class User:
-    """User object extracted from Zitadel authentication."""
+    """User object extracted from OAuth 2.0 token introspection."""
 
     user_id: str
     api_credits_per_minute: Optional[int] = None
@@ -32,15 +33,15 @@ class User:
 # L1 (in-memory, per-process) cache for token validation results
 _token_cache_l1: OrderedDict[str, tuple[Optional[User], float]] = OrderedDict()
 _token_cache_l1_lock = Lock()
-_token_cache_l1_ttl = int(environ.get("ZITADEL_TOKEN_CACHE_L1_TTL_SECONDS", "60"))
-_token_cache_l1_max_size = int(environ.get("ZITADEL_TOKEN_CACHE_L1_MAX_SIZE", "1000"))
+_token_cache_l1_ttl = int(environ.get("AUTH_TOKEN_CACHE_L1_TTL_SECONDS", "60"))
+_token_cache_l1_max_size = int(environ.get("AUTH_TOKEN_CACHE_L1_MAX_SIZE", "1000"))
 # L2 (redis, shared across workers) cache
-_token_cache_l2_ttl = int(environ.get("ZITADEL_TOKEN_CACHE_TTL_SECONDS", "300"))
+_token_cache_l2_ttl = int(environ.get("AUTH_TOKEN_CACHE_L2_TTL_SECONDS", "300"))
 
 
 def _get_token_cache_key(token: str) -> str:
     """Generate a hashed cache key from the token with optional salt."""
-    salt = environ.get("ZITADEL_TOKEN_CACHE_SALT", "").encode()
+    salt = environ.get("AUTH_TOKEN_CACHE_SALT", "").encode()
     return hashlib.sha256(token.encode() + salt).hexdigest()
 
 
@@ -112,12 +113,13 @@ def _cache_token_user_l2(cache_key: str, user: User, redis_client) -> None:
         logger.debug(f"Error writing to Redis cache: {e}")
 
 
-def verify_zitadel_token(token: str) -> Optional[User]:
+def verify_token(token: str) -> Optional[User]:
     """
-    Verify Zitadel token (access token or PAT) via API with two-tier caching.
-    Works for both access tokens from Angular frontend (humans) and personal access tokens (service users).
+    Verify OAuth 2.0 token (access token or PAT) via token introspection API with two-tier caching.
+    Works for both access tokens from frontend (humans) and personal access tokens (service users).
+    Supports any OAuth 2.0-compatible identity provider that implements token introspection.
     """
-    api_url = environ.get("ZITADEL_URL")
+    api_url = environ.get("AUTH_TOKEN_INTROSPECTION_URL")
     if not api_url:
         return None
 
@@ -139,19 +141,28 @@ def verify_zitadel_token(token: str) -> Optional[User]:
     except Exception:
         redis_client = None
 
-    # all caches missed, validate with Zitadel API
+    # all caches missed, validate with token introspection API
     try:
-        # TODO consider switching to token inspection endpoint
-        # https://zitadel.com/docs/guides/integrate/token-introspection/private-key-jwt
-        user_endpoint = f"{api_url.rstrip('/')}/auth/v1/users/me"
-        headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get(user_endpoint, headers=headers, timeout=5)
+        # https://zitadel.com/docs/guides/integrate/token-introspection/basic-auth
+        response = post(
+            api_url,
+            auth=HTTPBasicAuth(
+                environ["AUTH_CLIENT_ID"], environ["AUTH_CLIENT_SECRET"]
+            ),
+            data={"token": token},
+            timeout=5,
+        )
         response.raise_for_status()
-        user_data = response.json().get("user", {})
-        user_id = user_data.get("id")
+        user_data = response.json()
+        user_id = user_data.get("sub")
 
         if not user_id:
             logger.warning("No user ID found in API response")
+            return None
+
+        scope = environ.get("AUTH_TOKEN_SCOPE")
+        if scope and scope not in user_data.get("scope", "").split(" "):
+            logger.warning(f"Token scope {scope} not found in API response")
             return None
 
         user = User(
@@ -163,7 +174,7 @@ def verify_zitadel_token(token: str) -> Optional[User]:
             _cache_token_user_l2(cache_key, user, redis_client)
         return user
     except Exception as e:
-        logger.error(f"Error verifying Zitadel token: {e}")
+        logger.error(f"Error verifying token: {e}")
         return None
 
 
@@ -173,7 +184,7 @@ def extract_user_from_request(request) -> Optional[User]:
     if not auth_header or not auth_header.startswith("Bearer "):
         return None
     token = auth_header.split(" ", 1)[1]
-    return verify_zitadel_token(token)
+    return verify_token(token)
 
 
 def get_current_user(request: Request) -> Optional[User]:
