@@ -113,6 +113,11 @@ def _cache_token_user_l2(cache_key: str, user: User, redis_client) -> None:
         logger.debug(f"Error writing to Redis cache: {e}")
 
 
+def token_verification_enabled() -> bool:
+    """Check if token verification is enabled via env var."""
+    return bool(environ.get("AUTH_TOKEN_INTROSPECTION_URL"))
+
+
 def verify_token(token: str) -> Optional[User]:
     """
     Verify OAuth 2.0 token (access token or PAT) via token introspection API with two-tier caching.
@@ -220,7 +225,11 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
     """Middleware that returns 401 error if token was provided but validation failed."""
 
     async def dispatch(self, request, call_next):
-        if bool(request.headers.get("Authorization")) and not bool(request.state.user):
+        if (
+            token_verification_enabled()
+            and bool(request.headers.get("Authorization"))
+            and not bool(request.state.user)
+        ):
             return Response(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content='{"detail":"Invalid or expired token"}',
