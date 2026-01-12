@@ -207,18 +207,25 @@ def test_auth_token_caching(client_with_auth):
         assert mock_client.post_call_count == 1
 
 
-def test_auth_user_credits_per_minute(client_with_auth, monkeypatch):
+def test_auth_user_credits_per_minute(monkeypatch):
     """Test that user's api_credits_per_minute is extracted from token and used for rate limiting."""
+    introspection_url = "http://test-auth-server.com/introspect"
+    # set up auth
+    monkeypatch.setenv("AUTH_TOKEN_INTROSPECTION_URL", introspection_url)
+    monkeypatch.setenv("AUTH_CLIENT_ID", "test_client")
+    monkeypatch.setenv("AUTH_CLIENT_SECRET", "test_secret")
     # enable rate limiting with a default rate different from user's rate
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "1")
     monkeypatch.setenv("RATE_LIMIT_BACKEND", "memory")
     monkeypatch.setenv("RATE_LIMIT_CREDITS_PER_MINUTE", "60")
     monkeypatch.setenv("RATE_LIMIT_DEFAULT_CREDIT_COST", "1")
 
-    # reload modules to pick up rate limiting config
+    # reload modules to pick up auth and rate limiting config
     import sc_keeper.api
+    import sc_keeper.auth
     import sc_keeper.rate_limit
 
+    importlib.reload(sc_keeper.auth)
     importlib.reload(sc_keeper.rate_limit)
     importlib.reload(sc_keeper.api)
 
