@@ -85,8 +85,6 @@ def _get_cached_token_user_l2(cache_key: str, redis_client) -> Optional[User]:
     try:
         cached_data = redis_client.get(f"token:{cache_key}")
         if cached_data:
-            if cached_data == "null":
-                return None
             user_data = json_loads(cached_data)
             return User(
                 user_id=user_data["user_id"],
