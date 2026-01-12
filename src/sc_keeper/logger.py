@@ -60,7 +60,10 @@ class LogMiddleware(BaseHTTPMiddleware):
         request_time = time()
         request_resources = getrusage(RUSAGE_SELF)
         request_cpu_times = Process().cpu_times()
-        request_io = Process().io_counters()
+        # not available on Mac OS
+        request_io = (
+            Process().io_counters() if hasattr(Process(), "io_counters") else None
+        )
 
         request_info = {
             "method": request.method,
@@ -108,10 +111,22 @@ class LogMiddleware(BaseHTTPMiddleware):
         current_time = time()
         current_resources = getrusage(RUSAGE_SELF)
         current_cpu_times = Process().cpu_times()
-        current_io = Process().io_counters()
+        # not available on Mac OS
+        current_io = (
+            Process().io_counters() if hasattr(Process(), "io_counters") else None
+        )
 
         response.headers["X-Request-ID"] = get_request_id()
         content_length = response.headers.get("content-length")
+
+        def _io_diff(attr_name):
+            """Calculate IO difference if request_io exists, otherwise None."""
+            return (
+                getattr(current_io, attr_name) - getattr(request_io, attr_name)
+                if request_io
+                else None
+            )
+
         logging.info(
             "response returned",
             extra={
@@ -134,8 +149,8 @@ class LogMiddleware(BaseHTTPMiddleware):
                     "iowait": round(
                         current_cpu_times.iowait - request_cpu_times.iowait, 2
                     ),
-                    "read_bytes": current_io.read_bytes - request_io.read_bytes,
-                    "write_bytes": current_io.write_bytes - request_io.write_bytes,
+                    "read_bytes": _io_diff("read_bytes"),
+                    "write_bytes": _io_diff("write_bytes"),
                     "max_rss": current_resources.ru_maxrss,
                 },
             },
