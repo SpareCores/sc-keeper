@@ -22,7 +22,14 @@ DEFAULT_CREDIT_COST = int(environ.get("RATE_LIMIT_DEFAULT_CREDIT_COST", 1))
 CUSTOM_RATE_LIMIT_COSTS: dict[str, int] = {"/servers": 3, "/server_prices": 5}
 
 
-class InMemoryRateLimiter:
+class RateLimiter:
+    """Base class for rate limiters."""
+
+    window_seconds: int = 60
+    """The sliding window's length (in seconds) used for credit tracking."""
+
+
+class InMemoryRateLimiter(RateLimiter):
     """Simple in-memory rate limiter using a sliding window with credit-based tracking."""
 
     def __init__(self, credits_per_minute: int):
@@ -51,7 +58,7 @@ class InMemoryRateLimiter:
         """
         limit = credits_per_minute or self.credits_per_minute
         now = time.time()
-        window_start = now - 60  # 1 minute window
+        window_start = now - self.window_seconds
 
         # clean old entries
         self.windows[key] = [
@@ -72,7 +79,7 @@ class InMemoryRateLimiter:
         return True, remaining
 
 
-class RedisRateLimiter:
+class RedisRateLimiter(RateLimiter):
     """Redis-based rate limiter using sliding window with credit-based tracking."""
 
     def __init__(self, redis_url: str, credits_per_minute: int):
@@ -81,7 +88,6 @@ class RedisRateLimiter:
             raise ImportError("Could not connect to Redis")
         self.redis_client = redis_client
         self.credits_per_minute = credits_per_minute
-        self.window_seconds = 60
 
     def is_allowed(
         self,
