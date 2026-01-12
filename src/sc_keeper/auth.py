@@ -2,7 +2,6 @@ import hashlib
 import logging
 import time
 from collections import OrderedDict
-from dataclasses import dataclass
 from json import dumps as json_dumps
 from json import loads as json_loads
 from os import environ
@@ -11,6 +10,7 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer
+from pydantic import BaseModel
 from requests import post
 from requests.auth import HTTPBasicAuth
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -22,8 +22,7 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
 
 
-@dataclass
-class User:
+class User(BaseModel):
     """User object extracted from OAuth 2.0 token introspection."""
 
     user_id: str
