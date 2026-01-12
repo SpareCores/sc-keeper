@@ -176,8 +176,8 @@ async def verify_token(token: str) -> Optional[User]:
             if redis_client:
                 _cache_token_user_l2(cache_key, user, redis_client)
             return user
-    except Exception as e:
-        logger.error(f"Error verifying token: {e}")
+    except Exception:
+        logger.exception("Error verifying token")
         return None
 
 

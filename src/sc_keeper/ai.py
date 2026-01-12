@@ -103,7 +103,7 @@ async def openai_extract_filters(prompt: str, endpoint: str) -> dict:
         "temperature": 0.7,
     }
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=5.0) as client:
         response = await client.post(
             "https://api.openai.com/v1/chat/completions",
             headers=headers,
@@ -114,6 +114,6 @@ async def openai_extract_filters(prompt: str, endpoint: str) -> dict:
             message = response.json()["choices"][0]["message"]
             args = message["tool_calls"][0]["function"]["arguments"]
             return json.loads(args)
-        except Exception as exc:
-            logging.exception(exc)
-            raise exc
+        except Exception:
+            logging.exception("Failed to parse OpenAI response")
+            raise
