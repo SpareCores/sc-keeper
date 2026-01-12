@@ -63,8 +63,8 @@ def client_with_auth(monkeypatch):
     return TestClient(app), introspection_url
 
 
-def test_public_endpoints_no_token(client_with_auth):
-    """Test that requests without token are allowed at the public endpoints."""
+def test_endpoints_no_token(client_with_auth):
+    """Test that requests without token are allowed at the public endpoints but not at the private endpoints."""
     client, _ = client_with_auth
     response = client.get("/healthcheck")
     assert response.status_code == 200
@@ -72,28 +72,11 @@ def test_public_endpoints_no_token(client_with_auth):
     assert response.status_code == 401
 
 
-def test_public_endpoints_with_token(client_with_auth):
-    """Test that requests with token are allowed at the private endpoints."""
+def test_endpoints_with_token(client_with_auth):
+    """Test that requests with token are allowed at both the public and private endpoints."""
     client, _ = client_with_auth
     response = client.get("/healthcheck")
     assert response.status_code == 200
-
-    with mock_token_introspection(
-        {
-            "sub": "user123",
-            "scope": "read write",
-            "api_credits_per_minute": 100,
-        }
-    ):
-        response = client.get(
-            "/me", headers={"Authorization": "Bearer valid_token_123"}
-        )
-        assert response.status_code == 200
-
-
-def test_auth_valid_token(client_with_auth):
-    """Test that requests with valid token are authenticated."""
-    client, _ = client_with_auth
 
     with mock_token_introspection(
         {
@@ -104,6 +87,10 @@ def test_auth_valid_token(client_with_auth):
     ):
         response = client.get(
             "/healthcheck", headers={"Authorization": "Bearer valid_token_123"}
+        )
+        assert response.status_code == 200
+        response = client.get(
+            "/me", headers={"Authorization": "Bearer valid_token_123"}
         )
         assert response.status_code == 200
 
@@ -169,7 +156,6 @@ def test_auth_token_introspection_error(client_with_auth):
         response = client.get(
             "/healthcheck", headers={"Authorization": "Bearer token_error"}
         )
-        # should return 401 when introspection fails
         assert response.status_code == 401
 
 
