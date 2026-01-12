@@ -1,6 +1,5 @@
 import logging
 from collections import deque
-from shutil import copyfileobj
 from tempfile import NamedTemporaryFile
 from threading import Event, Lock, Thread
 from time import sleep
@@ -37,7 +36,8 @@ class CurrencyConverter(Thread):
                 # delete=False due to Windows support
                 # https://stackoverflow.com/questions/15588314/cant-access-temporary-files-created-with-tempfile/15590253#15590253
                 tmpfile = NamedTemporaryFile(delete=False, suffix=".zip")
-                copyfileobj(r.raw, tmpfile)
+                for chunk in r.iter_bytes():
+                    tmpfile.write(chunk)
                 tmpfile.flush()
                 with self.lock:
                     self.file_path = tmpfile.name
