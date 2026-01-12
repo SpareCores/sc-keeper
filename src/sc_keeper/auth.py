@@ -8,11 +8,10 @@ from os import environ
 from threading import Lock
 from typing import Optional
 
+import httpx
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel
-from requests import post
-from requests.auth import HTTPBasicAuth
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .redis_client import get_redis_client
@@ -117,7 +116,7 @@ def token_verification_enabled() -> bool:
     return bool(environ.get("AUTH_TOKEN_INTROSPECTION_URL"))
 
 
-def verify_token(token: str) -> Optional[User]:
+async def verify_token(token: str) -> Optional[User]:
     """
     Verify OAuth 2.0 token (access token or PAT) via token introspection API with two-tier caching.
     Works for both access tokens from frontend (humans) and personal access tokens (service users).
@@ -148,47 +147,47 @@ def verify_token(token: str) -> Optional[User]:
     # all caches missed, validate with token introspection API
     try:
         # https://zitadel.com/docs/guides/integrate/token-introspection/basic-auth
-        response = post(
-            api_url,
-            auth=HTTPBasicAuth(
-                environ["AUTH_CLIENT_ID"], environ["AUTH_CLIENT_SECRET"]
-            ),
-            data={"token": token},
-            timeout=5,
-        )
-        response.raise_for_status()
-        user_data = response.json()
-        user_id = user_data.get("sub")
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                api_url,
+                auth=httpx.BasicAuth(
+                    environ["AUTH_CLIENT_ID"], environ["AUTH_CLIENT_SECRET"]
+                ),
+                data={"token": token},
+            )
+            response.raise_for_status()
+            user_data = response.json()
+            user_id = user_data.get("sub")
 
-        if not user_id:
-            logger.warning("No user ID found in API response")
-            return None
+            if not user_id:
+                logger.warning("No user ID found in API response")
+                return None
 
-        scope = environ.get("AUTH_TOKEN_SCOPE")
-        if scope and scope not in user_data.get("scope", "").split(" "):
-            logger.warning(f"Token scope {scope} not found in API response")
-            return None
+            scope = environ.get("AUTH_TOKEN_SCOPE")
+            if scope and scope not in user_data.get("scope", "").split(" "):
+                logger.warning(f"Token scope {scope} not found in API response")
+                return None
 
-        user = User(
-            user_id=user_id,
-            api_credits_per_minute=user_data.get("api_credits_per_minute"),
-        )
-        _cache_token_user_l1(cache_key, user)
-        if redis_client:
-            _cache_token_user_l2(cache_key, user, redis_client)
-        return user
+            user = User(
+                user_id=user_id,
+                api_credits_per_minute=user_data.get("api_credits_per_minute"),
+            )
+            _cache_token_user_l1(cache_key, user)
+            if redis_client:
+                _cache_token_user_l2(cache_key, user, redis_client)
+            return user
     except Exception as e:
         logger.error(f"Error verifying token: {e}")
         return None
 
 
-def extract_user_from_request(request) -> Optional[User]:
+async def extract_user_from_request(request) -> Optional[User]:
     """Extract user from request Authorization header."""
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         return None
     token = auth_header.split(" ", 1)[1]
-    return verify_token(token)
+    return await verify_token(token)
 
 
 def get_current_user(request: Request) -> Optional[User]:
@@ -215,7 +214,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """Middleware that extracts and stores user info early in the request lifecycle."""
 
     async def dispatch(self, request, call_next):
-        request.state.user = extract_user_from_request(request)
+        request.state.user = await extract_user_from_request(request)
         response = await call_next(request)
         return response
 

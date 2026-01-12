@@ -42,17 +42,33 @@ def mock_token_introspection(user_data=None, exception=None):
         exception: Exception to raise instead of returning a response
 
     Yields:
-        The mock post function (useful for checking call counts)
+        The mock async client (useful for checking call counts)
     """
     if exception:
         mock_response = None
     else:
         mock_response = _create_mock_introspection_response(user_data or {})
 
-    with patch(
-        "sc_keeper.auth.post", return_value=mock_response, side_effect=exception
-    ) as mock_post:
-        yield mock_post
+    class MockAsyncClient:
+        def __init__(self):
+            self.post_call_count = 0
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, *args, **kwargs):
+            self.post_call_count += 1
+            if exception:
+                raise exception
+            return mock_response
+
+    mock_client = MockAsyncClient()
+
+    with patch("sc_keeper.auth.httpx.AsyncClient", return_value=mock_client):
+        yield mock_client
 
 
 @pytest.fixture
@@ -150,9 +166,15 @@ def test_auth_token_introspection_error(client_with_auth):
     """Test that requests fail gracefully when introspection API errors."""
     client, _ = client_with_auth
 
-    from requests.exceptions import RequestException
+    import httpx
 
-    with mock_token_introspection(exception=RequestException("API error")):
+    mock_request = Mock()
+    mock_response = Mock()
+    with mock_token_introspection(
+        exception=httpx.HTTPStatusError(
+            "API error", request=mock_request, response=mock_response
+        )
+    ):
         response = client.get(
             "/healthcheck", headers={"Authorization": "Bearer token_error"}
         )
@@ -168,13 +190,13 @@ def test_auth_token_caching(client_with_auth):
             "sub": "user123",
             "api_credits_per_minute": 50,
         }
-    ) as mock_post:
+    ) as mock_client:
         # first request should call introspection API
         response1 = client.get(
             "/healthcheck", headers={"Authorization": "Bearer cached_token"}
         )
         assert response1.status_code == 200
-        assert mock_post.call_count == 1
+        assert mock_client.post_call_count == 1
 
         # second request should use cache (should not call API again)
         response2 = client.get(
@@ -182,7 +204,7 @@ def test_auth_token_caching(client_with_auth):
         )
         assert response2.status_code == 200
         # should still be 1 call due to L1 cache
-        assert mock_post.call_count == 1
+        assert mock_client.post_call_count == 1
 
 
 def test_auth_user_credits_per_minute(client_with_auth, monkeypatch):

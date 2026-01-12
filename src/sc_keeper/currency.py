@@ -5,10 +5,10 @@ from tempfile import NamedTemporaryFile
 from threading import Event, Lock, Thread
 from time import sleep
 
+import httpx
 import safe_exit
 from currency_converter import SINGLE_DAY_ECB_URL
 from currency_converter import CurrencyConverter as CC
-from requests import get
 from sc_data.data import close_tmpfiles
 
 
@@ -28,7 +28,7 @@ class CurrencyConverter(Thread):
         super().__init__(*args, **kwargs)
 
     def update(self):
-        with get(SINGLE_DAY_ECB_URL, stream=True) as r:
+        with httpx.stream("GET", SINGLE_DAY_ECB_URL) as r:
             if (
                 200 <= r.status_code < 300
                 and (file_last_updated := r.headers.get("Last-Modified"))
