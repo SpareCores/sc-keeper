@@ -10,6 +10,8 @@ from currency_converter import SINGLE_DAY_ECB_URL
 from currency_converter import CurrencyConverter as CC
 from sc_data.data import close_tmpfiles
 
+logger = logging.getLogger(__name__)
+
 
 # mostly follows the logic of sparecores-data.Data
 class CurrencyConverter(Thread):
@@ -45,9 +47,9 @@ class CurrencyConverter(Thread):
                     self.converter = CC(self.file_path)
                 close_tmpfiles(self.tmpfiles)
                 self.tmpfiles.append(tmpfile)
-                logging.debug("Updated ECB file at %s", self.file_path)
+                logger.debug("Updated ECB file at %s", self.file_path)
             else:
-                logging.debug("No need to update ECB file")
+                logger.debug("No need to update ECB file")
 
     def run(self):
         """Start the update thread."""
@@ -55,7 +57,7 @@ class CurrencyConverter(Thread):
             try:
                 self.update()
             except Exception:
-                logging.exception("Failed to update the ECB file")
+                logger.exception("Failed to update the ECB file")
             self.updated.set()
             sleep(60 * 60)
 

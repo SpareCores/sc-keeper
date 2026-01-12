@@ -5,6 +5,8 @@ import os
 import httpx
 from fastapi.openapi.utils import get_openapi
 
+logger = logging.getLogger(__name__)
+
 
 def get_swagger():
     """Generate OpenAPI/Swagger JSON for current FastAPI app."""
@@ -115,5 +117,5 @@ async def openai_extract_filters(prompt: str, endpoint: str) -> dict:
             args = message["tool_calls"][0]["function"]["arguments"]
             return json.loads(args)
         except Exception:
-            logging.exception("Failed to parse OpenAI response")
+            logger.exception("Failed to parse OpenAI response")
             raise

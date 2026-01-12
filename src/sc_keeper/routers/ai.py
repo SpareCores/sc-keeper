@@ -5,12 +5,14 @@ from fastapi import APIRouter, Request
 from ..ai import openai_extract_filters
 from ..logger import get_request_id
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
 async def assister(text: str, endpoint: str) -> dict:
     res = await openai_extract_filters(text, endpoint=endpoint)
-    logging.info(
+    logger.info(
         "openai response",
         extra={
             "event": "assister response",
