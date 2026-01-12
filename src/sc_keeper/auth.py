@@ -140,6 +140,7 @@ async def verify_token(token: str) -> Optional[User]:
                 _cache_token_user_l1(cache_key, cached_user)
                 return cached_user
     except Exception:
+        logger.exception("Error getting cached token user from Redis")
         redis_client = None
 
     # all caches missed, validate with token introspection API
