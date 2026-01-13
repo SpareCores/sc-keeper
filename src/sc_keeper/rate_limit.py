@@ -84,12 +84,47 @@ class InMemoryRateLimiter(RateLimiter):
 class RedisRateLimiter(RateLimiter):
     """Redis-based rate limiter using sliding window with credit-based tracking."""
 
+    RATE_LIMIT_SCRIPT = """
+    -- use a sorted set for the sliding window as:
+    -- score=timestamp, member="request_id:credit_cost"
+    local key = KEYS[1]
+    local window_start = tonumber(ARGV[1])
+    local now = tonumber(ARGV[2])
+    local limit = tonumber(ARGV[3])
+    local credit_cost = tonumber(ARGV[4])
+    local member_id = ARGV[5]
+    local window_seconds = tonumber(ARGV[6])
+
+    -- drop old entries
+    redis.call('ZREMRANGEBYSCORE', key, 0, window_start)
+
+    -- get all current entries
+    local entries = redis.call('ZRANGE', key, 0, -1)
+    -- calculate total credits consumed
+    local total_credits = 0
+    for _, entry in ipairs(entries) do
+        local cost = tonumber(string.match(entry, ':(%d+)$')) or 0
+        total_credits = total_credits + cost
+    end
+
+    -- early return if not enough credits left
+    if total_credits + credit_cost > limit then
+        return {0, math.max(0, limit - total_credits)}
+    end
+
+    -- record current request's credit consumption
+    redis.call('ZADD', key, now, member_id)
+    redis.call('EXPIRE', key, window_seconds)
+    return {1, limit - total_credits - credit_cost}
+    """
+
     def __init__(self, redis_url: str, credits_per_minute: int):
         redis_client = get_redis_client(redis_url)
         if redis_client is None:
             raise ImportError("Could not connect to Redis")
         self.redis_client = redis_client
         self.credits_per_minute = credits_per_minute
+        self._rate_limiter = self.redis_client.register_script(self.RATE_LIMIT_SCRIPT)
 
     def is_allowed(
         self,
@@ -112,34 +147,22 @@ class RedisRateLimiter(RateLimiter):
         limit = credits_per_minute or self.credits_per_minute
         now = time.time()
         window_start = now - self.window_seconds
-
-        redis_key = f"ratelimit:{key}"
-
-        # use Redis sorted set for sliding window as:
-        # score=timestamp, member="request_id:credit_cost"
-        pipe = self.redis_client.pipeline()
-        # drop old entries
-        pipe.zremrangebyscore(redis_key, 0, window_start)
-        # get all current entries
-        pipe.zrange(redis_key, 0, -1, withscores=True)
-        results = pipe.execute()
-        # calculate total credits consumed
-        entries = results[1]
-        total_credits = sum(int(m.split(":")[1]) for m, _ in entries if ":" in m)
-
-        if total_credits + credit_cost > limit:
-            remaining = max(0, limit - total_credits)
-            return False, remaining
-
-        # record current request's credit consumption
         request_id = kwargs.get("request_id", str(uuid4()))
         member_id = f"{request_id}:{credit_cost}"
-        pipe = self.redis_client.pipeline()
-        pipe.zadd(redis_key, {member_id: now})
-        pipe.expire(redis_key, self.window_seconds)
-        pipe.execute()
-        remaining = limit - (total_credits + credit_cost)
-        return True, remaining
+        redis_key = f"ratelimit:{key}"
+
+        result = self._rate_limiter(
+            keys=[redis_key],
+            args=[
+                window_start,
+                now,
+                limit,
+                credit_cost,
+                member_id,
+                self.window_seconds,
+            ],
+        )
+        return bool(result[0]), int(result[1])
 
 
 def _get_rate_limit_response_data(
