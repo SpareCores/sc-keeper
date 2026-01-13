@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager, suppress
 from importlib.metadata import version
 from json import loads as json_loads
+from logging import getLogger
 from os import environ
 from textwrap import dedent
 from typing import List
@@ -28,6 +29,20 @@ from sc_crawler.tables import (
 from sqlalchemy.orm import aliased, contains_eager
 from sqlmodel import Session, String, case, func, or_, select
 
+# early validation (before DB imports) of environment variables
+logger = getLogger(__name__)
+if environ.get("AUTH_TOKEN_INTROSPECTION_URL"):
+    missing_vars = [
+        var for var in ["AUTH_CLIENT_ID", "AUTH_CLIENT_SECRET"] if not environ.get(var)
+    ]
+    if missing_vars:
+        logger.error("Invalid environment variable configuration")
+        raise ValueError(
+            f"The following environment variables are required when "
+            f"AUTH_TOKEN_INTROSPECTION_URL is set: {', '.join(missing_vars)}"
+        )
+
+# ruff: noqa: E402
 from . import parameters as options
 from . import routers
 from .auth import AuthGuardMiddleware, AuthMiddleware
@@ -65,9 +80,9 @@ db = next(get_db())
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
-    yield
+
     # shutdown
-    pass
+    yield
 
 
 # ##############################################################################
