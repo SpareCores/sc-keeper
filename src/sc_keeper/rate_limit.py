@@ -118,13 +118,10 @@ class RedisRateLimiter(RateLimiter):
     return {1, limit - total_credits - credit_cost}
     """
 
-    def __init__(self, redis_url: str, credits_per_minute: int):
-        redis_client = get_redis_client(redis_url)
-        if redis_client is None:
-            raise ImportError("Could not connect to Redis")
-        self.redis_client = redis_client
+    def __init__(self, credits_per_minute: int):
+        redis_client = get_redis_client()
         self.credits_per_minute = credits_per_minute
-        self._rate_limiter = self.redis_client.register_script(self.RATE_LIMIT_SCRIPT)
+        self._rate_limiter = redis_client.register_script(self.RATE_LIMIT_SCRIPT)
 
     def is_allowed(
         self,
@@ -151,18 +148,23 @@ class RedisRateLimiter(RateLimiter):
         member_id = f"{request_id}:{credit_cost}"
         redis_key = f"ratelimit:{key}"
 
-        result = self._rate_limiter(
-            keys=[redis_key],
-            args=[
-                window_start,
-                now,
-                limit,
-                credit_cost,
-                member_id,
-                self.window_seconds,
-            ],
-        )
-        return bool(result[0]), int(result[1])
+        try:
+            result = self._rate_limiter(
+                keys=[redis_key],
+                args=[
+                    window_start,
+                    now,
+                    limit,
+                    credit_cost,
+                    member_id,
+                    self.window_seconds,
+                ],
+            )
+            return bool(result[0]), int(result[1])
+        except Exception:
+            logger.exception("Failed to check rate limit with Redis")
+            # disable rate limiting when Redis fails
+            return True, limit
 
 
 def _get_rate_limit_response_data(
@@ -273,8 +275,7 @@ def create_rate_limiter() -> Optional[InMemoryRateLimiter | RedisRateLimiter]:
 
     if backend == "redis":
         try:
-            redis_url = environ["REDIS_URL"]
-            limiter = RedisRateLimiter(redis_url, credits_per_minute)
+            limiter = RedisRateLimiter(credits_per_minute)
         except Exception:
             logger.exception("Failed to initialize Redis rate limiter")
             logger.warning("Falling back to in-memory rate limiter")
