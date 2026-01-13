@@ -2,6 +2,7 @@ import logging
 import time
 from collections import defaultdict
 from os import environ
+from threading import Lock
 from typing import Optional
 from uuid import uuid4
 
@@ -34,6 +35,7 @@ class InMemoryRateLimiter(RateLimiter):
 
     def __init__(self, credits_per_minute: int):
         self.credits_per_minute = credits_per_minute
+        self._lock = Lock()
         # credit consumption history: {key: [(timestamp, credits), ...]}
         self.windows: dict[str, list[tuple[float, int]]] = defaultdict(list)
 
@@ -60,22 +62,22 @@ class InMemoryRateLimiter(RateLimiter):
         now = time.time()
         window_start = now - self.window_seconds
 
-        # clean old entries
-        self.windows[key] = [
-            (timestamp, credits)
-            for timestamp, credits in self.windows[key]
-            if timestamp > window_start
-        ]
+        with self._lock:
+            # clean old entries
+            self.windows[key] = [
+                (timestamp, credits)
+                for timestamp, credits in self.windows[key]
+                if timestamp > window_start
+            ]
+            # calculate total credits consumed
+            total_credits = sum(credits for _, credits in self.windows[key])
+            if total_credits + credit_cost > limit:
+                remaining = max(0, limit - total_credits)
+                return False, remaining
+            # record current request's credit consumption
+            self.windows[key].append((now, credit_cost))
+            remaining = limit - (total_credits + credit_cost)
 
-        # calculate total credits consumed
-        total_credits = sum(credits for _, credits in self.windows[key])
-        if total_credits + credit_cost > limit:
-            remaining = max(0, limit - total_credits)
-            return False, remaining
-
-        # record current request's credit consumption
-        self.windows[key].append((now, credit_cost))
-        remaining = limit - (total_credits + credit_cost)
         return True, remaining
 
 
