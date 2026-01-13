@@ -230,10 +230,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# set by create_rate_limiter below
-_default_limiter: Optional[InMemoryRateLimiter | RedisRateLimiter] = None
-
-
 def create_rate_limiter() -> Optional[InMemoryRateLimiter | RedisRateLimiter]:
     """Create rate limiter based on environment variables.
 
@@ -242,10 +238,7 @@ def create_rate_limiter() -> Optional[InMemoryRateLimiter | RedisRateLimiter]:
     - RATE_LIMIT_CREDITS_PER_MINUTE: default credits per minute
     - RATE_LIMIT_BACKEND: backend to use: "memory" (default) or "redis"
     """
-    global _default_limiter
-
-    rate_limit_enabled = bool(environ.get("RATE_LIMIT_ENABLED", ""))
-    if not rate_limit_enabled:
+    if not bool(environ.get("RATE_LIMIT_ENABLED", "")):
         return None
 
     credits_per_minute = int(
@@ -256,16 +249,16 @@ def create_rate_limiter() -> Optional[InMemoryRateLimiter | RedisRateLimiter]:
     if backend == "redis":
         try:
             redis_url = environ["REDIS_URL"]
-            _default_limiter = RedisRateLimiter(redis_url, credits_per_minute)
-        except Exception as e:
-            logger.error(f"Failed to initialize Redis rate limiter: {e}")
+            limiter = RedisRateLimiter(redis_url, credits_per_minute)
+        except Exception:
+            logger.exception("Failed to initialize Redis rate limiter")
             logger.warning("Falling back to in-memory rate limiter")
             backend = "memory"
 
     if backend == "memory":
-        _default_limiter = InMemoryRateLimiter(credits_per_minute)
+        limiter = InMemoryRateLimiter(credits_per_minute)
 
     logger.info(
         f"Rate limiting enabled: {backend} backend, {credits_per_minute} credits/minute"
     )
-    return _default_limiter
+    return limiter
