@@ -9,6 +9,7 @@ from threading import Lock
 from typing import Optional
 
 import httpx
+from cel import evaluate
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel
@@ -162,10 +163,16 @@ async def verify_token(token: str) -> Optional[User]:
                 logger.warning("No user ID found in API response")
                 return None
 
-            scope = environ.get("AUTH_TOKEN_SCOPE")
-            if scope and scope not in user_data.get("scope", "").split(" "):
-                logger.warning(f"Token scope {scope} not found in API response")
-                return None
+            rule = environ.get("AUTH_TOKEN_VALIDATION_CEL")
+            if rule:
+                try:
+                    token_valid = evaluate(rule, {"claims": user_data})
+                    if not token_valid:
+                        logger.warning("Token validation CEL rule not satisfied")
+                        return None
+                except Exception:
+                    logger.exception("Error evaluating token validation CEL rule")
+                    return None
 
             user = User(
                 user_id=user_id,
