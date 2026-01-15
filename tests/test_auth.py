@@ -127,7 +127,7 @@ def test_auth_invalid_token(client_with_auth):
 def test_auth_token_missing_scope(monkeypatch):
     """Test that requests with token missing required scope return 401."""
     introspection_url = "http://test-auth-server.com/introspect"
-    monkeypatch.setenv("AUTH_TOKEN_SCOPE", "required_scope")
+    monkeypatch.setenv("AUTH_TOKEN_VALIDATION_CEL", "claims.scope == 'required_scope'")
     app = _create_app_with_auth(monkeypatch, introspection_url)
     client = TestClient(app)
 
@@ -146,14 +146,14 @@ def test_auth_token_missing_scope(monkeypatch):
 def test_auth_token_with_required_scope(monkeypatch):
     """Test that requests with token having required scope succeed."""
     introspection_url = "http://test-auth-server.com/introspect"
-    monkeypatch.setenv("AUTH_TOKEN_SCOPE", "required_scope")
+    monkeypatch.setenv("AUTH_TOKEN_VALIDATION_CEL", "claims.scope == 'required_scope'")
     app = _create_app_with_auth(monkeypatch, introspection_url)
     client = TestClient(app)
 
     with mock_token_introspection(
         {
             "sub": "user123",
-            "scope": "required_scope other_scope",
+            "scope": "required_scope",
         }
     ):
         response = client.get(
