@@ -21,6 +21,8 @@ DEFAULT_CREDIT_COST = int(environ.get("RATE_LIMIT_DEFAULT_CREDIT_COST", 1))
 # custom credit costs per request path patterns, e.g.
 # "/expensive"=5 means that a request to any endpoint starting with "/expensive" costs 5 credits
 CUSTOM_RATE_LIMIT_COSTS: dict[str, int] = {"/servers": 3, "/server_prices": 5}
+# penalty credits for 401 unauthorized responses
+UNAUTHORIZED_PENALTY_CREDITS = 10
 
 
 class RateLimiter:
@@ -250,6 +252,23 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return response
 
         response: Response = await call_next(request)
+
+        # apply penalty for 401 unauthorized responses
+        if response.status_code == status.HTTP_401_UNAUTHORIZED:
+            # record penalty credits by calling is_allowed with high limit to ensure it always passes
+            _, _ = self.default_limiter.is_allowed(
+                rate_limit_key,
+                credits_per_minute=credits_per_minute + UNAUTHORIZED_PENALTY_CREDITS,
+                credit_cost=UNAUTHORIZED_PENALTY_CREDITS,
+                request_id=get_request_id(),
+            )
+            # update credit cost to include penalty
+            credit_cost += UNAUTHORIZED_PENALTY_CREDITS
+            # adjust remaining credits to account for penalty (estimate)
+            remaining_credits = max(0, remaining_credits - UNAUTHORIZED_PENALTY_CREDITS)
+            # update request state for logging
+            request.state.rate_limit["credit_cost"] = credit_cost
+            request.state.rate_limit["remaining_credits"] = remaining_credits
 
         response.headers["X-RateLimit-Limit"] = str(credits_per_minute)
         response.headers["X-RateLimit-Cost"] = str(credit_cost)
