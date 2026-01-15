@@ -9,7 +9,6 @@ from threading import Lock
 from typing import Optional
 
 import httpx
-from cel import evaluate
 from fastapi import HTTPException, Request, Response, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -166,6 +165,8 @@ async def verify_token(token: str) -> Optional[User]:
             rule = environ.get("AUTH_TOKEN_VALIDATION_CEL")
             if rule:
                 try:
+                    from cel import evaluate
+
                     token_valid = evaluate(rule, {"claims": user_data})
                     if not token_valid:
                         logger.warning("Token validation CEL rule not satisfied")
