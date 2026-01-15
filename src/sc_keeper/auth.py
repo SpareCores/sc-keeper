@@ -10,8 +10,8 @@ from typing import Optional
 
 import httpx
 from cel import evaluate
-from fastapi import Depends, HTTPException, Request, Response, status
-from fastapi.security import HTTPBearer
+from fastapi import HTTPException, Request, Response, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -196,24 +196,28 @@ async def extract_user_from_request(request) -> Optional[User]:
     return await verify_token(token)
 
 
-def get_current_user(request: Request) -> Optional[User]:
-    """FastAPI dependency to return the user from request.state, where it was extracted by AuthMiddleware."""
-    return getattr(request.state, "user", None)
-
-
-def require_auth(
-    user: Optional[User] = Depends(get_current_user),
+async def current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security),
 ) -> User:
-    """FastAPI dependency to require authentication and return the user.
+    """FastAPI dependency to require authentication and return the current user.
 
-    Raises: HTTPException(401) if user is not authenticated."""
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return user
+    Uses request.state.user (populated by AuthMiddleware). The credentials parameter
+    is only present for FastAPI to detect the security scheme in OpenAPI docs.
+
+    Raises: HTTPException(401) if user is not authenticated.
+    """
+    # AuthMiddleware always sets request.state.user (even if None)
+    user = getattr(request.state, "user", None)
+    if user:
+        return user
+
+    # if no User found, middleware already tried and failed
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
