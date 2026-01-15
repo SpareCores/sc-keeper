@@ -161,22 +161,74 @@ ServerPriceWithPKs.model_config["json_schema_extra"] = {
 # API metadata
 
 app = FastAPI(
-    title="Spare Cores (SC) Keeper",
+    title="Spare Cores Navigator API",
     description=dedent("""
-    API to search and serve data collected on cloud compute resources.
+    The Spare Cores Navigator API lets you programmatically explore cloud
+    compute instances across providers, covering pricing, hardware
+    specifications, benchmark performance, and cost-efficiency metrics.
 
-    ## Licensing
+    It is designed for FinOps engineers, data scientists, and platform teams,
+    who prefer working with empirical and structured data rather than vendor heuristics.
 
-    This is a free service provided by the Spare Cores team, without any warranty.
-    The source code of the API is licensed under MPL-2.0, find more details at
-    <https://github.com/SpareCores/sc-keeper>.
+    For more details, see <https://sparecores.com/about/navigator>.
 
-    ## References
+    If you prefer to explore the data visually before integrating the API,
+    the web interface exposes the same underlying dataset at <https://sparecores.com/servers>.
 
-    - Spare Cores: <https://sparecores.com>
-    - SC Keeper: <https://github.com/SpareCores/sc-keeper>
-    - SC Crawler: <https://github.com/SpareCores/sc-crawler>
-    - SC Data: <https://github.com/SpareCores/sc-data>
+    ## Open Source & Self-Hosting
+
+    The entire Navigator stack is open source and designed to be inspectable, reproducible, and self-hostable:
+
+    - FastAPI implementation of this service:
+      <https://github.com/SpareCores/sc-keeper>
+    - Database schemas and ETL tooling:
+      <https://github.com/SpareCores/sc-crawler>
+    - Underlying data on cloud servers, regions, zones, storages and more:
+      <https://github.com/SpareCores/sc-data>
+    - Raw hardware inspection and performance benchmarking logs:
+      <https://github.com/SpareCores/sc-inspector-data>
+
+    Source code is licensed under **MPL-2.0**, data records under
+    **CC-BY-SA-4.0**.
+
+    ## Caching
+
+    Responses are served via reverse proxy and CDN with 1-hour cache TTL for
+    most endpoints.
+    For real-time access, lower-latency requirements, or custom caching strategies,
+    feel free to reach out -- we are happy to discuss what works best for your use case.
+
+    ## Rate Limiting
+
+    Credit-based rate limiting with a 1-minute sliding window:
+
+    - Default: 60 credits/minute
+    - Cost per request: 1 credit (standard) with some exceptions for heavier
+      queries, e.g. `/servers` (3 credits) or `/server_prices` (5 credits)
+    - Tracking: per authenticated user or IP address
+    - Headers: `X-RateLimit-Limit`, `X-RateLimit-Cost`, `X-RateLimit-Remaining`
+
+    The default limits are intended to support exploration and prototyping.
+    If you are building something larger, we are glad to help you scale access responsibly.
+
+    ## Authentication
+
+    Authentication is optional for most exploratory use cases, but required for:
+
+    - Higher rate limits
+    - Access to premium endpoints
+    - Commercial and partnership use cases
+
+    ## Fair Use & Commercial Use
+
+    This public API is provided under a fair use policy to ensure availability
+    for all users and to facilitate the evaluation of integrating the Navigator
+    data into your products.
+
+    Commercial use, high-volume access, open-source and integration partnerships
+    are welcome.
+    If you are experimenting, building a prototype, or considering deeper integration,
+    we would love to hear what you are working on and help you find the best setup.
     """),
     version=version("sparecores-keeper"),
     terms_of_service="https://sparecores.com/legal/terms-of-service",

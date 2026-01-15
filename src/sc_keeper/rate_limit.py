@@ -15,7 +15,7 @@ from .redis_client import get_redis_client
 logger = logging.getLogger(__name__)
 
 # default credits per minute when rate-limiting is enabled (see env vars)
-DEFAULT_CREDITS_PER_MINUTE = 60  # TODO review default based on sc-www usage
+DEFAULT_CREDITS_PER_MINUTE = 60
 # default credit cost per request for routes not in CUSTOM_RATE_LIMIT_COSTS
 DEFAULT_CREDIT_COST = int(environ.get("RATE_LIMIT_DEFAULT_CREDIT_COST", 1))
 # custom credit costs per request path patterns, e.g.
