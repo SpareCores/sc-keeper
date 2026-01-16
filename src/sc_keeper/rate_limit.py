@@ -124,6 +124,8 @@ class RedisRateLimiter(RateLimiter):
         redis_client = get_redis_client()
         self.credits_per_minute = credits_per_minute
         self._rate_limiter = redis_client.register_script(self.RATE_LIMIT_SCRIPT)
+        # fallback to in-memory limiter when Redis fails
+        self._fallback_limiter = InMemoryRateLimiter(credits_per_minute)
 
     def is_allowed(
         self,
@@ -164,9 +166,13 @@ class RedisRateLimiter(RateLimiter):
             )
             return bool(result[0]), int(result[1])
         except Exception:
-            logger.exception("Failed to check rate limit with Redis")
-            # disable rate limiting when Redis fails
-            return True, limit
+            logger.exception(
+                "Failed to check rate limit with Redis, falling back to in-memory limiter"
+            )
+            # fallback to in-memory limiter when Redis fails
+            return self._fallback_limiter.is_allowed(
+                key, credits_per_minute, credit_cost, **kwargs
+            )
 
 
 def _get_rate_limit_response_data(
