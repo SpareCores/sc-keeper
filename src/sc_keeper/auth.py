@@ -208,6 +208,9 @@ async def current_user(
 
     Raises: HTTPException(401) if user is not authenticated.
     """
+    # flag that this endpoint requires authentication for cache middleware to skip caching
+    request.state.auth_required = True
+
     # AuthMiddleware always sets request.state.user (even if None)
     user = getattr(request.state, "user", None)
     if user:

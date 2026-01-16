@@ -12,9 +12,10 @@ class CacheHeaderMiddleware(BaseHTTPMiddleware):
         # lower TTL for server prices
         if "server" in request.url.path and "prices" in request.url.path:
             ttl = 60 * 10
-        # skip cache
+        # skip cache for authenticated endpoints and a few specific paths
         if (
-            request.url.path in ["/healthcheck", "/me"]
+            getattr(request.state, "auth_required", False)
+            or request.url.path in ["/healthcheck"]
             or "/ai/assist" in request.url.path
         ):
             response.headers["Cache-Control"] = "private, no-store"
