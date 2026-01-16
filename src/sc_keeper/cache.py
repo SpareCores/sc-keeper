@@ -13,7 +13,11 @@ class CacheHeaderMiddleware(BaseHTTPMiddleware):
         if "server" in request.url.path and "prices" in request.url.path:
             ttl = 60 * 10
         # skip cache
-        if request.url.path == "/healthcheck" or "/ai/assist" in request.url.path:
+        if (
+            request.url.path in ["/healthcheck", "/me"]
+            or "/ai/assist" in request.url.path
+        ):
+            response.headers["Cache-Control"] = "private, no-store"
             ttl = 0
         if ttl > 0:
             response.headers["Cache-Control"] = f"public, max-age={ttl}"
