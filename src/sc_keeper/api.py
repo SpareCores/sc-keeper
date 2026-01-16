@@ -280,10 +280,10 @@ app.add_middleware(AuthGuardMiddleware)
 # response handler: aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
 
-# logging (added last so it wraps everything and logs even rate-limited requests)
+# logging (need to run early for the request but after auth, and then late to log e.g. rate-limit params)
 app.add_middleware(LogMiddleware)
 
-# extract user early from access token (if provided) and before even logging and rate limiting
+# extract user early from access token (if provided) and before logging and rate limiting
 app.add_middleware(AuthMiddleware)
 
 # ##############################################################################
