@@ -53,8 +53,7 @@ introspection (RFC 7662), such as ZITADEL.
   (required for and enables token validation)
 - `AUTH_CLIENT_ID` - Client ID for token inspection API (basic auth)
 - `AUTH_CLIENT_SECRET` - Client secret for token inspection API (basic auth)
-- `AUTH_TOKEN_VALIDATION_CEL` - Optional CEL rule to evaluate the token introspection response (passed as `{"claims": <token introspection response>}` in the CEL context) for validation (e.g. to enforce tenant-specific scopes or other claims), using [Python CEL
-](https://python-common-expression-language.readthedocs.io/).
+- `AUTH_TOKEN_VALIDATION_CEL` - Optional CEL rule to evaluate the token introspection response (passed as `{"claims": <token introspection response>}` in the CEL context) for validation (e.g. to enforce tenant-specific scopes or other claims), using [Python CEL](https://python-common-expression-language.readthedocs.io/).
 - `AUTH_TOKEN_CACHE_SALT` - Salt for token hashing
 - `AUTH_TOKEN_CACHE_L1_TTL_SECONDS` - L1 (in-memory) cache TTL in seconds (default: `60`)
 - `AUTH_TOKEN_CACHE_L1_MAX_SIZE` - Maximum size of L1 cache (default: `1000`)
