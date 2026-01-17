@@ -1,8 +1,9 @@
 from importlib.metadata import version
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Security
 from sqlmodel import Session, text
 
+from ..auth import User, current_user
 from ..database import get_db, session
 from ..references import HealthcheckResponse
 
@@ -26,3 +27,9 @@ def healthcheck(db: Session = Depends(get_db)) -> HealthcheckResponse:
             text("SELECT version_num FROM zzz_alembic_version")
         ).one()[0],
     }
+
+
+@router.get("/me")
+def me(user: User = Security(current_user)) -> User:
+    """Return the current user after authentication."""
+    return user

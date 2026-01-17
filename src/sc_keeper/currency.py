@@ -1,15 +1,16 @@
 import logging
 from collections import deque
-from shutil import copyfileobj
 from tempfile import NamedTemporaryFile
 from threading import Event, Lock, Thread
 from time import sleep
 
+import httpx
 import safe_exit
 from currency_converter import SINGLE_DAY_ECB_URL
 from currency_converter import CurrencyConverter as CC
-from requests import get
 from sc_data.data import close_tmpfiles
+
+logger = logging.getLogger(__name__)
 
 
 # mostly follows the logic of sparecores-data.Data
@@ -28,7 +29,7 @@ class CurrencyConverter(Thread):
         super().__init__(*args, **kwargs)
 
     def update(self):
-        with get(SINGLE_DAY_ECB_URL, stream=True) as r:
+        with httpx.stream("GET", SINGLE_DAY_ECB_URL) as r:
             if (
                 200 <= r.status_code < 300
                 and (file_last_updated := r.headers.get("Last-Modified"))
@@ -37,7 +38,8 @@ class CurrencyConverter(Thread):
                 # delete=False due to Windows support
                 # https://stackoverflow.com/questions/15588314/cant-access-temporary-files-created-with-tempfile/15590253#15590253
                 tmpfile = NamedTemporaryFile(delete=False, suffix=".zip")
-                copyfileobj(r.raw, tmpfile)
+                for chunk in r.iter_bytes():
+                    tmpfile.write(chunk)
                 tmpfile.flush()
                 with self.lock:
                     self.file_path = tmpfile.name
@@ -45,9 +47,9 @@ class CurrencyConverter(Thread):
                     self.converter = CC(self.file_path)
                 close_tmpfiles(self.tmpfiles)
                 self.tmpfiles.append(tmpfile)
-                logging.debug("Updated ECB file at %s", self.file_path)
+                logger.debug("Updated ECB file at %s", self.file_path)
             else:
-                logging.debug("No need to update ECB file")
+                logger.debug("No need to update ECB file")
 
     def run(self):
         """Start the update thread."""
@@ -55,7 +57,7 @@ class CurrencyConverter(Thread):
             try:
                 self.update()
             except Exception:
-                logging.exception("Failed to update the ECB file")
+                logger.exception("Failed to update the ECB file")
             self.updated.set()
             sleep(60 * 60)
 

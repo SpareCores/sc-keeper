@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager, suppress
 from importlib.metadata import version
 from json import loads as json_loads
+from logging import getLogger
 from os import environ
 from textwrap import dedent
 from typing import List
@@ -28,13 +29,29 @@ from sc_crawler.tables import (
 from sqlalchemy.orm import aliased, contains_eager
 from sqlmodel import Session, String, case, func, or_, select
 
+# early validation (before DB imports) of environment variables
+logger = getLogger(__name__)
+if environ.get("AUTH_TOKEN_INTROSPECTION_URL"):
+    missing_vars = [
+        var for var in ["AUTH_CLIENT_ID", "AUTH_CLIENT_SECRET"] if not environ.get(var)
+    ]
+    if missing_vars:
+        logger.error("Invalid environment variable configuration")
+        raise ValueError(
+            f"The following environment variables are required when "
+            f"AUTH_TOKEN_INTROSPECTION_URL is set: {', '.join(missing_vars)}"
+        )
+
+# ruff: noqa: E402
 from . import parameters as options
 from . import routers
+from .auth import AuthGuardMiddleware, AuthMiddleware
 from .cache import CacheHeaderMiddleware
 from .currency import currency_converter
 from .database import get_db
 from .logger import LogMiddleware
 from .queries import gen_benchmark_query
+from .rate_limit import RateLimitMiddleware, create_rate_limiter
 from .references import (
     BenchmarkConfig,
     OrderDir,
@@ -63,9 +80,9 @@ db = next(get_db())
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
-    yield
+
     # shutdown
-    pass
+    yield
 
 
 # ##############################################################################
@@ -144,22 +161,74 @@ ServerPriceWithPKs.model_config["json_schema_extra"] = {
 # API metadata
 
 app = FastAPI(
-    title="Spare Cores (SC) Keeper",
+    title="Spare Cores Navigator API",
     description=dedent("""
-    API to search and serve data collected on cloud compute resources.
+    The Spare Cores Navigator API lets you programmatically explore cloud
+    compute instances across providers, covering pricing, hardware
+    specifications, benchmark performance, and cost-efficiency metrics.
 
-    ## Licensing
+    It is designed for FinOps engineers, data scientists, and platform teams,
+    who prefer working with empirical and structured data rather than vendor heuristics.
 
-    This is a free service provided by the Spare Cores team, without any warranty.
-    The source code of the API is licensed under MPL-2.0, find more details at
-    <https://github.com/SpareCores/sc-keeper>.
+    For more details, see <https://sparecores.com/about/navigator>.
 
-    ## References
+    If you prefer to explore the data visually before integrating the API,
+    the web interface exposes the same underlying dataset at <https://sparecores.com/servers>.
 
-    - Spare Cores: <https://sparecores.com>
-    - SC Keeper: <https://github.com/SpareCores/sc-keeper>
-    - SC Crawler: <https://github.com/SpareCores/sc-crawler>
-    - SC Data: <https://github.com/SpareCores/sc-data>
+    ## Open Source & Self-Hosting
+
+    The entire Navigator stack is open source and designed to be inspectable, reproducible, and self-hostable:
+
+    - FastAPI implementation of this service:
+      <https://github.com/SpareCores/sc-keeper>
+    - Database schemas and ETL tooling:
+      <https://github.com/SpareCores/sc-crawler>
+    - Underlying data on cloud servers, regions, zones, storages and more:
+      <https://github.com/SpareCores/sc-data>
+    - Raw hardware inspection and performance benchmarking logs:
+      <https://github.com/SpareCores/sc-inspector-data>
+
+    Source code is licensed under **MPL-2.0**, data records under
+    **CC-BY-SA-4.0**.
+
+    ## Caching
+
+    Responses are served via reverse proxy and CDN with 1-hour cache TTL for
+    most endpoints.
+    For real-time access, lower-latency requirements, or custom caching strategies,
+    feel free to reach out -- we are happy to discuss what works best for your use case.
+
+    ## Rate Limiting
+
+    Credit-based rate limiting with a 1-minute sliding window:
+
+    - Default: 60 credits/minute
+    - Cost per request: 1 credit (standard) with some exceptions for heavier
+      queries, e.g. `/servers` (3 credits) or `/server_prices` (5 credits)
+    - Tracking: per authenticated user or IP address
+    - Headers: `X-RateLimit-Limit`, `X-RateLimit-Cost`, `X-RateLimit-Remaining`
+
+    The default limits are intended to support exploration and prototyping.
+    If you are building something larger, we are glad to help you scale access responsibly.
+
+    ## Authentication
+
+    Authentication is optional for most exploratory use cases, but required for:
+
+    - Higher rate limits
+    - Access to premium endpoints
+    - Commercial and partnership use cases
+
+    ## Fair Use & Commercial Use
+
+    This public API is provided under a fair use policy to ensure availability
+    for all users and to facilitate the evaluation of integrating the Navigator
+    data into your products.
+
+    Commercial use, high-volume access, open-source and integration partnerships
+    are welcome.
+    If you are experimenting, building a prototype, or considering deeper integration,
+    we would love to hear what you are working on and help you find the best setup.
     """),
     version=version("sparecores-keeper"),
     terms_of_service="https://sparecores.com/legal/terms-of-service",
@@ -185,10 +254,9 @@ async def redoc_html():
 
 
 # ##############################################################################
-# Middlewares
-
-# logging
-app.add_middleware(LogMiddleware)
+# Middlewares:
+# - last added runs first on the request
+# - then last added runs last on the response
 
 # CORS: allows all origins, without spec headers and without auth
 app.add_middleware(
@@ -198,11 +266,25 @@ app.add_middleware(
     expose_headers=["X-Total-Count"],
 )
 
-# aggressive compression
+# rate limiting (disabled by default, enabled via env vars)
+rate_limiter = create_rate_limiter()
+if rate_limiter:
+    app.add_middleware(RateLimitMiddleware, default_limiter=rate_limiter)
+
+# response handler: set cache control header
+app.add_middleware(CacheHeaderMiddleware)
+
+# auth guard: return 401 early (but after logging) if token was provided but validation failed
+app.add_middleware(AuthGuardMiddleware)
+
+# response handler: aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
 
-# set cache control header
-app.add_middleware(CacheHeaderMiddleware)
+# logging (need to run early for the request but after auth, and then late to log e.g. rate-limit params)
+app.add_middleware(LogMiddleware)
+
+# extract user early from access token (if provided) and before logging and rate limiting
+app.add_middleware(AuthMiddleware)
 
 # ##############################################################################
 # API endpoints
