@@ -5,12 +5,14 @@ from fastapi import APIRouter, Request
 from ..ai import openai_extract_filters
 from ..logger import get_request_id
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
-def assister(text: str, endpoint: str) -> dict:
-    res = openai_extract_filters(text, endpoint=endpoint)
-    logging.info(
+async def assister(text: str, endpoint: str) -> dict:
+    res = await openai_extract_filters(text, endpoint=endpoint)
+    logger.info(
         "openai response",
         extra={
             "event": "assister response",
@@ -23,24 +25,24 @@ def assister(text: str, endpoint: str) -> dict:
 
 
 @router.get("/assist_server_filters")
-def assist_server_filters(text: str, request: Request) -> dict:
+async def assist_server_filters(text: str, request: Request) -> dict:
     """Extract Server JSON filters from freetext."""
-    return assister(text, "/servers")
+    return await assister(text, "/servers")
 
 
 @router.get("/assist_server_price_filters")
-def assist_server_price_filters(text: str, request: Request) -> dict:
+async def assist_server_price_filters(text: str, request: Request) -> dict:
     """Extract ServerPrice JSON filters from freetext."""
-    return assister(text, "/server_prices")
+    return await assister(text, "/server_prices")
 
 
 @router.get("/assist_storage_price_filters")
-def assist_storage_price_filters(text: str, request: Request) -> dict:
+async def assist_storage_price_filters(text: str, request: Request) -> dict:
     """Extract StoragePrice JSON filters from freetext."""
-    return assister(text, "/storage_prices")
+    return await assister(text, "/storage_prices")
 
 
 @router.get("/assist_traffic_price_filters")
-def assist_traffic_price_filters(text: str, request: Request) -> dict:
+async def assist_traffic_price_filters(text: str, request: Request) -> dict:
     """Extract TrafficPrice JSON filters from freetext."""
-    return assister(text, "/traffic_prices")
+    return await assister(text, "/traffic_prices")

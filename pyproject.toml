@@ -4,15 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sparecores-keeper"
-version = "0.3.2"
+version = "0.3.3"
 requires-python = ">= 3.8"
 dependencies = [
-  "sparecores-crawler==0.3.2",
-  "sparecores-data==0.3.2",
+  "sparecores-crawler==0.3.3",
+  "sparecores-data==0.3.3",
   "fastapi==0.115.13",
   "uvicorn",
   "psutil",
   "currencyconverter",
+  "httpx",
 ]
 authors = [
   { name="Attila Nagy" },
@@ -36,9 +37,10 @@ repository = "https://github.com/SpareCores/sc-keeper"
 issues = "https://github.com/SpareCores/sc-keeper/issues"
 
 [project.optional-dependencies]
-testing = ["pytest", "httpx"]
+testing = ["pytest"]
 apm = ["sentry-sdk[fastapi]"]
-all = ["sc-keeper[testing]", "sc-keeper[apm]"]
+security = ["redis", "common-expression-language"]
+all = ["sparecores-keeper[testing]", "sparecores-keeper[apm]", "sparecores-keeper[security]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

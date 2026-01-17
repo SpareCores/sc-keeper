@@ -9,6 +9,8 @@ from uuid import uuid4
 from psutil import Process
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from .auth import User
+
 _request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default=None)
 
 
@@ -34,7 +36,15 @@ class JsonFormatter(Formatter):
                 if k in record.__dict__
             },
         }
-        for nested in ["event", "request_id", "client", "req", "res", "proc"]:
+        for nested in [
+            "event",
+            "request_id",
+            "client",
+            "req",
+            "res",
+            "rate_limit",
+            "proc",
+        ]:
             if nested in record.__dict__:
                 json_record[nested] = record.__dict__[nested]
         if record.levelno == logging.ERROR and record.exc_info:
@@ -50,7 +60,10 @@ class LogMiddleware(BaseHTTPMiddleware):
         request_time = time()
         request_resources = getrusage(RUSAGE_SELF)
         request_cpu_times = Process().cpu_times()
-        request_io = Process().io_counters()
+        # not available on Mac OS
+        request_io = (
+            Process().io_counters() if hasattr(Process(), "io_counters") else None
+        )
 
         request_info = {
             "method": request.method,
@@ -62,25 +75,34 @@ class LogMiddleware(BaseHTTPMiddleware):
             "referer": request.headers.get("Referer"),
         }
 
+        client_info = {
+            "application": request.headers.get("X-Application-ID"),
+            "ip": request.headers.get(
+                "X-Forwarded-For",
+                request.client.host if request.client else "Unknown",
+            ),
+            "ua": request.headers.get("User-Agent"),
+            "hints": {
+                "ua": request.headers.get("Sec-Ch-Ua"),
+                "platform": request.headers.get("Sec-Ch-Ua-Platform"),
+                "mobile": request.headers.get("Sec-CH-UA-Mobile"),
+                "arch": request.headers.get("Sec-CH-UA-Arch"),
+            },
+        }
+
+        user = getattr(request.state, "user", None)
+        if user and isinstance(user, User):
+            client_info["user"] = {
+                "user_id": user.user_id,
+                "api_credits_per_minute": user.api_credits_per_minute,
+            }
+
         logging.info(
             "request received",
             extra={
                 "event": "request",
                 "request_id": get_request_id(),
-                "client": {
-                    "application": request.headers.get("X-Application-ID"),
-                    "ip": request.headers.get(
-                        "X-Forwarded-For",
-                        request.client.host if request.client else "Unknown",
-                    ),
-                    "ua": request.headers.get("User-Agent"),
-                    "hints": {
-                        "ua": request.headers.get("Sec-Ch-Ua"),
-                        "platform": request.headers.get("Sec-Ch-Ua-Platform"),
-                        "mobile": request.headers.get("Sec-CH-UA-Mobile"),
-                        "arch": request.headers.get("Sec-CH-UA-Arch"),
-                    },
-                },
+                "client": client_info,
                 "req": request_info,
             },
         )
@@ -89,9 +111,22 @@ class LogMiddleware(BaseHTTPMiddleware):
         current_time = time()
         current_resources = getrusage(RUSAGE_SELF)
         current_cpu_times = Process().cpu_times()
-        current_io = Process().io_counters()
+        # not available on Mac OS
+        current_io = (
+            Process().io_counters() if hasattr(Process(), "io_counters") else None
+        )
 
         response.headers["X-Request-ID"] = get_request_id()
+        content_length = response.headers.get("content-length")
+
+        def _io_diff(attr_name):
+            """Calculate IO difference if request_io exists, otherwise None."""
+            return (
+                getattr(current_io, attr_name) - getattr(request_io, attr_name)
+                if request_io
+                else None
+            )
+
         logging.info(
             "response returned",
             extra={
@@ -100,8 +135,9 @@ class LogMiddleware(BaseHTTPMiddleware):
                 "req": request_info,
                 "res": {
                     "status_code": response.status_code,
-                    "length": int(response.headers["content-length"]),
+                    "length": int(content_length) if content_length else None,
                 },
+                "rate_limit": getattr(request.state, "rate_limit", {}),
                 "proc": {
                     "real": round(current_time - request_time, 4),
                     "user": round(
@@ -113,8 +149,8 @@ class LogMiddleware(BaseHTTPMiddleware):
                     "iowait": round(
                         current_cpu_times.iowait - request_cpu_times.iowait, 2
                     ),
-                    "read_bytes": current_io.read_bytes - request_io.read_bytes,
-                    "write_bytes": current_io.write_bytes - request_io.write_bytes,
+                    "read_bytes": _io_diff("read_bytes"),
+                    "write_bytes": _io_diff("write_bytes"),
                     "max_rss": current_resources.ru_maxrss,
                 },
             },

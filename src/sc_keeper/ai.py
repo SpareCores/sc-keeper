@@ -2,8 +2,10 @@ import json
 import logging
 import os
 
-import requests
+import httpx
 from fastapi.openapi.utils import get_openapi
+
+logger = logging.getLogger(__name__)
 
 
 def get_swagger():
@@ -51,7 +53,7 @@ def convert_swagger_to_json_schema(swagger: dict, endpoint: str) -> dict:
     }
 
 
-def openai_extract_filters(prompt: str, endpoint: str) -> dict:
+async def openai_extract_filters(prompt: str, endpoint: str) -> dict:
     """Ask ChatGPT to generate filter JSON based on freetext input."""
 
     try:
@@ -103,14 +105,17 @@ def openai_extract_filters(prompt: str, endpoint: str) -> dict:
         "temperature": 0.7,
     }
 
-    response = requests.post(
-        "https://api.openai.com/v1/chat/completions", headers=headers, json=json_data
-    )
-    response.raise_for_status()
-    try:
-        message = response.json()["choices"][0]["message"]
-        args = message["tool_calls"][0]["function"]["arguments"]
-        return json.loads(args)
-    except Exception as exc:
-        logging.exception(exc)
-        raise exc
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=json_data,
+        )
+        response.raise_for_status()
+        try:
+            message = response.json()["choices"][0]["message"]
+            args = message["tool_calls"][0]["function"]["arguments"]
+            return json.loads(args)
+        except Exception:
+            logger.exception("Failed to parse OpenAI response")
+            raise
