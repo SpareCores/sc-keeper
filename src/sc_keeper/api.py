@@ -266,21 +266,22 @@ app.add_middleware(
     expose_headers=["X-Total-Count"],
 )
 
-# rate limiting (disabled by default, enabled via env vars)
+# response handler: set cache control header
+app.add_middleware(CacheHeaderMiddleware)
+
+# auth guard: return 401 early (but after logging and rate-limiting) if token was provided but validation failed
+app.add_middleware(AuthGuardMiddleware)
+
+# optional rate limiting: need to run before AuthGuardMiddleware to apply penalty on 401 responses
 rate_limiter = create_rate_limiter()
 if rate_limiter:
     app.add_middleware(RateLimitMiddleware, default_limiter=rate_limiter)
 
-# response handler: set cache control header
-app.add_middleware(CacheHeaderMiddleware)
-
-# auth guard: return 401 early (but after logging) if token was provided but validation failed
-app.add_middleware(AuthGuardMiddleware)
-
 # response handler: aggressive compression
 app.add_middleware(GZipMiddleware, minimum_size=100)
 
-# logging (need to run early for the request but after auth, and then late to log e.g. rate-limit params)
+# logging: need to run ASAP for the request (after auth),
+# and as late as possible for the response (to log e.g. rate-limit params and results)
 app.add_middleware(LogMiddleware)
 
 # extract user early from access token (if provided) and before logging and rate limiting
