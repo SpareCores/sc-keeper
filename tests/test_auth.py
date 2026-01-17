@@ -96,6 +96,7 @@ def test_endpoints_with_token(client_with_auth):
 
     with mock_token_introspection(
         {
+            "active": True,
             "sub": "user123",
             "scope": "read write",
             "api_credits_per_minute": 100,
@@ -111,11 +112,11 @@ def test_endpoints_with_token(client_with_auth):
         assert response.status_code == 200
 
 
-def test_auth_invalid_token(client_with_auth):
-    """Test that requests with invalid token return 401."""
+def test_auth_inactive_token(client_with_auth):
+    """Test that requests with inactive token return 401."""
     client, _ = client_with_auth
 
-    # mock failed token introspection (no user_id in response)
+    # mock inactive token introspection response
     with mock_token_introspection({"active": False}):
         response = client.get(
             "/healthcheck", headers={"Authorization": "Bearer invalid_token"}
@@ -133,6 +134,7 @@ def test_auth_token_missing_scope(monkeypatch):
 
     with mock_token_introspection(
         {
+            "active": True,
             "sub": "user123",
             "scope": "other_scope",
         }
@@ -152,6 +154,7 @@ def test_auth_token_with_required_scope(monkeypatch):
 
     with mock_token_introspection(
         {
+            "active": True,
             "sub": "user123",
             "scope": "required_scope",
         }
@@ -187,6 +190,7 @@ def test_auth_token_caching(client_with_auth):
 
     with mock_token_introspection(
         {
+            "active": True,
             "sub": "user123",
             "api_credits_per_minute": 50,
         }
@@ -233,6 +237,7 @@ def test_auth_user_credits_per_minute(monkeypatch):
 
     with mock_token_introspection(
         {
+            "active": True,
             "sub": "user123",
             "api_credits_per_minute": 200,
         }
