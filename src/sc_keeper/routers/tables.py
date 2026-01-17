@@ -1,21 +1,23 @@
 from typing import List
 
-from fastapi import (
-    APIRouter,
-    Depends,
-)
+from fastapi import APIRouter, Depends, HTTPException, Security
+from sc_crawler.table_fields import Status
 from sc_crawler.tables import (
     Benchmark,
     ComplianceFramework,
     Country,
     Region,
     Server,
+    ServerPrice,
     Storage,
     Vendor,
     Zone,
 )
 from sqlmodel import Session, select
 
+from .. import parameters as options
+from ..auth import User, current_user
+from ..currency import currency_converter
 from ..database import get_db
 
 router = APIRouter()
@@ -63,6 +65,46 @@ def table_zone(db: Session = Depends(get_db)) -> List[Zone]:
 def table_server(db: Session = Depends(get_db)) -> List[Server]:
     """Return the Server table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Server)).all()
+
+
+@router.get("/server_prices")
+def table_server_prices(
+    vendor: options.vendor = None,
+    region: options.regions = None,
+    allocation: options.allocation = None,
+    only_active: options.only_active = True,
+    currency: options.currency = None,
+    user: User = Security(current_user),
+    db: Session = Depends(get_db),
+) -> List[ServerPrice]:
+    """Query ServerPrices records without relationships resolved."""
+    query = select(ServerPrice)
+    if vendor:
+        query = query.where(ServerPrice.vendor_id.in_(vendor))
+    if region:
+        query = query.where(ServerPrice.region_id.in_(region))
+    if allocation:
+        query = query.where(ServerPrice.allocation == allocation)
+    if only_active:
+        query = query.where(ServerPrice.status == Status.ACTIVE)
+    prices = db.exec(query).all()
+    if currency:
+        for price in prices:
+            if price.currency != currency:
+                db.expunge(price)
+                try:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        4,
+                    )
+                except ValueError as e:
+                    raise HTTPException(
+                        status_code=400, detail="Invalid currency code"
+                    ) from e
+                price.currency = currency
+    return prices
 
 
 @router.get("/storage")

@@ -156,8 +156,12 @@ async def verify_token(token: str) -> Optional[User]:
             )
             response.raise_for_status()
             user_data = response.json()
-            user_id = user_data.get("sub")
 
+            if bool(user_data.get("active", False)) is not True:
+                logger.warning("Token is not active")
+                return None
+
+            user_id = user_data.get("sub")
             if not user_id:
                 logger.warning("No user ID found in API response")
                 return None

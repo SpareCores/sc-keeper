@@ -96,6 +96,7 @@ def test_endpoints_with_token(client_with_auth):
 
     with mock_token_introspection(
         {
+            "active": True,
             "sub": "user123",
             "scope": "read write",
             "api_credits_per_minute": 100,
@@ -111,11 +112,11 @@ def test_endpoints_with_token(client_with_auth):
         assert response.status_code == 200
 
 
-def test_auth_invalid_token(client_with_auth):
-    """Test that requests with invalid token return 401."""
+def test_auth_inactive_token(client_with_auth):
+    """Test that requests with inactive token return 401."""
     client, _ = client_with_auth
 
-    # mock failed token introspection (no user_id in response)
+    # mock inactive token introspection response
     with mock_token_introspection({"active": False}):
         response = client.get(
             "/healthcheck", headers={"Authorization": "Bearer invalid_token"}
@@ -133,6 +134,7 @@ def test_auth_token_missing_scope(monkeypatch):
 
     with mock_token_introspection(
         {
+            "active": True,
             "sub": "user123",
             "scope": "other_scope",
         }
@@ -152,6 +154,7 @@ def test_auth_token_with_required_scope(monkeypatch):
 
     with mock_token_introspection(
         {
+            "active": True,
             "sub": "user123",
             "scope": "required_scope",
         }
@@ -187,6 +190,7 @@ def test_auth_token_caching(client_with_auth):
 
     with mock_token_introspection(
         {
+            "active": True,
             "sub": "user123",
             "api_credits_per_minute": 50,
         }
@@ -233,6 +237,7 @@ def test_auth_user_credits_per_minute(monkeypatch):
 
     with mock_token_introspection(
         {
+            "active": True,
             "sub": "user123",
             "api_credits_per_minute": 200,
         }
@@ -243,6 +248,40 @@ def test_auth_user_credits_per_minute(monkeypatch):
         assert response.status_code == 200
         # verify that the rate limit header shows user's custom rate (200) instead of default (60)
         assert response.headers["X-RateLimit-Limit"] == "200"
+
+
+def test_auth_401_penalty_on_rate_limiting(monkeypatch):
+    """Test that 401 penalty is applied on rate limiting."""
+    introspection_url = "http://test-auth-server.com/introspect"
+    # set up auth
+    monkeypatch.setenv("AUTH_TOKEN_INTROSPECTION_URL", introspection_url)
+    monkeypatch.setenv("AUTH_CLIENT_ID", "test_client")
+    monkeypatch.setenv("AUTH_CLIENT_SECRET", "test_secret")
+    # enable rate limiting with a default rate different from user's rate
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "1")
+    monkeypatch.setenv("RATE_LIMIT_BACKEND", "memory")
+    monkeypatch.setenv("RATE_LIMIT_CREDITS_PER_MINUTE", "60")
+    monkeypatch.setenv("RATE_LIMIT_DEFAULT_CREDIT_COST", "1")
+
+    # reload modules to pick up auth and rate limiting config
+    import sc_keeper.api
+    import sc_keeper.auth
+    import sc_keeper.rate_limit
+
+    importlib.reload(sc_keeper.auth)
+    importlib.reload(sc_keeper.rate_limit)
+    importlib.reload(sc_keeper.api)
+
+    client = TestClient(sc_keeper.api.app)
+
+    with mock_token_introspection({"active": False}):
+        response = client.get(
+            "/healthcheck", headers={"Authorization": "Bearer inactive_token"}
+        )
+        assert response.status_code == 401
+        assert response.headers["X-RateLimit-Limit"] == "60"
+        # 10 credits extra penalty for inactive token + 1 credit for the request
+        assert response.headers["X-RateLimit-Remaining"] == "49"
 
 
 def test_auth_no_introspection_url(monkeypatch):

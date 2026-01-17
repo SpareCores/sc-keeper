@@ -20,7 +20,11 @@ DEFAULT_CREDITS_PER_MINUTE = 60
 DEFAULT_CREDIT_COST = int(environ.get("RATE_LIMIT_DEFAULT_CREDIT_COST", 1))
 # custom credit costs per request path patterns, e.g.
 # "/expensive"=5 means that a request to any endpoint starting with "/expensive" costs 5 credits
-CUSTOM_RATE_LIMIT_COSTS: dict[str, int] = {"/servers": 3, "/server_prices": 5}
+CUSTOM_RATE_LIMIT_COSTS: dict[str, int] = {
+    "/servers": 3,
+    "/server_prices": 5,
+    "/table/server_prices": 10,
+}
 # penalty credits for 401 unauthorized responses
 UNAUTHORIZED_PENALTY_CREDITS = 10
 
