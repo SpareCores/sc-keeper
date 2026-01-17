@@ -1,10 +1,6 @@
 from typing import List
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-)
+from fastapi import APIRouter, Depends, HTTPException, Security
 from sc_crawler.table_fields import Status
 from sc_crawler.tables import (
     Benchmark,
@@ -19,9 +15,9 @@ from sc_crawler.tables import (
 )
 from sqlmodel import Session, select
 
-from sc_keeper.currency import currency_converter
-
 from .. import parameters as options
+from ..auth import User, current_user
+from ..currency import currency_converter
 from ..database import get_db
 
 router = APIRouter()
@@ -78,6 +74,7 @@ def table_server_prices(
     allocation: options.allocation = None,
     only_active: options.only_active = True,
     currency: options.currency = None,
+    user: User = Security(current_user),
     db: Session = Depends(get_db),
 ) -> List[ServerPrice]:
     """Query ServerPrices records without relationships resolved."""
