@@ -178,10 +178,26 @@ async def verify_token(token: str) -> Optional[User]:
                     logger.exception("Error evaluating token validation CEL rule")
                     return None
 
+            user_data_extra = {}
+            extra_fields_cel = environ.get("AUTH_TOKEN_EXTRA_FIELDS_CEL")
+            if extra_fields_cel:
+                try:
+                    extra_fields = evaluate(extra_fields_cel, {"claims": user_data})
+                    assert isinstance(
+                        extra_fields,
+                        dict,
+                    ), "Extra token fields CEL expression must return a dict"
+                    user_data_extra.update(**extra_fields)
+                except Exception:
+                    logger.exception(
+                        "Error extracting dict via CEL expression for extra token fields"
+                    )
+
             user = User(
                 user_id=user_id,
                 api_credits_per_minute=user_data.get("api_credits_per_minute"),
                 token_source="oauth2_introspection",
+                **user_data_extra,
             )
             _cache_token_user_l1(cache_key, user)
             if redis_client:
