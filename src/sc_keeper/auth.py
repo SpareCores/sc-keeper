@@ -11,7 +11,7 @@ from typing import Optional
 import httpx
 from fastapi import HTTPException, Request, Response, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .redis_client import get_redis_client
@@ -23,6 +23,8 @@ security = HTTPBearer(auto_error=False)
 
 class User(BaseModel):
     """User object extracted from OAuth 2.0 token introspection."""
+
+    model_config = ConfigDict(extra="allow")
 
     user_id: str
     api_credits_per_minute: Optional[int] = None
@@ -56,6 +58,10 @@ def _get_cached_token_user_l1(cache_key: str) -> Optional[User]:
 
         # mark key as recently used not to be evicted when max size reached
         _token_cache_l1.move_to_end(cache_key)
+
+        # flag that token was cached in L1
+        user.token_source = "l1_cache"
+
         return user
 
 
@@ -86,10 +92,8 @@ def _get_cached_token_user_l2(cache_key: str, redis_client) -> Optional[User]:
         cached_data = redis_client.get(f"token:{cache_key}")
         if cached_data:
             user_data = json_loads(cached_data)
-            return User(
-                user_id=user_data["user_id"],
-                api_credits_per_minute=user_data.get("api_credits_per_minute"),
-            )
+            user_data["token_source"] = "l2_cache"
+        return User.model_validate(user_data)
     except Exception as e:
         logger.debug(f"Error reading from Redis cache: {e}")
     return None
@@ -98,12 +102,7 @@ def _get_cached_token_user_l2(cache_key: str, redis_client) -> Optional[User]:
 def _cache_token_user_l2(cache_key: str, user: User, redis_client) -> None:
     """Cache token user in L2 (Redis) cache."""
     try:
-        user_data = json_dumps(
-            {
-                "user_id": user.user_id,
-                "api_credits_per_minute": user.api_credits_per_minute,
-            }
-        )
+        user_data = json_dumps(user.model_dump())
         redis_client.setex(f"token:{cache_key}", _token_cache_l2_ttl, user_data)
     except Exception as e:
         logger.debug(f"Error writing to Redis cache: {e}")
@@ -182,6 +181,7 @@ async def verify_token(token: str) -> Optional[User]:
             user = User(
                 user_id=user_id,
                 api_credits_per_minute=user_data.get("api_credits_per_minute"),
+                token_source="oauth2_introspection",
             )
             _cache_token_user_l1(cache_key, user)
             if redis_client:

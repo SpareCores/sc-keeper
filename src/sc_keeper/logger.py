@@ -92,10 +92,7 @@ class LogMiddleware(BaseHTTPMiddleware):
 
         user = getattr(request.state, "user", None)
         if user and isinstance(user, User):
-            client_info["user"] = {
-                "user_id": user.user_id,
-                "api_credits_per_minute": user.api_credits_per_minute,
-            }
+            client_info["user"] = user.model_dump()
 
         logging.info(
             "request received",
