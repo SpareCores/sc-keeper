@@ -105,6 +105,21 @@ with session.sessionmaker as db:
                 # exclude Google TPUs for now
                 .where(not_(Server.gpu_model.like("ct%")))
                 .where(not_(Server.gpu_model.like("tpu%")))
+                # and a few other low-frequency models
+                .where(
+                    Server.gpu_model.notin_(
+                        [
+                            "5090",
+                            "5880",
+                            "ALINPU 800",
+                            "H20",
+                            "Lovelace",
+                            "MI-308X",
+                            "NETINT T408",
+                            "VG1000",
+                        ]
+                    )
+                )
                 .order_by(text("1"))
             ).all()
         },
