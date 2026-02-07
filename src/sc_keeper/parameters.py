@@ -274,7 +274,7 @@ countries = Annotated[
 
 
 gpu_min = Annotated[
-    Optional[int],
+    Optional[float],
     Query(
         title="GPU count",
         description="Minimum number of GPUs.",

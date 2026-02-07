@@ -53,6 +53,7 @@ test_servers_params = [
     {"compliance_framework": ["hipaa"]},
     {"storage_size": 100},
     {"storage_type": "ssd"},
+    {"gpu_min": 0.25},
     {"gpu_min": 1},
     {"gpu_memory_min": 1},
     {"gpu_memory_total": 128},
