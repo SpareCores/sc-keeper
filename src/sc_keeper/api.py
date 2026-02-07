@@ -49,6 +49,7 @@ from .auth import AuthGuardMiddleware, AuthMiddleware
 from .cache import CacheHeaderMiddleware
 from .currency import currency_converter
 from .database import get_db
+from .helpers import calculate_tiered_monthly_price, parse_price_tiers
 from .logger import LogMiddleware
 from .queries import gen_benchmark_query
 from .rate_limit import RateLimitMiddleware, create_rate_limiter
@@ -541,6 +542,10 @@ def search_servers(
             server.min_price = server_extra.min_price
             server.min_price_spot = server_extra.min_price_spot
             server.min_price_ondemand = server_extra.min_price_ondemand
+            price_tiers = parse_price_tiers(server_extra.min_price_tiered)
+            server.min_price_ondemand_monthly = calculate_tiered_monthly_price(
+                price_tiers, server_extra.min_price_ondemand
+            )
             server.score_per_price = server_extra.score_per_price
             server.price = server.min_price  # legacy
             server.selected_benchmark_score = benchmark_score
