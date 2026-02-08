@@ -41,6 +41,7 @@ class ServerExtraBase(HasServerPK, HasVendorPKFK):
     min_price: Optional[float]
     min_price_spot: Optional[float]
     min_price_ondemand: Optional[float]
+    min_price_tiered: Optional[str]
 
 
 class ServerExtra(ServerExtraBase, table=True):
@@ -101,6 +102,41 @@ class ServerExtra(ServerExtraBase, table=True):
             .order_by(ServerPrice.vendor_id, ServerPrice.server_id)
             .subquery()
         )
+        min_price_ranked = (
+            select(
+                ServerPrice.vendor_id,
+                ServerPrice.server_id,
+                ServerPrice.price_tiered,
+                func.round(ServerPrice.price * Currency.rate, 4).label(
+                    "converted_price"
+                ),
+                func.row_number()
+                .over(
+                    partition_by=[ServerPrice.vendor_id, ServerPrice.server_id],
+                    order_by=[
+                        func.round(ServerPrice.price * Currency.rate, 4),
+                        ServerPrice.zone_id,
+                    ],
+                )
+                .label("row_num"),
+            )
+            .where(ServerPrice.status == Status.ACTIVE)
+            .where(ServerPrice.allocation == Allocation.ONDEMAND)
+            .join(
+                Currency,
+                (ServerPrice.currency == Currency.base) & (Currency.quote == "USD"),
+            )
+            .subquery()
+        )
+        min_price_tiered = (
+            select(
+                min_price_ranked.c.vendor_id,
+                min_price_ranked.c.server_id,
+                min_price_ranked.c.price_tiered.label("min_price_tiered"),
+            )
+            .where(min_price_ranked.c.row_num == 1)
+            .subquery()
+        )
         query = select(
             price.c.vendor_id,
             price.c.server_id,
@@ -113,15 +149,22 @@ class ServerExtra(ServerExtraBase, table=True):
             price.c.min_price,
             price.c.min_price_spot,
             price.c.min_price_ondemand,
+            min_price_tiered.c.min_price_tiered,
         ).select_from(
             price.outerjoin(
                 score1,
                 (price.c.vendor_id == score1.c.vendor_id)
                 & (price.c.server_id == score1.c.server_id),
-            ).outerjoin(
+            )
+            .outerjoin(
                 scoren,
                 (price.c.vendor_id == scoren.c.vendor_id)
                 & (price.c.server_id == scoren.c.server_id),
+            )
+            .outerjoin(
+                min_price_tiered,
+                (price.c.vendor_id == min_price_tiered.c.vendor_id)
+                & (price.c.server_id == min_price_tiered.c.server_id),
             )
         )
 

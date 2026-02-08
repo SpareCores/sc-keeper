@@ -174,6 +174,7 @@ class ServerWithScore(ServerBase):
     min_price: Optional[float] = None
     min_price_spot: Optional[float] = None
     min_price_ondemand: Optional[float] = None
+    min_price_ondemand_monthly: Optional[float] = None
     score_per_price: Optional[float] = None
     selected_benchmark_score: Optional[float] = None
     selected_benchmark_score_per_price: Optional[float] = None
