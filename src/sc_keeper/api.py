@@ -49,7 +49,7 @@ from .auth import AuthGuardMiddleware, AuthMiddleware
 from .cache import CacheHeaderMiddleware
 from .currency import currency_converter
 from .database import get_db
-from .helpers import calculate_tiered_monthly_price, parse_price_tiers
+from .helpers import calculate_tiered_price, parse_price_tiers
 from .logger import LogMiddleware
 from .queries import gen_benchmark_query
 from .rate_limit import RateLimitMiddleware, create_rate_limiter
@@ -542,9 +542,13 @@ def search_servers(
             server.min_price = server_extra.min_price
             server.min_price_spot = server_extra.min_price_spot
             server.min_price_ondemand = server_extra.min_price_ondemand
-            price_tiers = parse_price_tiers(server_extra.min_price_tiered)
-            server.min_price_ondemand_monthly = calculate_tiered_monthly_price(
-                price_tiers, server_extra.min_price_ondemand
+            server.min_price_ondemand_monthly = calculate_tiered_price(
+                price_tiers=parse_price_tiers(server_extra.min_price_tiered),
+                # See e.g. Amazon pricing guides:
+                # > We assume a month equals 730 hours (8,760 hours in a year / 12 months = 730 hours per month)
+                usage=730.0,
+                fallback_unit_price=server_extra.min_price_ondemand,
+                round_digits=2,
             )
             server.score_per_price = server_extra.score_per_price
             server.price = server.min_price  # legacy
@@ -1112,17 +1116,13 @@ def search_traffic_prices(
                         )
                     price.currency = currency
 
-        if price.price_tiered:
-            price.price_monthly_traffic = traffic_paid = 0
-            for i, tier in enumerate(price.price_tiered):
-                traffic_tier = min(
-                    max(monthly_traffic - traffic_paid, 0),
-                    (float(tier.upper) - float(tier.lower)),
-                )
-                price.price_monthly_traffic += rounder(tier.price * traffic_tier)
-                traffic_paid += traffic_tier
-        else:
-            price.price_monthly_traffic = rounder(price.price * monthly_traffic)
+        monthly_price = calculate_tiered_price(
+            price_tiers=price.price_tiered if price.price_tiered else [],
+            usage=monthly_traffic,
+            fallback_unit_price=price.price,
+            round_digits=6,
+        )
+        price.price_monthly_traffic = monthly_price if monthly_price else 0
 
     return prices
 

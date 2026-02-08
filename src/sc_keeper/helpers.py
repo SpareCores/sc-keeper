@@ -89,39 +89,44 @@ def parse_price_tiers(price_tiers_json: str | None) -> list[PriceTier]:
         return []
 
 
-def calculate_tiered_monthly_price(
+def calculate_tiered_price(
     price_tiers: list[PriceTier],
-    fallback_hourly_price: float | None,
-    hours_per_month: float = 730.0,
+    usage: float,
+    fallback_unit_price: float | None = None,
+    round_digits: int = 4,
 ) -> float | None:
     """
-    Calculate monthly price from tiered pricing structure.
+    Calculate price from tiered pricing structure based on usage.
+
+    Generic function that works for any unit, e.g. to compute the monthly price
+    of a server or the price of x amount of traffic.
 
     Args:
-        price_tiers: List of [PriceTier][sc_crawler.table_fields.PriceTier] objects with lower/upper bounds and prices.
-            Can be empty list if no tiers are available.
-        fallback_hourly_price: Hourly price to use if tiered pricing is empty or None.
-            Will be multiplied by hours_per_month to get monthly price.
-        hours_per_month: Number of hours in a month (default: 730)
+        price_tiers: List of [PriceTier][sc_crawler.table_fields.PriceTier]
+            objects with lower/upper bounds and unit prices. Can be empty list if no tiers are available.
+        usage: Amount of usage (e.g., 730 hours/month, 1000 GB traffic).
+        fallback_unit_price: Unit price to use if tiered pricing is empty or None.
+            Will be multiplied by usage to get total price.
+        round_digits: Number of decimal places to round the result to (default: 4).
 
     Returns:
-        Calculated monthly price or None if no pricing is available
+        Calculated total price or None if no pricing is available
     """
     if not price_tiers:
-        if fallback_hourly_price:
-            return fallback_hourly_price * hours_per_month
+        if fallback_unit_price is not None:
+            return round(fallback_unit_price * usage, round_digits)
         else:
             return None
 
     total_cost = 0.0
-    hours_remaining = hours_per_month
+    usage_remaining = usage
 
     sorted_tiers = sorted(price_tiers, key=lambda x: float(x.lower))
     for tier in sorted_tiers:
-        if hours_remaining <= 0:
+        if usage_remaining <= 0:
             break
-        tier_hours = min(hours_remaining, tier.upper - tier.lower)
-        total_cost += tier_hours * tier.price
-        hours_remaining -= tier_hours
+        tier_usage = min(usage_remaining, float(tier.upper) - float(tier.lower))
+        total_cost += tier_usage * float(tier.price)
+        usage_remaining -= tier_usage
 
-    return round(total_cost, 2)
+    return round(total_cost, round_digits)
