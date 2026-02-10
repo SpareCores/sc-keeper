@@ -129,8 +129,13 @@ class LogMiddleware(BaseHTTPMiddleware):
         def _cpu_times_diff(attr_name):
             """Calculate CPU time difference if both current and request CPU times have the attribute, otherwise None."""
             return (
-                round(getattr(current_cpu_times, attr_name) - getattr(request_cpu_times, attr_name), 2)
-                if hasattr(current_cpu_times, attr_name) and hasattr(request_cpu_times, attr_name)
+                round(
+                    getattr(current_cpu_times, attr_name)
+                    - getattr(request_cpu_times, attr_name),
+                    2,
+                )
+                if hasattr(current_cpu_times, attr_name)
+                and hasattr(request_cpu_times, attr_name)
                 else None
             )
 
