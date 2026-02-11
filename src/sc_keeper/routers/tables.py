@@ -13,7 +13,7 @@ from sc_crawler.tables import (
     Vendor,
     Zone,
 )
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from .. import parameters as options
 from ..auth import User, current_user
@@ -111,3 +111,22 @@ def table_server_prices(
 def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
     """Return the Storage table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Storage)).all()
+
+
+@router.get("/stats")
+def get_server_stats(
+    db: Session = Depends(get_db),
+) -> dict:
+    """Get general statistics about the servers in the database."""
+    total_vendors = db.exec(select(func.count()).select_from(Vendor)).one()
+    total_regions = db.exec(select(func.count()).select_from(Region)).one()
+    total_zones = db.exec(select(func.count()).select_from(Zone)).one()
+    total_servers = db.exec(select(func.count()).select_from(Server)).one()
+    total_prices = db.exec(select(func.count()).select_from(ServerPrice)).one()
+    return {
+        "total_vendors": total_vendors,
+        "total_regions": total_regions,
+        "total_zones": total_zones,
+        "total_server_types": total_servers,
+        "total_server_prices": total_prices,
+    }
