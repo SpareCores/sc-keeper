@@ -4,6 +4,7 @@ New feature(s):
 
 - Monthly pricing calculations for on-demand servers with optional capping.
 - Support for float GPU count values for fractional GPU allocation.
+- New endpoint `/table/stats` for querying database table statistics with optional vendor and status filters.
 
 ## January 2026
 
@@ -193,13 +194,13 @@ New feature(s):
 - Vendor ID enumeration for better type safety.
 - Optional total count parameter to improve performance.
 - Comprehensive filter options:
-  - Vendor, CPU, memory, storage, GPU filters.
-  - Green energy availability filtering.
-  - Compliance framework filtering (HIPAA, SOC2, etc.).
-  - Architecture filtering (x86_64, arm64, etc.).
-  - Storage type filtering.
-  - GPU manufacturer, family, and model filters.
-  - Total GPU memory filtering.
+    - Vendor, CPU, memory, storage, GPU filters.
+    - Green energy availability filtering.
+    - Compliance framework filtering (HIPAA, SOC2, etc.).
+    - Architecture filtering (x86_64, arm64, etc.).
+    - Storage type filtering.
+    - GPU manufacturer, family, and model filters.
+    - Total GPU memory filtering.
 - Server similarity endpoints based on hardware specifications.
 - Similar servers by family endpoint.
 
@@ -285,6 +286,7 @@ Initial release:
 - Annotated example inputs for API documentation.
 
 API endpoints:
+
 - Server instance lookup endpoint by vendor and API ID.
 - Server search endpoint by CPU/RAM specifications.
 - Swagger/OpenAPI documentation with examples.

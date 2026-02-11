@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Security
 from sc_crawler.table_fields import Status
 from sc_crawler.tables import (
     Benchmark,
+    BenchmarkScore,
     ComplianceFramework,
     Country,
     Region,
@@ -115,18 +116,32 @@ def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
 
 @router.get("/stats")
 def get_server_stats(
+    vendor: options.vendor = None,
+    status: options.status = None,
     db: Session = Depends(get_db),
 ) -> dict:
-    """Get general statistics about the servers in the database."""
-    total_vendors = db.exec(select(func.count()).select_from(Vendor)).one()
-    total_regions = db.exec(select(func.count()).select_from(Region)).one()
-    total_zones = db.exec(select(func.count()).select_from(Zone)).one()
-    total_servers = db.exec(select(func.count()).select_from(Server)).one()
-    total_prices = db.exec(select(func.count()).select_from(ServerPrice)).one()
+    """Return counts of records in each table, optionally filtered by vendor and status."""
+
+    def _count(table, has_vendor=True, has_status=True):
+        """Execute count query with optional vendor and status filters."""
+        conditions = []
+        if vendor and has_vendor:
+            conditions.append(table.vendor_id.in_(vendor))
+        if status and has_status:
+            conditions.append(table.status == status)
+
+        query = select(func.count()).select_from(table)
+        for condition in conditions:
+            query = query.where(condition)
+        return db.exec(query).one()
+
     return {
-        "total_vendors": total_vendors,
-        "total_regions": total_regions,
-        "total_zones": total_zones,
-        "total_server_types": total_servers,
-        "total_server_prices": total_prices,
+        "total_vendors": _count(Vendor, has_vendor=True, has_status=True),
+        "total_regions": _count(Region, has_vendor=True, has_status=True),
+        "total_zones": _count(Zone, has_vendor=True, has_status=True),
+        "total_server_types": _count(Server, has_vendor=True, has_status=True),
+        "total_server_prices": _count(ServerPrice, has_vendor=True, has_status=True),
+        "total_benchmark_scores": _count(
+            BenchmarkScore, has_vendor=True, has_status=True
+        ),
     }

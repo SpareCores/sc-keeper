@@ -5,6 +5,7 @@ from sc_crawler.table_fields import (
     Allocation,
     CpuAllocation,
     CpuArchitecture,
+    Status,
     StorageType,
     TrafficDirection,
 )
@@ -445,6 +446,17 @@ benchmark_config = Annotated[
     Optional[str],
     Query(
         description="Optional benchmark config dict JSON to filter results of a benchmark_id."
+    ),
+]
+
+status = Annotated[
+    Optional[str],
+    Query(
+        title="Status",
+        json_schema_extra={
+            "category_id": FilterCategories.STATUS,
+            "enum": [s.value for s in Status],
+        },
     ),
 ]
 

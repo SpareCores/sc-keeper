@@ -232,6 +232,7 @@ class FilterCategories(Enum):
     MEMORY = "memory"
     REGION = "region"
     VENDOR = "vendor"
+    STATUS = "status"
     STORAGE = "storage"
     GPU = "gpu"
     TRAFFIC = "traffic"
