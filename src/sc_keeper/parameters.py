@@ -450,9 +450,10 @@ benchmark_config = Annotated[
 ]
 
 status = Annotated[
-    Optional[str],
+    Optional[Status],
     Query(
         title="Status",
+        description="Filter by resource status.",
         json_schema_extra={
             "category_id": FilterCategories.STATUS,
             "enum": [s.value for s in Status],
