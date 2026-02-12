@@ -4,7 +4,8 @@ New feature(s):
 
 - Monthly pricing calculations for on-demand servers with optional capping.
 - Support for float GPU count values for fractional GPU allocation.
-- New endpoint `/table/stats` for querying database table statistics with optional vendor and status filters.
+- New endpoint `/stats` for querying database table statistics with optional vendor and only_active filters.
+- Update FastAPI from 0.128.6 from 0.128.8.
 
 ## January 2026
 
