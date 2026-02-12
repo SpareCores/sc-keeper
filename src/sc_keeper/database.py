@@ -9,6 +9,7 @@ from time import sleep, time
 
 import safe_exit
 from sc_data import db
+from sqlalchemy import inspect
 from sqlmodel import Session, create_engine, delete, insert, text
 
 from . import views
@@ -60,6 +61,7 @@ class Database(Thread):
                 connect_args={"check_same_thread": False},
                 echo=bool(environ.get("KEEPER_DEBUG", False)),
             )
+            inspector = inspect(engine)
             with engine.connect() as conn:
                 # minimal gain for read ops with the below PRAGMA configs
                 conn.execute(text("PRAGMA synchronous=OFF"))
@@ -70,6 +72,29 @@ class Database(Thread):
                     index.create(bind=conn, checkfirst=True)
                 # prep and fill ~materialized views
                 for t in views.views:
+                    table_name_wo_extra = t.__tablename__.replace("_extra", "")
+                    table_exists = inspector.has_table(table_name_wo_extra)
+                    # TODO: for test purposes, this logic now allows only add columns to ServerPrice
+                    table_exists = (
+                        table_exists and table_name_wo_extra == "server_price"
+                    )
+                    if table_exists:
+                        columns = [
+                            col.get("name")
+                            for col in inspector.get_columns(table_name_wo_extra)
+                        ]
+                        new_columns = [
+                            (col.name, col.type)
+                            for col in t.__table__.columns
+                            if col.name not in columns
+                        ]
+                        for new_col in new_columns:
+                            conn.execute(
+                                text(
+                                    f"ALTER TABLE {table_name_wo_extra} ADD COLUMN {new_col[0]} {new_col[1]}"
+                                )
+                            )
+                        continue
                     t.__table__.create(engine, checkfirst=True)
                     if hasattr(t, "insert"):
                         with Session(engine) as session:

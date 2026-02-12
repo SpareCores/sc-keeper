@@ -1,9 +1,13 @@
 from typing import List, Optional
 
 from sc_crawler.insert import insert_items
-from sc_crawler.table_bases import HasServerPK, HasVendorPKFK, ScModel
+from sc_crawler.table_bases import (
+    HasServerPK,
+    HasVendorPKFK,
+    ScModel,
+)
 from sc_crawler.table_fields import Allocation, Status
-from sc_crawler.tables import BenchmarkScore, ServerPrice, is_table
+from sc_crawler.tables import BenchmarkScore, ServerPrice, ServerPriceBase, is_table
 from sqlmodel import Field, Session, case, func, select
 
 from .currency import currency_converter as cc
@@ -169,6 +173,12 @@ class ServerExtra(ServerExtraBase, table=True):
         )
 
         return query
+
+
+class ServerPriceExtra(ServerPriceBase, table=True):
+    """Extra fields for ServerPrice."""
+
+    price_monthly: Optional[float]
 
 
 views: List[ScModel] = [
