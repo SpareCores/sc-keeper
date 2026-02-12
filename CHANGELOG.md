@@ -5,6 +5,15 @@ New feature(s):
 - Monthly pricing calculations for on-demand servers with optional capping.
 - Support for float GPU count values for fractional GPU allocation.
 
+Fix(es):
+
+- Upgrade FastAPI from 0.115.13 to 0.128.6.
+- Fix macOS compatibility issue with `iowait` CPU metric logging (not available on Darwin systems).
+
+‼ Breaking changes:
+
+- Minimum required Python version upgraded from 3.8 to 3.11.
+
 ## January 2026
 
 New feature(s):
@@ -193,13 +202,13 @@ New feature(s):
 - Vendor ID enumeration for better type safety.
 - Optional total count parameter to improve performance.
 - Comprehensive filter options:
-  - Vendor, CPU, memory, storage, GPU filters.
-  - Green energy availability filtering.
-  - Compliance framework filtering (HIPAA, SOC2, etc.).
-  - Architecture filtering (x86_64, arm64, etc.).
-  - Storage type filtering.
-  - GPU manufacturer, family, and model filters.
-  - Total GPU memory filtering.
+    - Vendor, CPU, memory, storage, GPU filters.
+    - Green energy availability filtering.
+    - Compliance framework filtering (HIPAA, SOC2, etc.).
+    - Architecture filtering (x86_64, arm64, etc.).
+    - Storage type filtering.
+    - GPU manufacturer, family, and model filters.
+    - Total GPU memory filtering.
 - Server similarity endpoints based on hardware specifications.
 - Similar servers by family endpoint.
 
@@ -285,6 +294,7 @@ Initial release:
 - Annotated example inputs for API documentation.
 
 API endpoints:
+
 - Server instance lookup endpoint by vendor and API ID.
 - Server search endpoint by CPU/RAM specifications.
 - Swagger/OpenAPI documentation with examples.
