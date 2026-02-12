@@ -7,6 +7,15 @@ New feature(s):
 - New endpoint `/stats` for querying database table statistics with optional vendor and only_active filters.
 - Update FastAPI from 0.128.6 from 0.128.8.
 
+Fix(es):
+
+- Upgrade FastAPI from 0.115.13 to 0.128.6.
+- Fix macOS compatibility issue with `iowait` CPU metric logging (not available on Darwin systems).
+
+‼ Breaking changes:
+
+- Minimum required Python version upgraded from 3.8 to 3.11.
+
 ## January 2026
 
 New feature(s):
