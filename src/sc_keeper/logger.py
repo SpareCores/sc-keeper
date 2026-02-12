@@ -59,8 +59,8 @@ class LogMiddleware(BaseHTTPMiddleware):
         request_id = _request_id_ctx_var.set(str(uuid4()))
         request_time = time()
         request_resources = getrusage(RUSAGE_SELF)
+        # some attributes (e.g. iowait, io_counters) not available on Mac OS
         request_cpu_times = Process().cpu_times()
-        # not available on Mac OS
         request_io = (
             Process().io_counters() if hasattr(Process(), "io_counters") else None
         )
@@ -107,8 +107,8 @@ class LogMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         current_time = time()
         current_resources = getrusage(RUSAGE_SELF)
+        # some attributes (e.g. iowait, io_counters) not available on Mac OS
         current_cpu_times = Process().cpu_times()
-        # not available on Mac OS
         current_io = (
             Process().io_counters() if hasattr(Process(), "io_counters") else None
         )
@@ -121,6 +121,19 @@ class LogMiddleware(BaseHTTPMiddleware):
             return (
                 getattr(current_io, attr_name) - getattr(request_io, attr_name)
                 if request_io
+                else None
+            )
+
+        def _cpu_times_diff(attr_name):
+            """Calculate CPU time difference if both current and request CPU times have the attribute, otherwise None."""
+            return (
+                round(
+                    getattr(current_cpu_times, attr_name)
+                    - getattr(request_cpu_times, attr_name),
+                    2,
+                )
+                if hasattr(current_cpu_times, attr_name)
+                and hasattr(request_cpu_times, attr_name)
                 else None
             )
 
@@ -143,9 +156,7 @@ class LogMiddleware(BaseHTTPMiddleware):
                     "sys": round(
                         current_resources.ru_stime - request_resources.ru_stime, 2
                     ),
-                    "iowait": round(
-                        current_cpu_times.iowait - request_cpu_times.iowait, 2
-                    ),
+                    "iowait": _cpu_times_diff("iowait"),
                     "read_bytes": _io_diff("read_bytes"),
                     "write_bytes": _io_diff("write_bytes"),
                     "max_rss": current_resources.ru_maxrss,
