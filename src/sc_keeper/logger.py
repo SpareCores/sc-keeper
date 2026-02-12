@@ -59,9 +59,8 @@ class LogMiddleware(BaseHTTPMiddleware):
         request_id = _request_id_ctx_var.set(str(uuid4()))
         request_time = time()
         request_resources = getrusage(RUSAGE_SELF)
-        # not available on Mac OS
+        # some attributes (e.g. iowait, io_counters) not available on Mac OS
         request_cpu_times = Process().cpu_times()
-        # not available on Mac OS
         request_io = (
             Process().io_counters() if hasattr(Process(), "io_counters") else None
         )
@@ -108,9 +107,8 @@ class LogMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         current_time = time()
         current_resources = getrusage(RUSAGE_SELF)
-        # not available on Mac OS
+        # some attributes (e.g. iowait, io_counters) not available on Mac OS
         current_cpu_times = Process().cpu_times()
-        # not available on Mac OS
         current_io = (
             Process().io_counters() if hasattr(Process(), "io_counters") else None
         )
