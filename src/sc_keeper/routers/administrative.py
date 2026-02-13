@@ -15,7 +15,7 @@ from sqlmodel import Session, case, func, select, text
 from .. import parameters as options
 from ..auth import User, current_user
 from ..database import get_db, session
-from ..references import HealthcheckResponse
+from ..references import DebugInfoResponse, HealthcheckResponse
 from ..views import ServerExtra
 
 router = APIRouter()
@@ -74,8 +74,11 @@ def get_stats(
 
 
 @router.get("/debug")
-def get_debug_info(db: Session = Depends(get_db)) -> dict:
-    """Return debug information about the availability of benchmark scores for servers."""
+def get_debug_info(db: Session = Depends(get_db)) -> DebugInfoResponse:
+    """Return debug information about the availability of benchmark scores for servers.
+
+    Returns vendor-level statistics, per-server details, and a list of all benchmark families.
+    """
 
     servers_query = (
         select(Server, ServerExtra.min_price)
