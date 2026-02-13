@@ -96,7 +96,7 @@ def get_debug_info(db: Session = Depends(get_db)) -> dict:
                 "vendor_id": server.vendor_id,
                 "server_id": server.server_id,
                 "api_reference": server.api_reference,
-                "status": server.status.value if server.status else None,
+                "status": server.status if server.status else None,
                 "has_hw_info": bool(server.cpu_flags),
                 "has_price": bool(min_price),
                 "has_benchmarks": False,
@@ -152,7 +152,38 @@ def get_debug_info(db: Session = Depends(get_db)) -> dict:
         }
         server["has_benchmarks"] = any(server["benchmarks"].values())
 
+    vendor_stats = {}
+    for server in servers:
+        vendor_id = server["vendor_id"]
+        if vendor_id not in vendor_stats:
+            vendor_stats[vendor_id] = {
+                "vendor_id": vendor_id,
+                "all": 0,
+                "inactive": 0,
+                "active": 0,
+                "evaluated": 0,
+                "missing": 0,
+            }
+        vendor_stats[vendor_id]["all"] += 1
+
+        has_price = server["has_price"]
+        is_active = server["status"] == Status.ACTIVE
+        has_benchmarks = server["has_benchmarks"]
+
+        if is_active:
+            vendor_stats[vendor_id]["active"] += 1
+        if is_active and has_benchmarks:
+            vendor_stats[vendor_id]["evaluated"] += 1
+        elif is_active and has_price and not has_benchmarks:
+            vendor_stats[vendor_id]["missing"] += 1
+        elif not is_active or not has_price:
+            vendor_stats[vendor_id]["inactive"] += 1
+        else:
+            raise ValueError(f"Unexpected server category: {server}")
+    vendors = sorted(vendor_stats.values(), key=lambda x: x["vendor_id"])
+
     return {
+        "vendors": vendors,
         "servers": servers,
         "benchmark_families": benchmark_families,
     }
