@@ -3,7 +3,7 @@ from json import loads as json_loads
 from typing import Any, Dict, List
 
 from sc_crawler.table_bases import ScModel
-from sc_crawler.table_fields import Allocation, PriceTier
+from sc_crawler.table_fields import Allocation, PriceTier, Status
 from sc_crawler.tables import ServerPrice
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import column_property
@@ -169,14 +169,17 @@ class ServerPriceExtender(TableExtender):
             # set baseline for 730 hours per month (covers most cases)
             session.execute(
                 text(
-                    "UPDATE server_price SET price_monthly = ROUND(price * 730, 2) WHERE allocation = :allocation"
+                    "UPDATE server_price SET price_monthly = ROUND(price * 730, 2) WHERE status = :status AND allocation = :allocation"
                 ).bindparams(
+                    status=Status.ACTIVE.name,
                     allocation=Allocation.ONDEMAND.name,
                 )
             )
             # then calculate actual monthly capped prices based on tiers and update baseline if necessary
             prices = session.exec(
-                select(ServerPrice).where(ServerPrice.allocation == Allocation.ONDEMAND)
+                select(ServerPrice)
+                .where(ServerPrice.status == Status.ACTIVE)
+                .where(ServerPrice.allocation == Allocation.ONDEMAND)
             ).all()
             for price in prices:
                 monthly_price = calculate_tiered_price(
