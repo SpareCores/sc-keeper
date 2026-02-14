@@ -9,7 +9,6 @@ from time import sleep, time
 
 import safe_exit
 from sc_data import db
-from sqlalchemy import inspect
 from sqlmodel import Session, create_engine, delete, insert, text
 
 from .crawler_extend import extenders
@@ -63,7 +62,6 @@ class Database(Thread):
                 connect_args={"check_same_thread": False},
                 echo=bool(environ.get("KEEPER_DEBUG", False)),
             )
-            inspector = inspect(engine)
             with engine.connect() as conn:
                 # minimal gain for read ops with the below PRAGMA configs
                 conn.execute(text("PRAGMA synchronous=OFF"))
