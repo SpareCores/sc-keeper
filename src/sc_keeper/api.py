@@ -47,9 +47,9 @@ from . import parameters as options
 from . import routers
 from .auth import AuthGuardMiddleware, AuthMiddleware
 from .cache import CacheHeaderMiddleware
+from .crawler_extend import calculate_tiered_price, parse_price_tiers
 from .currency import currency_converter
 from .database import get_db
-from .helpers import calculate_tiered_price, parse_price_tiers
 from .logger import LogMiddleware
 from .queries import gen_benchmark_query
 from .rate_limit import RateLimitMiddleware, create_rate_limiter
