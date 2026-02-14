@@ -116,6 +116,30 @@ def sql_add_column(table_name: str, column: NewColumn):
 
 
 class TableExtender:
+    """Base class for extending existing sc_crawler tables with new columns.
+
+    This is quite a hack to add new columns to the existing database tables and
+    their SQLAlchemy/SQLModel model metadata to enrich the database file at
+    startup/database refresh for easy querying.
+
+    Note that it comes with some limitations:
+
+    - Pydantic models don't know about the new columns, so they need to be
+      manually updated. This means that `model_dump` will not include the new
+      columns by default, so you need to return the dict as a custom model,
+      which we already do in the `references.py` anyway.
+    - The new columns attributes are only available for reading, not for
+      writing, so when you need to update values in the database, it needs to
+      happen via manual SQL statements.
+
+    To extend a table, you need to:
+
+    - Create a subclass of this class.
+    - Define the table and the new columns to add via the `NewColumn` class.
+    - Implement the `update` method to update the new columns with new values at
+      the startup time or when database is refreshed.
+    """
+
     table: ScModel
     new_columns: List[NewColumn]
 
