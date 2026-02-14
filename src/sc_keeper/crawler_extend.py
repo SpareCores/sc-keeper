@@ -19,7 +19,11 @@ def parse_price_tiers(price_tiers_json: str | None) -> list[PriceTier]:
         return []
 
     try:
-        tier_dicts = json_loads(price_tiers_json)
+        # JSON might have been already parsed into a list of dicts
+        if isinstance(price_tiers_json, str):
+            tier_dicts = json_loads(price_tiers_json)
+        else:
+            tier_dicts = price_tiers_json
         if not tier_dicts or not isinstance(tier_dicts, list):
             return []
 
