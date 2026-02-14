@@ -3,14 +3,17 @@ from json import loads as json_loads
 from sc_crawler.table_fields import PriceTier
 
 
-def parse_price_tiers(price_tiers_json: str | None) -> list[PriceTier]:
-    """
-    Parse JSON string of price tiers into PriceTier objects.
 
-    Converts "Infinity" strings to float('inf') for upper bounds.
+def parse_price_tiers(
+    price_tiers_json: str | List[Dict[str, Any]] | List[PriceTier] | None,
+) -> list[PriceTier]:
+    """
+    Parse JSON string or list of dicts of price tiers into PriceTier objects, and
+    convert "Infinity" strings to float('inf') for upper bounds.
 
     Args:
-        price_tiers_json: JSON string representation of price tiers from database
+        price_tiers_json: JSON string representation of price tiers from database when read as a string,
+            or already parsed list of dicts or list of actual PriceTier objects.
 
     Returns:
         List of PriceTier objects, or empty list if parsing fails or input is None/empty
