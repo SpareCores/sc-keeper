@@ -7,7 +7,7 @@ from sc_crawler.table_bases import (
     ScModel,
 )
 from sc_crawler.table_fields import Allocation, Status
-from sc_crawler.tables import BenchmarkScore, ServerPrice, ServerPriceBase, is_table
+from sc_crawler.tables import BenchmarkScore, ServerPrice, is_table
 from sqlmodel import Field, Session, case, func, select
 
 from .currency import currency_converter as cc
@@ -184,67 +184,6 @@ class ServerExtra(ServerExtraBase, table=True):
         )
 
         return query
-
-
-class ServerPriceExtra(ServerPriceBase, table=True):
-    """Extra fields for ServerPrice."""
-
-    price_monthly: Optional[float]
-
-    @classmethod
-    def get_table_to_modify(cls):
-        return ServerPrice
-
-    @classmethod
-    def update(cls, session: Session) -> list[dict]:
-        """Calculate price_monthly for each ServerPrice row."""
-        from .helpers import calculate_tiered_price, parse_price_tiers
-
-        # TODO: this logic currently off
-        return []
-
-        pk_columns = [
-            col.name
-            for col in cls.get_table_to_modify().__table__.columns
-            if col.primary_key
-        ]
-
-        query = (
-            select(
-                *[getattr(ServerPrice, pk) for pk in pk_columns],
-                ServerExtra.min_price_tiered,
-                ServerExtra.min_price_ondemand,
-            )
-            .select_from(ServerExtra)
-            .join(
-                ServerPrice,
-                (ServerExtra.vendor_id == ServerPrice.vendor_id)
-                & (ServerExtra.server_id == ServerPrice.server_id),
-            )
-            .where(ServerPrice.status == Status.ACTIVE)
-            .where(ServerPrice.allocation == Allocation.ONDEMAND)
-        )
-
-        results = session.exec(query).all()
-
-        update_data = []
-        for row in results:
-            pk_values = {pk_columns[i]: row[i] for i in range(len(pk_columns))}
-            min_price_tiered = row[len(pk_columns)]
-            min_price_ondemand = row[len(pk_columns) + 1]
-
-            price_monthly = calculate_tiered_price(
-                price_tiers=parse_price_tiers(min_price_tiered),
-                # See e.g. Amazon pricing guides:
-                # > We assume a month equals 730 hours (8,760 hours in a year / 12 months = 730 hours per month)
-                usage=730.0,
-                fallback_unit_price=min_price_ondemand,
-                round_digits=2,
-            )
-
-            update_data.append({**pk_values, "price_monthly": price_monthly})
-
-        return update_data
 
 
 views: List[ScModel] = [

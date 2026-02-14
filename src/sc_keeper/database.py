@@ -10,10 +10,11 @@ from time import sleep, time
 import safe_exit
 from sc_data import db
 from sqlalchemy import inspect
-from sqlmodel import Session, create_engine, delete, insert, text, update
+from sqlmodel import Session, create_engine, delete, insert, text
 
-from . import views
+from .crawler_extend import extenders
 from .indexes import indexes
+from .views import views
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class Database(Thread):
             )
             # delete=False due to Windows support
             tmpfile = NamedTemporaryFile(delete=False).name
+            logger.info(f"Copying {db.path} to {tmpfile}")
             copyfile(db.path, tmpfile)
             with self.lock:
                 self.tmpfiles.append(tmpfile)
@@ -67,60 +69,17 @@ class Database(Thread):
                 conn.execute(text("PRAGMA synchronous=OFF"))
                 conn.execute(text("PRAGMA journal_mode=OFF"))
                 conn.execute(text("PRAGMA mmap_size=67108864"))  # 64 MiB
+                # add new columns to the database
+                logger.info("Extending tables")
+                for extender in extenders:
+                    logger.info(f"Adding columns to {extender.table.__table__}")
+                    extender.add_columns(engine)
+                    extender.update(engine)
                 # speed up some queries with indexes
                 for index in indexes:
                     index.create(bind=conn, checkfirst=True)
                 # prep and fill ~materialized views
-                for t in views.views:
-                    # TODO: for test purposes, this logic now allows only add columns to ServerPrice
-                    table_exists = (
-                        inspector.has_table(t.get_table_to_modify().__tablename__)
-                        if hasattr(t, "get_table_to_modify")
-                        else False
-                    )
-                    if table_exists:
-                        columns = [
-                            col.name
-                            for col in t.get_table_to_modify().__table__.columns
-                        ]
-                        new_columns = [
-                            (col.name, col.type)
-                            for col in t.__table__.columns
-                            if col.name not in columns
-                        ]
-                        for new_col in new_columns:
-                            conn.execute(
-                                text(
-                                    f"ALTER TABLE {t.get_table_to_modify().__tablename__} ADD COLUMN {new_col[0]} {new_col[1]}"
-                                )
-                            )
-                        if hasattr(t, "update"):
-                            target_table = t.get_table_to_modify()
-                            pk_columns = [
-                                col.name
-                                for col in target_table.__table__.columns
-                                if col.primary_key
-                            ]
-                            value_columns = [col_name for col_name, _ in new_columns]
-                            results = []
-                            # TODO: causes deadlock, don't know why
-                            # with Session(engine) as session:
-                            #     results: list[dict] = t.update(session)
-                            if results:
-                                for row in results:
-                                    q = update(target_table)
-                                    for pk_col in pk_columns:
-                                        q = q.where(
-                                            getattr(target_table, pk_col)
-                                            == row.get(pk_col)
-                                        )
-                                    values_dict = {
-                                        value_column: row.get(value_column)
-                                        for value_column in value_columns
-                                    }
-                                    q = q.values(**values_dict)
-                                    conn.execute(q)
-                                conn.commit()
+                for t in views:
                     t.__table__.create(engine, checkfirst=True)
                     if hasattr(t, "insert"):
                         with Session(engine) as session:
