@@ -5,6 +5,7 @@ New feature(s):
 - Monthly pricing calculations for on-demand servers with optional capping.
 - Support for float GPU count values for fractional GPU allocation.
 - New endpoint `/stats` for querying database table statistics with optional vendor and only_active filters.
+- New endpoint `/debug` for querying debug information about the availability of benchmark scores for servers.
 
 Fix(es):
 

@@ -1,8 +1,8 @@
 from enum import Enum, StrEnum
 from time import time
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sc_crawler.table_bases import (
     CountryBase,
     RegionBase,
@@ -242,3 +242,96 @@ class BenchmarkConfig(BaseModel):
     benchmark_id: str
     config: str
     category: Optional[str] = None
+
+
+class VendorDebugInfo(BaseModel):
+    """Statistics about benchmark coverage for a specific vendor."""
+
+    vendor_id: str = Field(description="Vendor identifier (e.g., 'aws', 'gcp')")
+    all: int = Field(description="Total number of server types for this vendor")
+    active: int = Field(description="Number of active server types")
+    evaluated: int = Field(
+        description="Number of servers with at least one benchmark score"
+    )
+    missing: int = Field(
+        description="Number of active servers with prices but no benchmark data"
+    )
+    inactive: int = Field(
+        description="Number of servers without prices or with inactive status"
+    )
+
+
+VendorDebugInfo.model_config["json_schema_extra"] = {
+    "examples": [
+        {
+            "vendor_id": "aws",
+            "all": 500,
+            "active": 450,
+            "evaluated": 350,
+            "missing": 100,
+            "inactive": 50,
+        }
+    ]
+}
+
+
+class ServerDebugInfo(BaseModel):
+    """Debug information about a single server type and its benchmark coverage."""
+
+    vendor_id: str = Field(description="Vendor identifier")
+    server_id: str = Field(description="Server type identifier")
+    api_reference: str = Field(description="API reference name for the server")
+    status: str = Field(description="Server status (e.g., 'ACTIVE', 'INACTIVE')")
+    has_hw_info: bool = Field(
+        description="Whether hardware information (e.g. CPU flags) is available"
+    )
+    has_price: bool = Field(description="Whether any pricing data is available")
+    has_benchmarks: bool = Field(description="Whether any benchmark data is available")
+    benchmarks: Dict[str, bool] = Field(
+        description="Map of benchmark family names to availability (true if at least one score exists)"
+    )
+
+
+ServerDebugInfo.model_config["json_schema_extra"] = {
+    "examples": [
+        {
+            "vendor_id": "aws",
+            "server_id": "m5.large",
+            "api_reference": "m5.large",
+            "status": "ACTIVE",
+            "has_hw_info": True,
+            "has_price": True,
+            "has_benchmarks": True,
+            "benchmarks": {
+                "stress_ng": True,
+                "geekbench": True,
+                "passmark": False,
+            },
+        }
+    ]
+}
+
+
+class DebugInfoResponse(BaseModel):
+    """Complete debug information about server and benchmark data availability."""
+
+    vendors: List[VendorDebugInfo] = Field(
+        description="Per-vendor statistics about benchmark coverage"
+    )
+    servers: List[ServerDebugInfo] = Field(
+        description="Detailed information about each server type"
+    )
+    benchmark_families: List[str] = Field(
+        description="List of all available benchmark families (e.g., 'stress_ng', 'geekbench', 'passmark')"
+    )
+
+
+DebugInfoResponse.model_config["json_schema_extra"] = {
+    "examples": [
+        {
+            "vendors": VendorDebugInfo.model_config["json_schema_extra"]["examples"],
+            "servers": ServerDebugInfo.model_config["json_schema_extra"]["examples"],
+            "benchmark_families": ["stress_ng", "geekbench", "passmark"],
+        }
+    ]
+}
