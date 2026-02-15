@@ -140,6 +140,9 @@ ServerPKs.model_config["json_schema_extra"]["examples"][0]["price"] = 7
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price"] = 7
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price_spot"] = 7
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price_ondemand"] = 10
+ServerPKs.model_config["json_schema_extra"]["examples"][0][
+    "min_price_ondemand_monthly"
+] = 10 * 730 * 0.9
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["score_per_price"] = 42 / 7
 
 Storage.model_config["json_schema_extra"] = {
