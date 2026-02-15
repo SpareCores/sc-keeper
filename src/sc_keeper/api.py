@@ -853,6 +853,15 @@ def search_server_prices(
                         ),
                         4,
                     )
+                    if price.price_tiered:
+                        for tier in price.price_tiered:
+                            tier.price = round(
+                                currency_converter.convert(
+                                    tier.price, price.currency, currency
+                                ),
+                                4,
+                            )
+                    if price.price_monthly:
                         price.price_monthly = round(
                             currency_converter.convert(
                                 price.price_monthly, price.currency, currency
