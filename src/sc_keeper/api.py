@@ -47,9 +47,9 @@ from . import parameters as options
 from . import routers
 from .auth import AuthGuardMiddleware, AuthMiddleware
 from .cache import CacheHeaderMiddleware
+from .crawler_extend import calculate_tiered_price
 from .currency import currency_converter
 from .database import get_db
-from .helpers import calculate_tiered_price, parse_price_tiers
 from .logger import LogMiddleware
 from .queries import gen_benchmark_query
 from .rate_limit import RateLimitMiddleware, create_rate_limiter
@@ -140,6 +140,9 @@ ServerPKs.model_config["json_schema_extra"]["examples"][0]["price"] = 7
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price"] = 7
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price_spot"] = 7
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["min_price_ondemand"] = 10
+ServerPKs.model_config["json_schema_extra"]["examples"][0][
+    "min_price_ondemand_monthly"
+] = 10 * 730 * 0.9
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["score_per_price"] = 42 / 7
 
 Storage.model_config["json_schema_extra"] = {
@@ -149,6 +152,7 @@ ServerPriceWithPKs.model_config["json_schema_extra"] = {
     "examples": [
         example_data["prices"][0].model_dump()
         | {
+            "price_monthly": 42,
             "vendor": example_data["vendor"].model_dump(),
             "region": example_data["region"].model_dump()
             | {"country": example_data["country"].model_dump()},
@@ -542,14 +546,7 @@ def search_servers(
             server.min_price = server_extra.min_price
             server.min_price_spot = server_extra.min_price_spot
             server.min_price_ondemand = server_extra.min_price_ondemand
-            server.min_price_ondemand_monthly = calculate_tiered_price(
-                price_tiers=parse_price_tiers(server_extra.min_price_tiered),
-                # See e.g. Amazon pricing guides:
-                # > We assume a month equals 730 hours (8,760 hours in a year / 12 months = 730 hours per month)
-                usage=730.0,
-                fallback_unit_price=server_extra.min_price_ondemand,
-                round_digits=2,
-            )
+            server.min_price_ondemand_monthly = server_extra.min_price_ondemand_monthly
             server.score_per_price = server_extra.score_per_price
             server.price = server.min_price  # legacy
             server.selected_benchmark_score = benchmark_score
@@ -837,6 +834,7 @@ def search_server_prices(
     prices = []
     for result in results:
         price = ServerPriceWithPKs.model_validate(result[0])
+        price.price_monthly = result[0].price_monthly
         with suppress(Exception):
             price.server.score = result[1].score
             price.server.min_price = result[1].min_price
@@ -858,6 +856,21 @@ def search_server_prices(
                         ),
                         4,
                     )
+                    if price.price_tiered:
+                        for tier in price.price_tiered:
+                            tier.price = round(
+                                currency_converter.convert(
+                                    tier.price, price.currency, currency
+                                ),
+                                4,
+                            )
+                    if price.price_monthly:
+                        price.price_monthly = round(
+                            currency_converter.convert(
+                                price.price_monthly, price.currency, currency
+                            ),
+                            2,
+                        )
                     price.currency = currency
     return prices
 
