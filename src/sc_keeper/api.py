@@ -149,6 +149,7 @@ ServerPriceWithPKs.model_config["json_schema_extra"] = {
     "examples": [
         example_data["prices"][0].model_dump()
         | {
+            "price_monthly": 42,
             "vendor": example_data["vendor"].model_dump(),
             "region": example_data["region"].model_dump()
             | {"country": example_data["country"].model_dump()},
@@ -830,6 +831,7 @@ def search_server_prices(
     prices = []
     for result in results:
         price = ServerPriceWithPKs.model_validate(result[0])
+        price.price_monthly = result[0].price_monthly
         with suppress(Exception):
             price.server.score = result[1].score
             price.server.min_price = result[1].min_price
@@ -851,6 +853,12 @@ def search_server_prices(
                         ),
                         4,
                     )
+                        price.price_monthly = round(
+                            currency_converter.convert(
+                                price.price_monthly, price.currency, currency
+                            ),
+                            2,
+                        )
                     price.currency = currency
     return prices
 

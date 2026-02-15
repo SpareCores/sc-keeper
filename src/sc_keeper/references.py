@@ -198,6 +198,7 @@ class RegionBaseWithPKs(RegionBase):
 
 
 class ServerPriceWithPKs(ServerPriceBase):
+    price_monthly: Optional[float] = None
     vendor: VendorBase
     region: RegionBaseWithPKs
     zone: ZoneBase
