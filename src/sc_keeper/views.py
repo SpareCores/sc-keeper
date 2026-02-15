@@ -100,7 +100,7 @@ class ServerExtra(ServerExtraBase, table=True):
                     case(
                         (
                             ServerPrice.allocation == Allocation.ONDEMAND,
-                            func.round(ServerPrice.price_monthly * Currency.rate, 4),
+                            func.round(ServerPrice.price_monthly * Currency.rate, 2),
                         )
                     )
                 ).label("min_price_ondemand_monthly"),
