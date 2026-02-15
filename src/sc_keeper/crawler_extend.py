@@ -124,18 +124,21 @@ class TableExtender:
 
     Note that it comes with some limitations:
 
-    - Pydantic models don't know about the new columns, so they need to be
-      manually updated. This means that `model_dump` will not include the new
-      columns by default, so you need to return the dict as a custom model,
-      which we already do in the `references.py` anyway.
-    - The new columns attributes are only available for reading, not for
-      writing, so when you need to update values in the database, it needs to
-      happen via manual SQL statements.
+    - The new columns are registered as SQLModel column_property attributes,
+      which are only available for reading, not for writing. So although you can
+      easily access the values of the extra columns, you need to update their
+      values in the database via manual SQL statements.
+    - Pydantic models don't know about the new columns (haven't found a way to
+      inject that yet), so e.g. `model_dump` will not include the new columns by
+      default. When you need to return a dict including the new columns (e.g.
+      FastAPI response), you need to return a custom Pydantic model. We already
+      do this in the `references.py`, so probably not a huge issue.
 
     To extend a table, you need to:
 
     - Create a subclass of this class.
-    - Define the table and the new columns to add via the `NewColumn` class.
+    - Define the table reference as the SQLModel class along with the new
+      columns to add using the `NewColumn` class.
     - Implement the `update` method to update the new columns with new values at
       the startup time or when database is refreshed.
     """
