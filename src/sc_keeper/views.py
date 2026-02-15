@@ -45,7 +45,7 @@ class ServerExtraBase(HasServerPK, HasVendorPKFK):
     min_price: Optional[float]
     min_price_spot: Optional[float]
     min_price_ondemand: Optional[float]
-    min_price_tiered: Optional[str]
+    min_price_ondemand_monthly: Optional[float]
 
 
 class ServerExtra(ServerExtraBase, table=True):
@@ -96,6 +96,14 @@ class ServerExtra(ServerExtraBase, table=True):
                         )
                     )
                 ).label("min_price_ondemand"),
+                func.min(
+                    case(
+                        (
+                            ServerPrice.allocation == Allocation.ONDEMAND,
+                            func.round(ServerPrice.price_monthly * Currency.rate, 4),
+                        )
+                    )
+                ).label("min_price_ondemand_monthly"),
             )
             .where(ServerPrice.status == Status.ACTIVE)
             .join(
@@ -106,51 +114,6 @@ class ServerExtra(ServerExtraBase, table=True):
             .order_by(ServerPrice.vendor_id, ServerPrice.server_id)
             .subquery()
         )
-        min_price_ranked = (
-            select(
-                ServerPrice.vendor_id,
-                ServerPrice.server_id,
-                ServerPrice.price_tiered,
-                func.round(ServerPrice.price * Currency.rate, 4).label(
-                    "converted_price"
-                ),
-                func.row_number()
-                .over(
-                    partition_by=[ServerPrice.vendor_id, ServerPrice.server_id],
-                    order_by=[
-                        func.round(ServerPrice.price * Currency.rate, 4),
-                        ServerPrice.zone_id,
-                    ],
-                )
-                .label("row_num"),
-            )
-            .where(ServerPrice.status == Status.ACTIVE)
-            .where(ServerPrice.allocation == Allocation.ONDEMAND)
-            .join(
-                Currency,
-                (ServerPrice.currency == Currency.base) & (Currency.quote == "USD"),
-            )
-            .subquery()
-        )
-        min_price_tiered = (
-            select(
-                min_price_ranked.c.vendor_id,
-                min_price_ranked.c.server_id,
-                min_price_ranked.c.price_tiered.label("min_price_tiered"),
-            )
-            .where(min_price_ranked.c.row_num == 1)
-            .subquery()
-        )
-        # price_monthly = (
-        #     select(
-        #         ServerPriceExtra.vendor_id,
-        #         ServerPriceExtra.server_id,
-        #         ServerPriceExtra.price_monthly,
-        #     )
-        #     .where(ServerPriceExtra.status == Status.ACTIVE)
-        #     .where(ServerPriceExtra.allocation == Allocation.ONDEMAND)
-        #     .subquery()
-        # )
         query = select(
             price.c.vendor_id,
             price.c.server_id,
@@ -163,23 +126,16 @@ class ServerExtra(ServerExtraBase, table=True):
             price.c.min_price,
             price.c.min_price_spot,
             price.c.min_price_ondemand,
-            min_price_tiered.c.min_price_tiered,
-            # price_monthly.c.price_monthly,
+            price.c.min_price_ondemand_monthly,
         ).select_from(
             price.outerjoin(
                 score1,
                 (price.c.vendor_id == score1.c.vendor_id)
                 & (price.c.server_id == score1.c.server_id),
-            )
-            .outerjoin(
+            ).outerjoin(
                 scoren,
                 (price.c.vendor_id == scoren.c.vendor_id)
                 & (price.c.server_id == scoren.c.server_id),
-            )
-            .outerjoin(
-                min_price_tiered,
-                (price.c.vendor_id == min_price_tiered.c.vendor_id)
-                & (price.c.server_id == min_price_tiered.c.server_id),
             )
         )
 

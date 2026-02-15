@@ -47,7 +47,7 @@ from . import parameters as options
 from . import routers
 from .auth import AuthGuardMiddleware, AuthMiddleware
 from .cache import CacheHeaderMiddleware
-from .crawler_extend import calculate_tiered_price, parse_price_tiers
+from .crawler_extend import calculate_tiered_price
 from .currency import currency_converter
 from .database import get_db
 from .logger import LogMiddleware
@@ -542,14 +542,7 @@ def search_servers(
             server.min_price = server_extra.min_price
             server.min_price_spot = server_extra.min_price_spot
             server.min_price_ondemand = server_extra.min_price_ondemand
-            server.min_price_ondemand_monthly = calculate_tiered_price(
-                price_tiers=parse_price_tiers(server_extra.min_price_tiered),
-                # See e.g. Amazon pricing guides:
-                # > We assume a month equals 730 hours (8,760 hours in a year / 12 months = 730 hours per month)
-                usage=730.0,
-                fallback_unit_price=server_extra.min_price_ondemand,
-                round_digits=2,
-            )
+            server.min_price_ondemand_monthly = server_extra.min_price_ondemand_monthly
             server.score_per_price = server_extra.score_per_price
             server.price = server.min_price  # legacy
             server.selected_benchmark_score = benchmark_score
