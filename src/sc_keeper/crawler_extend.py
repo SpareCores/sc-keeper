@@ -112,7 +112,7 @@ def calculate_tiered_price(
 class NewColumn:
     name: str
     sqlite_type: str
-    sqlalchemy_type: str
+    sqlalchemy_type: type
     nullable: bool = False
 
     def __init__(
