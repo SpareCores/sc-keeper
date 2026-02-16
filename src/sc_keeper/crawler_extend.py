@@ -232,7 +232,10 @@ class ServerPriceExtender(TableExtender):
                     round_digits=2,
                 )
                 # avoid exact match due to SQL/Python rounding behavior
-                if abs(monthly_price - price.price_monthly) > 0.02:
+                if monthly_price and (
+                    price.price_monthly is None
+                    or abs(monthly_price - price.price_monthly) > 0.02
+                ):
                     logger.debug(
                         f"Updating price_monthly for {price.vendor_id}/{price.region_id}/{price.zone_id}/{price.server_id} from {price.price_monthly} to {monthly_price}"
                     )
