@@ -28,17 +28,17 @@ def parse_price_tiers(
 
     Example:
         >>> parse_price_tiers('[{"lower": 0, "upper": 100, "price": 10}]')
-        [PriceTier(lower=0, upper=100, price=10)]
+        [PriceTier(lower=0.0, upper=100.0, price=10.0)]
         >>> parse_price_tiers('[{"lower": 0, "upper": "Infinity", "price": 10}]')
-        [PriceTier(lower=0, upper=inf, price=10)]
+        [PriceTier(lower=0.0, upper=inf, price=10.0)]
         >>> parse_price_tiers([{'lower': 0, 'upper': 100, 'price': 10}])
-        [PriceTier(lower=0, upper=100, price=10)]
+        [PriceTier(lower=0.0, upper=100.0, price=10.0)]
         >>> parse_price_tiers([{'lower': 0, 'upper': 'Infinity', 'price': 10}])
-        [PriceTier(lower=0, upper=inf, price=10)]
+        [PriceTier(lower=0.0, upper=inf, price=10.0)]
         >>> parse_price_tiers([{'lower': 0, 'upper': float("inf"), 'price': 10}])
-        [PriceTier(lower=0, upper=inf, price=10)]
+        [PriceTier(lower=0.0, upper=inf, price=10.0)]
         >>> parse_price_tiers([PriceTier(lower=0, upper=100, price=10)])
-        [PriceTier(lower=0, upper=100, price=10)]
+        [PriceTier(lower=0.0, upper=100.0, price=10.0)]
     """
     if not price_tiers_json:
         return []
