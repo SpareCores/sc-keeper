@@ -173,7 +173,7 @@ def get_debug_info(db: Session = Depends(get_db)) -> DebugInfoResponse:
         is_active = server["status"] == Status.ACTIVE
         has_benchmarks = server["has_benchmarks"]
 
-        if is_active:
+        if is_active and has_price:
             vendor_stats[vendor_id]["active"] += 1
         if is_active and has_benchmarks:
             vendor_stats[vendor_id]["evaluated"] += 1
