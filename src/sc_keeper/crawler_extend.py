@@ -25,12 +25,26 @@ def parse_price_tiers(
 
     Returns:
         List of PriceTier objects, or empty list if parsing fails or input is None/empty
+
+    Example:
+        >>> parse_price_tiers('[{"lower": 0, "upper": 100, "price": 10}]')
+        [PriceTier(lower=0, upper=100, price=10)]
+        >>> parse_price_tiers('[{"lower": 0, "upper": "Infinity", "price": 10}]')
+        [PriceTier(lower=0, upper=inf, price=10)]
+        >>> parse_price_tiers([{'lower': 0, 'upper': 100, 'price': 10}])
+        [PriceTier(lower=0, upper=100, price=10)]
+        >>> parse_price_tiers([{'lower': 0, 'upper': 'Infinity', 'price': 10}])
+        [PriceTier(lower=0, upper=inf, price=10)]
+        >>> parse_price_tiers([{'lower': 0, 'upper': float("inf"), 'price': 10}])
+        [PriceTier(lower=0, upper=inf, price=10)]
+        >>> parse_price_tiers([PriceTier(lower=0, upper=100, price=10)])
+        [PriceTier(lower=0, upper=100, price=10)]
     """
     if not price_tiers_json:
         return []
 
     try:
-        # JSON might have been already parsed into a list of dicts
+        # JSON might have been already parsed into a list of dicts or actual PriceTier objects
         if isinstance(price_tiers_json, str):
             tier_dicts = json_loads(price_tiers_json)
         else:
@@ -41,9 +55,11 @@ def parse_price_tiers(
 
         price_tiers = []
         for tier in tier_dicts:
-            if tier.get("upper") == "Infinity":
-                tier["upper"] = float("inf")
-            price_tiers.append(PriceTier(**tier))
+            if isinstance(tier, dict):
+                tier = PriceTier(**tier)
+            if tier.upper == "Infinity":
+                tier.upper = float("inf")
+            price_tiers.append(tier)
         return price_tiers
 
     except Exception:
