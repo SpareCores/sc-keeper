@@ -6,11 +6,13 @@ New feature(s):
 - Support for float GPU count values for fractional GPU allocation.
 - New endpoint `/stats` for querying database table statistics with optional vendor and only_active filters.
 - New endpoint `/debug` for querying debug information about the availability of benchmark scores for servers.
+- Include monthly price caps (calculated from tiered prices) in server and server price search results.
 
 Fix(es):
 
 - Upgrade FastAPI from 0.115.13 to 0.128.8.
 - Fix macOS compatibility issue with `iowait` CPU metric logging (not available on Darwin systems).
+- Convert tiered prices to requested currency in the server price search results.
 
 ‼ Breaking changes:
 

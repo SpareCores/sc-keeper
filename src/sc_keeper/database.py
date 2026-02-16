@@ -11,8 +11,9 @@ import safe_exit
 from sc_data import db
 from sqlmodel import Session, create_engine, delete, insert, text
 
-from . import views
+from .crawler_extend import extenders
 from .indexes import indexes
+from .views import views
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ class Database(Thread):
             )
             # delete=False due to Windows support
             tmpfile = NamedTemporaryFile(delete=False).name
+            logger.info(f"Copying {db.path} to {tmpfile}")
             copyfile(db.path, tmpfile)
             with self.lock:
                 self.tmpfiles.append(tmpfile)
@@ -65,11 +67,17 @@ class Database(Thread):
                 conn.execute(text("PRAGMA synchronous=OFF"))
                 conn.execute(text("PRAGMA journal_mode=OFF"))
                 conn.execute(text("PRAGMA mmap_size=67108864"))  # 64 MiB
+                # add new columns to the database
+                logger.info("Extending tables")
+                for extender in extenders:
+                    logger.info(f"Adding columns to {extender.table.__table__}")
+                    extender.add_columns(engine)
+                    extender.update(engine)
                 # speed up some queries with indexes
                 for index in indexes:
                     index.create(bind=conn, checkfirst=True)
                 # prep and fill ~materialized views
-                for t in views.views:
+                for t in views:
                     t.__table__.create(engine, checkfirst=True)
                     if hasattr(t, "insert"):
                         with Session(engine) as session:
