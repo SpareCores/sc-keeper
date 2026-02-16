@@ -56,9 +56,14 @@ def parse_price_tiers(
         price_tiers = []
         for tier in tier_dicts:
             if isinstance(tier, dict):
+                if tier.get("upper") == "Infinity":
+                    tier["upper"] = float("inf")
                 tier = PriceTier(**tier)
-            if tier.upper == "Infinity":
-                tier.upper = float("inf")
+            elif isinstance(tier, PriceTier):
+                if tier.upper == "Infinity":
+                    tier.upper = float("inf")
+            else:
+                raise ValueError(f"Invalid tier type: {type(tier)}")
             price_tiers.append(tier)
         return price_tiers
 
@@ -256,7 +261,7 @@ class ServerPriceExtender(TableExtender):
                     round_digits=2,
                 )
                 # avoid exact match due to SQL/Python rounding behavior
-                if monthly_price and (
+                if monthly_price is not None and (
                     price.price_monthly is None
                     or abs(monthly_price - price.price_monthly) > 0.02
                 ):
