@@ -113,22 +113,47 @@ class NewColumn:
     name: str
     sqlite_type: str
     sqlalchemy_type: type
-    nullable: bool = False
+    nullable: bool = True
+    default: Any = None
 
     def __init__(
-        self, name: str, sqlite_type: str, sqlalchemy_type: type, nullable: bool = False
+        self,
+        name: str,
+        sqlite_type: str,
+        sqlalchemy_type: type,
+        nullable: bool = True,
+        default: Any = None,
     ):
         self.name = name
         self.sqlite_type = sqlite_type
         self.sqlalchemy_type = sqlalchemy_type
+        if nullable is False and default is None:
+            raise ValueError("default value must be set if a column is not nullable")
         self.nullable = nullable
+        self.default = default
+
+
+def _sql_default(value: Any) -> str:
+    """Format any value for SQL DEFAULT clause."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return f"DEFAULT {1 if value else 0}"
+    if isinstance(value, (int, float)):
+        return f"DEFAULT {value}"
+    # quote and escape string and other types
+    escaped = str(value).replace("'", "''")
+    return f"DEFAULT '{escaped}'"
 
 
 def sql_add_column(table_name: str, column: NewColumn):
     """Generate SQL to add a column to a table."""
-    return text(
-        f"ALTER TABLE {table_name} ADD COLUMN {column.name} {column.sqlite_type} {'' if column.nullable else 'NOT NULL'}"
-    )
+    return text(f"""
+        ALTER TABLE {table_name}
+        ADD COLUMN {column.name} {column.sqlite_type}
+        {"" if column.nullable else "NOT NULL"}
+        {_sql_default(column.default)}
+    """)
 
 
 class TableExtender:
@@ -202,7 +227,6 @@ class ServerPriceExtender(TableExtender):
             name="price_monthly",
             sqlite_type="FLOAT",
             sqlalchemy_type=Float,
-            nullable=True,
         ),
     ]
 
