@@ -62,6 +62,8 @@ test_servers_params = [
     {"gpu_family": ["Turing"]},
     {"gpu_model": ["A100"]},
     {"benchmark_id": "bogomips", "benchmark_score_min": 5000},
+    {"countries": ["DE"]},
+    {"regions": ["us-west-2", "eu-central-1"]},
 ]
 
 test_server_prices_params = (

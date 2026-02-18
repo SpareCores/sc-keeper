@@ -7,6 +7,7 @@ New feature(s):
 - New endpoint `/stats` for querying database table statistics with optional vendor and only_active filters.
 - New endpoint `/debug` for querying debug information about the availability of benchmark scores for servers.
 - Include monthly price caps (calculated from tiered prices) in server and server price search results.
+- Add optional country/region filter for the servers endpoint.
 
 Fix(es):
 

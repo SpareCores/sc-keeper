@@ -1,4 +1,4 @@
-from sc_crawler.tables import BenchmarkScore, Server, ServerPrice
+from sc_crawler.tables import BenchmarkScore, Region, Server, ServerPrice
 from sqlmodel import Index
 
 index_defs = [
@@ -40,6 +40,34 @@ index_defs = [
         BenchmarkScore.benchmark_id,
         BenchmarkScore.vendor_id,
         BenchmarkScore.server_id,
+    ],
+    [
+        "server_price_idx_vendor_region_status",
+        ServerPrice.vendor_id,
+        ServerPrice.region_id,
+        ServerPrice.status,
+        ServerPrice.server_id,
+        ServerPrice.price,
+    ],
+    [
+        "server_price_idx_region_status",
+        ServerPrice.region_id,
+        ServerPrice.status,
+        ServerPrice.vendor_id,
+        ServerPrice.server_id,
+        ServerPrice.price,
+    ],
+    [
+        "region_idx_country",
+        Region.country_id,
+        Region.vendor_id,
+        Region.region_id,
+    ],
+    [
+        "server_idx_vendor_server_status",
+        Server.vendor_id,
+        Server.server_id,
+        Server.status,
     ],
 ]
 
