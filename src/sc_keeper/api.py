@@ -501,6 +501,7 @@ def search_servers(
         conditions.add(Server.gpu_model.in_(gpu_model))
     if only_active:
         conditions.add(Server.status == Status.ACTIVE)
+        conditions.add(ServerExtra.min_price.isnot(None))
     if storage_type:
         conditions.add(Server.storage_type.in_(storage_type))
     if vendor:
@@ -562,7 +563,7 @@ def search_servers(
                 & (Server.server_id == benchmark_query.c.server_id),
                 isouter=True,
             )
-        if live_price_query is not None and order_by in _live_price_order_fields:
+        if live_price_query is not None:
             query = query.join(
                 live_price_query,
                 (Server.vendor_id == live_price_query.c.vendor_id)
@@ -571,12 +572,15 @@ def search_servers(
             )
         for condition in conditions:
             query = query.where(condition)
-        if live_price_query is not None and order_by in _live_price_order_fields:
-            query = query.where(
-                getattr(live_price_query.c, _live_price_order_fields[order_by]).isnot(
-                    None
+        if live_price_query is not None:
+            if order_by in _live_price_order_fields:
+                query = query.where(
+                    getattr(
+                        live_price_query.c, _live_price_order_fields[order_by]
+                    ).isnot(None)
                 )
-            )
+            if only_active:
+                query = query.where(live_price_query.c.min_price.isnot(None))
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     # actual query
@@ -629,10 +633,15 @@ def search_servers(
         query = query.where(condition)
 
     # strictly exclude servers with no price in the filtered regions/countries
-    if live_price_query is not None and order_by in _live_price_order_fields:
-        query = query.where(
-            getattr(live_price_query.c, _live_price_order_fields[order_by]).isnot(None)
-        )
+    if live_price_query is not None:
+        if order_by in _live_price_order_fields:
+            query = query.where(
+                getattr(live_price_query.c, _live_price_order_fields[order_by]).isnot(
+                    None
+                )
+            )
+        if only_active:
+            query = query.where(live_price_query.c.min_price.isnot(None))
 
     # ordering
     if order_by:
