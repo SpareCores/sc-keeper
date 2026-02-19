@@ -510,7 +510,6 @@ def search_servers(
     # hide servers without value when filtering by the related column
     if order_by == "score_per_price":
         conditions.add(ServerExtra.score.isnot(None))
-    if order_by == "score_per_price":
         conditions.add(ServerExtra.score_per_price.isnot(None))
     if order_by == "min_price":
         conditions.add(ServerExtra.min_price.isnot(None))
@@ -665,6 +664,13 @@ def search_servers(
                 else ServerExtra.min_price
             )
             order_field = benchmark_query.c.benchmark_score / denom
+        elif order_by == "score_per_price":
+            denom = (
+                live_price_query.c.min_price
+                if live_price_query is not None
+                else ServerExtra.min_price
+            )
+            order_field = ServerExtra.score / denom
         else:
             if live_price_query is not None and order_by in _live_price_fields:
                 order_field = getattr(live_price_query.c, order_by)
