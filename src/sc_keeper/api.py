@@ -547,6 +547,16 @@ def search_servers(
             or benchmark_score_stressng_cpu_min
             or benchmark_score_per_price_stressng_cpu_min
             or benchmark_score_per_price_min
+            or (
+                order_by
+                in [
+                    "score_per_price",
+                    "min_price",
+                    "min_price_ondemand",
+                    "min_price_spot",
+                    "selected_benchmark_score_per_price",
+                ]
+            )
         ):
             query = query.join(
                 ServerExtra,
