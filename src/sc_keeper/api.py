@@ -535,6 +535,7 @@ def search_servers(
         "min_price_spot": "min_price_spot",
         "min_price_ondemand": "min_price_ondemand",
         "min_price_ondemand_monthly": "min_price_ondemand_monthly",
+        "score_per_price": "min_price",
         "selected_benchmark_score_per_price": "min_price",
     }
 
