@@ -1,6 +1,5 @@
 import logging
-from json import loads as json_loads
-from typing import Any, Dict, List
+from typing import Any, List
 
 from sc_crawler.table_bases import ScModel
 from sc_crawler.table_fields import Allocation, PriceTier, Status
@@ -10,65 +9,6 @@ from sqlalchemy.orm import column_property
 from sqlmodel import Column, Float, Session, select, text
 
 logger = logging.getLogger(__name__)
-
-
-def parse_price_tiers(
-    price_tiers_json: str | List[Dict[str, Any]] | List[PriceTier] | None,
-) -> list[PriceTier]:
-    """
-    Parse JSON string or list of dicts of price tiers into PriceTier objects, and
-    convert "Infinity" strings to float('inf') for upper bounds.
-
-    Args:
-        price_tiers_json: JSON string representation of price tiers from database when read as a string,
-            or already parsed list of dicts or list of actual PriceTier objects.
-
-    Returns:
-        List of PriceTier objects, or empty list if parsing fails or input is None/empty
-
-    Example:
-        >>> parse_price_tiers('[{"lower": 0, "upper": 100, "price": 10}]')
-        [PriceTier(lower=0.0, upper=100.0, price=10.0)]
-        >>> parse_price_tiers('[{"lower": 0, "upper": "Infinity", "price": 10}]')
-        [PriceTier(lower=0.0, upper=inf, price=10.0)]
-        >>> parse_price_tiers([{'lower': 0, 'upper': 100, 'price': 10}])
-        [PriceTier(lower=0.0, upper=100.0, price=10.0)]
-        >>> parse_price_tiers([{'lower': 0, 'upper': 'Infinity', 'price': 10}])
-        [PriceTier(lower=0.0, upper=inf, price=10.0)]
-        >>> parse_price_tiers([{'lower': 0, 'upper': float("inf"), 'price': 10}])
-        [PriceTier(lower=0.0, upper=inf, price=10.0)]
-        >>> parse_price_tiers([PriceTier(lower=0, upper=100, price=10)])
-        [PriceTier(lower=0.0, upper=100.0, price=10.0)]
-    """
-    if not price_tiers_json:
-        return []
-
-    try:
-        # JSON might have been already parsed into a list of dicts or actual PriceTier objects
-        if isinstance(price_tiers_json, str):
-            tier_dicts = json_loads(price_tiers_json)
-        else:
-            tier_dicts = price_tiers_json
-
-        if not tier_dicts or not isinstance(tier_dicts, list):
-            return []
-
-        price_tiers = []
-        for tier in tier_dicts:
-            if isinstance(tier, dict):
-                if tier.get("upper") == "Infinity":
-                    tier["upper"] = float("inf")
-                tier = PriceTier(**tier)
-            elif isinstance(tier, PriceTier):
-                if tier.upper == "Infinity":
-                    tier.upper = float("inf")
-            else:
-                raise ValueError(f"Invalid tier type: {type(tier)}")
-            price_tiers.append(tier)
-        return price_tiers
-
-    except Exception:
-        return []
 
 
 def calculate_tiered_price(
@@ -255,7 +195,7 @@ class ServerPriceExtender(TableExtender):
             ).all()
             for price in prices:
                 monthly_price = calculate_tiered_price(
-                    price_tiers=parse_price_tiers(price.price_tiered),
+                    price_tiers=price.price_tiered,
                     usage=730.0,
                     fallback_unit_price=price.price,
                     round_digits=2,
