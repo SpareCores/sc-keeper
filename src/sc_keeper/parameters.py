@@ -190,7 +190,7 @@ regions = Annotated[
     Optional[List[Regions]],
     Query(
         title="Region id",
-        description="Identifier of the region.",
+        description="Identifier of the region. Note that region ids are not vendor specific, so you when you select a region, you might get results from multiple vendors. For more precise filtering, use vendor_regions instead.",
         json_schema_extra={
             "category_id": FilterCategories.REGION,
             "enum": [m.value for m in Regions],
