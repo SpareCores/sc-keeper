@@ -366,12 +366,12 @@ def search_servers(
 
     user = getattr(request.state, "user", None)
     if not user:
-        if regions and len(regions) > 3:
+        if max(len(regions or []), len(vendor_regions or [])) > 3:
             raise HTTPException(
                 status_code=400,
                 detail="Max 3 regions can be queried at a time without authentication.",
             )
-        if countries and len(countries) > 1:
+        if len(countries or []) > 1:
             raise HTTPException(
                 status_code=400,
                 detail="Max 1 country can be queried at a time without authentication.",
