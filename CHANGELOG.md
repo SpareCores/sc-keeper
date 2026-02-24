@@ -13,6 +13,7 @@ Fix(es):
 - Upgrade FastAPI from 0.115.13 to 0.128.8.
 - Fix macOS compatibility issue with `iowait` CPU metric logging (not available on Darwin systems).
 - Convert tiered prices to requested currency in the server price search results.
+- Filter out server prices without a related server score when ordering by score or score_per_price.
 
 ‼ Breaking changes:
 
