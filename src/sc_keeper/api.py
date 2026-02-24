@@ -794,6 +794,7 @@ def search_server_prices(
     allocation: options.allocation = None,
     vendor: options.vendor = None,
     regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
     compliance_framework: options.compliance_framework = None,
     storage_size: options.storage_size = None,
     storage_type: options.storage_type = None,
@@ -908,6 +909,15 @@ def search_server_prices(
         conditions.add(ServerPrice.vendor_id.in_(vendor))
     if regions:
         conditions.add(ServerPrice.region_id.in_(regions))
+    if vendor_regions:
+        vendor_region_clauses = []
+        for vendor_region in vendor_regions:
+            v, r = vendor_region.split("~")
+            vendor_region_clauses.append(
+                and_(ServerPrice.vendor_id == v, ServerPrice.region_id == r)
+            )
+        if vendor_region_clauses:
+            conditions.add(or_(*vendor_region_clauses))
     if countries:
         joins.add(ServerPrice.region)
         conditions.add(Region.country_id.in_(countries))
