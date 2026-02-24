@@ -517,7 +517,7 @@ def search_servers(
     if vendor:
         conditions.add(Server.vendor_id.in_(vendor))
 
-    # hide servers without value when filtering by the related column
+    # hide servers without value when ordering by the related column
     if order_by == "score_per_price":
         conditions.add(ServerExtra.score.isnot(None))
         conditions.add(ServerExtra.score_per_price.isnot(None))
@@ -922,6 +922,10 @@ def search_server_prices(
         joins.add(ServerPrice.region)
         conditions.add(Region.country_id.in_(countries))
 
+    # hide servers without value when ordering by the related column
+    if order_by in ["score", "score_per_price"]:
+        conditions.add(ServerExtra.score.isnot(None))
+
     # count all records to be returned in header
     if add_total_count_header:
         query = select(func.count()).select_from(ServerPrice)
@@ -930,6 +934,7 @@ def search_server_prices(
         if (
             benchmark_score_stressng_cpu_min
             or benchmark_score_per_price_stressng_cpu_min
+            or order_by in ["score", "score_per_price"]
         ):
             query = query.join(
                 ServerExtra,

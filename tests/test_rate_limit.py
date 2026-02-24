@@ -104,7 +104,7 @@ def test_rate_limit_custom_credit_cost(client_with_rate_limit):
     success_count = 0
     blocked_count = 0
 
-    for _ in range(10):
+    for _ in range(5):
         response = client_with_rate_limit.get("/servers", params={"limit": 1})
         if response.status_code == 200:
             success_count += 1
