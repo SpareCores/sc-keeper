@@ -8,6 +8,7 @@ New feature(s):
 - New endpoint `/debug` for querying debug information about the availability of benchmark scores for servers.
 - Include monthly price caps (calculated from tiered prices) in server and server price search results.
 - Add optional country/region filter for the servers endpoint.
+- Add optional `vendor_regions` filter for all endpoints already supporting the `regions` filter for more precise filtering.
 
 Fix(es):
 
