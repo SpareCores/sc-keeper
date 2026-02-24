@@ -39,7 +39,9 @@ with session.sessionmaker as db:
         "VendorRegions",
         {
             m.vendor_id + "~" + m.region_id: m.vendor_id + "~" + m.region_id
-            for m in db.exec(select(Region)).all()
+            for m in db.exec(
+                select(Region).order_by(Region.vendor_id, Region.region_id)
+            ).all()
         },
     )
     Regions = StrEnum(
