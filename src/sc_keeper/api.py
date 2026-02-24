@@ -478,15 +478,24 @@ def search_servers(
     if benchmark_score_stressng_cpu_min:
         conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
     if benchmark_score_per_price_stressng_cpu_min:
+        denom = (
+            live_price_query.c.min_price
+            if live_price_query is not None
+            else ServerExtra.min_price
+        )
         conditions.add(
-            ServerExtra.score_per_price > benchmark_score_per_price_stressng_cpu_min
+            ServerExtra.score / denom > benchmark_score_per_price_stressng_cpu_min
         )
     if benchmark_score_min:
         conditions.add(benchmark_query.c.benchmark_score >= benchmark_score_min)
     if benchmark_score_per_price_min:
+        denom = (
+            live_price_query.c.min_price
+            if live_price_query is not None
+            else ServerExtra.min_price
+        )
         conditions.add(
-            benchmark_query.c.benchmark_score / ServerExtra.min_price
-            >= benchmark_score_per_price_min
+            benchmark_query.c.benchmark_score / denom >= benchmark_score_per_price_min
         )
     if memory_min:
         conditions.add(Server.memory_amount >= memory_min * 1024)
