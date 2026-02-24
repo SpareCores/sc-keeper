@@ -6,11 +6,11 @@ from os import environ
 from textwrap import dedent
 from typing import List
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.docs import get_redoc_html
-from sc_crawler.table_fields import Status, TrafficDirection
+from sc_crawler.table_fields import Allocation, Status, TrafficDirection
 from sc_crawler.tables import (
     Benchmark,
     BenchmarkScore,
@@ -28,6 +28,8 @@ from sc_crawler.tables import (
 )
 from sqlalchemy.orm import aliased, contains_eager
 from sqlmodel import Session, String, case, func, or_, select
+
+from .helpers import vendor_region_filter
 
 # early validation (before DB imports) of environment variables
 logger = getLogger(__name__)
@@ -63,7 +65,7 @@ from .references import (
     TrafficPriceWithPKsWithMonthlyTraffic,
 )
 from .sentry import before_send as sentry_before_send
-from .views import ServerExtra
+from .views import Currency, ServerExtra
 
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
@@ -316,6 +318,7 @@ def search_regions(
 
 @app.get("/servers", tags=["Query Resources"])
 def search_servers(
+    request: Request,
     response: Response,
     partial_name_or_id: options.partial_name_or_id = None,
     vcpus_min: options.vcpus_min = 1,
@@ -334,6 +337,9 @@ def search_servers(
     only_active: options.only_active = True,
     vendor: options.vendor = None,
     compliance_framework: options.compliance_framework = None,
+    regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
+    countries: options.countries = None,
     storage_size: options.storage_size = None,
     storage_type: options.storage_type = None,
     gpu_min: options.gpu_min = None,
@@ -360,6 +366,19 @@ def search_servers(
         compliant_vendors = db.exec(query).all()
         vendor = list(set(vendor or []) & set(compliant_vendors))
 
+    user = getattr(request.state, "user", None)
+    if not user:
+        if max(len(regions or []), len(vendor_regions or [])) > 3:
+            raise HTTPException(
+                status_code=400,
+                detail="Max 3 regions can be queried at a time without authentication.",
+            )
+        if len(countries or []) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Max 1 country can be queried at a time without authentication.",
+            )
+
     # keep track of filter conditions
     conditions = set()
 
@@ -377,6 +396,61 @@ def search_servers(
             status_code=400,
             detail="benchmark_id is required when ordering by benchmark_score or benchmark_score_per_price",
         )
+
+    live_price_query = None
+    if regions or countries or vendor_regions:
+        lp = (
+            select(
+                ServerPrice.vendor_id,
+                ServerPrice.server_id,
+                func.round(func.min(ServerPrice.price * Currency.rate), 4).label(
+                    "min_price"
+                ),
+                func.min(
+                    case(
+                        (
+                            ServerPrice.allocation == Allocation.SPOT,
+                            func.round(ServerPrice.price * Currency.rate, 4),
+                        )
+                    )
+                ).label("min_price_spot"),
+                func.min(
+                    case(
+                        (
+                            ServerPrice.allocation == Allocation.ONDEMAND,
+                            func.round(ServerPrice.price * Currency.rate, 4),
+                        )
+                    )
+                ).label("min_price_ondemand"),
+                func.min(
+                    case(
+                        (
+                            ServerPrice.allocation == Allocation.ONDEMAND,
+                            func.round(ServerPrice.price_monthly * Currency.rate, 2),
+                        )
+                    )
+                ).label("min_price_ondemand_monthly"),
+            )
+            .where(ServerPrice.status == Status.ACTIVE)
+            .join(
+                Currency,
+                (ServerPrice.currency == Currency.base) & (Currency.quote == "USD"),
+            )
+        )
+        if countries:
+            lp = lp.join(
+                Region,
+                (ServerPrice.vendor_id == Region.vendor_id)
+                & (ServerPrice.region_id == Region.region_id),
+            )
+            lp = lp.where(Region.country_id.in_(countries))
+        if regions:
+            lp = lp.where(ServerPrice.region_id.in_(regions))
+        if vendor_regions:
+            lp = lp.where(vendor_region_filter(vendor_regions, ServerPrice))
+        live_price_query = lp.group_by(
+            ServerPrice.vendor_id, ServerPrice.server_id
+        ).subquery()
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
@@ -404,15 +478,24 @@ def search_servers(
     if benchmark_score_stressng_cpu_min:
         conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
     if benchmark_score_per_price_stressng_cpu_min:
+        denom = (
+            live_price_query.c.min_price
+            if live_price_query is not None
+            else ServerExtra.min_price
+        )
         conditions.add(
-            ServerExtra.score_per_price > benchmark_score_per_price_stressng_cpu_min
+            ServerExtra.score / denom > benchmark_score_per_price_stressng_cpu_min
         )
     if benchmark_score_min:
         conditions.add(benchmark_query.c.benchmark_score >= benchmark_score_min)
     if benchmark_score_per_price_min:
+        denom = (
+            live_price_query.c.min_price
+            if live_price_query is not None
+            else ServerExtra.min_price
+        )
         conditions.add(
-            benchmark_query.c.benchmark_score / ServerExtra.min_price
-            >= benchmark_score_per_price_min
+            benchmark_query.c.benchmark_score / denom >= benchmark_score_per_price_min
         )
     if memory_min:
         conditions.add(Server.memory_amount >= memory_min * 1024)
@@ -432,15 +515,15 @@ def search_servers(
         conditions.add(Server.gpu_model.in_(gpu_model))
     if only_active:
         conditions.add(Server.status == Status.ACTIVE)
+        conditions.add(ServerExtra.min_price.isnot(None))
     if storage_type:
         conditions.add(Server.storage_type.in_(storage_type))
     if vendor:
         conditions.add(Server.vendor_id.in_(vendor))
 
-    # hide servers without value when filtering by the related column
+    # hide servers without value when ordering by the related column
     if order_by == "score_per_price":
         conditions.add(ServerExtra.score.isnot(None))
-    if order_by == "score_per_price":
         conditions.add(ServerExtra.score_per_price.isnot(None))
     if order_by == "min_price":
         conditions.add(ServerExtra.min_price.isnot(None))
@@ -454,6 +537,21 @@ def search_servers(
         conditions.add(benchmark_query.c.benchmark_score.isnot(None))
         conditions.add(ServerExtra.min_price.isnot(None))
 
+    _live_price_fields = (
+        "min_price",
+        "min_price_spot",
+        "min_price_ondemand",
+        "min_price_ondemand_monthly",
+    )
+    _live_price_order_fields = {
+        "min_price": "min_price",
+        "min_price_spot": "min_price_spot",
+        "min_price_ondemand": "min_price_ondemand",
+        "min_price_ondemand_monthly": "min_price_ondemand_monthly",
+        "score_per_price": "min_price",
+        "selected_benchmark_score_per_price": "min_price",
+    }
+
     # count all records to be returned in header
     if add_total_count_header:
         query = select(func.count()).select_from(Server)
@@ -462,6 +560,16 @@ def search_servers(
             or benchmark_score_stressng_cpu_min
             or benchmark_score_per_price_stressng_cpu_min
             or benchmark_score_per_price_min
+            or (
+                order_by
+                in [
+                    "score_per_price",
+                    "min_price",
+                    "min_price_ondemand",
+                    "min_price_spot",
+                    "selected_benchmark_score_per_price",
+                ]
+            )
         ):
             query = query.join(
                 ServerExtra,
@@ -479,13 +587,48 @@ def search_servers(
                 & (Server.server_id == benchmark_query.c.server_id),
                 isouter=True,
             )
+        if live_price_query is not None:
+            query = query.join(
+                live_price_query,
+                (Server.vendor_id == live_price_query.c.vendor_id)
+                & (Server.server_id == live_price_query.c.server_id),
+                isouter=True,
+            )
         for condition in conditions:
             query = query.where(condition)
+        if live_price_query is not None:
+            if order_by in _live_price_order_fields:
+                query = query.where(
+                    getattr(
+                        live_price_query.c, _live_price_order_fields[order_by]
+                    ).isnot(None)
+                )
+            if only_active:
+                query = query.where(live_price_query.c.min_price.isnot(None))
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     # actual query
-    if benchmark_id:
+    if benchmark_id and live_price_query is not None:
+        query = select(
+            Server,
+            ServerExtra,
+            benchmark_query.c.benchmark_score,
+            live_price_query.c.min_price,
+            live_price_query.c.min_price_spot,
+            live_price_query.c.min_price_ondemand,
+            live_price_query.c.min_price_ondemand_monthly,
+        )
+    elif benchmark_id:
         query = select(Server, ServerExtra, benchmark_query.c.benchmark_score)
+    elif live_price_query is not None:
+        query = select(
+            Server,
+            ServerExtra,
+            live_price_query.c.min_price,
+            live_price_query.c.min_price_spot,
+            live_price_query.c.min_price_ondemand,
+            live_price_query.c.min_price_ondemand_monthly,
+        )
     else:
         query = select(Server, ServerExtra)
     query = query.join(Server.vendor)
@@ -502,23 +645,60 @@ def search_servers(
             & (Server.server_id == benchmark_query.c.server_id),
             isouter=True,
         )
+    if live_price_query is not None:
+        query = query.join(
+            live_price_query,
+            (Server.vendor_id == live_price_query.c.vendor_id)
+            & (Server.server_id == live_price_query.c.server_id),
+            isouter=True,
+        )
     query = query.options(contains_eager(Server.vendor))
     for condition in conditions:
         query = query.where(condition)
+
+    # strictly exclude servers with no price in the filtered regions/countries
+    if live_price_query is not None:
+        if order_by in _live_price_order_fields:
+            query = query.where(
+                getattr(live_price_query.c, _live_price_order_fields[order_by]).isnot(
+                    None
+                )
+            )
+        if only_active:
+            query = query.where(live_price_query.c.min_price.isnot(None))
 
     # ordering
     if order_by:
         if order_by == "selected_benchmark_score":
             order_field = benchmark_query.c.benchmark_score
         elif order_by == "selected_benchmark_score_per_price":
-            order_field = benchmark_query.c.benchmark_score / ServerExtra.min_price
+            denom = (
+                live_price_query.c.min_price
+                if live_price_query is not None
+                else ServerExtra.min_price
+            )
+            order_field = benchmark_query.c.benchmark_score / denom
+        elif order_by == "score_per_price":
+            denom = (
+                live_price_query.c.min_price
+                if live_price_query is not None
+                else ServerExtra.min_price
+            )
+            order_field = ServerExtra.score / denom
         else:
-            order_obj = [o for o in [Server, ServerExtra] if hasattr(o, order_by)]
-            if len(order_obj) == 0:
-                raise HTTPException(status_code=400, detail="Unknown order_by field.")
-            if len(order_obj) > 1:
-                raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
-            order_field = getattr(order_obj[0], order_by)
+            if live_price_query is not None and order_by in _live_price_fields:
+                order_field = getattr(live_price_query.c, order_by)
+            else:
+                order_obj = [o for o in [Server, ServerExtra] if hasattr(o, order_by)]
+                if len(order_obj) == 0:
+                    raise HTTPException(
+                        status_code=400, detail="Unknown order_by field."
+                    )
+                if len(order_obj) > 1:
+                    raise HTTPException(
+                        status_code=400, detail="Ambiguous order_by field."
+                    )
+                order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
         else:
@@ -535,19 +715,58 @@ def search_servers(
     # unpack score
     serverlist = []
     for server_items in servers:
-        if benchmark_id:
+        if benchmark_id and live_price_query is not None:
+            (
+                server_data,
+                server_extra,
+                benchmark_score,
+                lp_min,
+                lp_spot,
+                lp_ondemand,
+                lp_monthly,
+            ) = server_items
+        elif benchmark_id:
             server_data, server_extra, benchmark_score = server_items
+            lp_min = lp_spot = lp_ondemand = lp_monthly = None
+        elif live_price_query is not None:
+            (
+                server_data,
+                server_extra,
+                lp_min,
+                lp_spot,
+                lp_ondemand,
+                lp_monthly,
+            ) = server_items
+            benchmark_score = None
         else:
             server_data, server_extra = server_items
             benchmark_score = None
+            lp_min = lp_spot = lp_ondemand = lp_monthly = None
         server = ServerPKs.model_validate(server_data)
         with suppress(Exception):
             server.score = server_extra.score
-            server.min_price = server_extra.min_price
-            server.min_price_spot = server_extra.min_price_spot
-            server.min_price_ondemand = server_extra.min_price_ondemand
-            server.min_price_ondemand_monthly = server_extra.min_price_ondemand_monthly
-            server.score_per_price = server_extra.score_per_price
+            server.min_price = lp_min if lp_min is not None else server_extra.min_price
+            server.min_price_spot = (
+                lp_spot if lp_spot is not None else server_extra.min_price_spot
+            )
+            server.min_price_ondemand = (
+                lp_ondemand
+                if lp_ondemand is not None
+                else server_extra.min_price_ondemand
+            )
+            server.min_price_ondemand_monthly = (
+                lp_monthly
+                if lp_monthly is not None
+                else server_extra.min_price_ondemand_monthly
+            )
+            effective_min_price = (
+                lp_min if lp_min is not None else server_extra.min_price
+            )
+            server.score_per_price = (
+                round(server_extra.score / effective_min_price, 4)
+                if server_extra.score and effective_min_price
+                else server_extra.score_per_price
+            )
             server.price = server.min_price  # legacy
             server.selected_benchmark_score = benchmark_score
             server.selected_benchmark_score_per_price = (
@@ -579,6 +798,7 @@ def search_server_prices(
     allocation: options.allocation = None,
     vendor: options.vendor = None,
     regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
     compliance_framework: options.compliance_framework = None,
     storage_size: options.storage_size = None,
     storage_type: options.storage_type = None,
@@ -693,9 +913,15 @@ def search_server_prices(
         conditions.add(ServerPrice.vendor_id.in_(vendor))
     if regions:
         conditions.add(ServerPrice.region_id.in_(regions))
+    if vendor_regions:
+        conditions.add(vendor_region_filter(vendor_regions, ServerPrice))
     if countries:
         joins.add(ServerPrice.region)
         conditions.add(Region.country_id.in_(countries))
+
+    # hide servers without value when ordering by the related column
+    if order_by in ["score", "score_per_price"]:
+        conditions.add(ServerExtra.score.isnot(None))
 
     # count all records to be returned in header
     if add_total_count_header:
@@ -705,6 +931,7 @@ def search_server_prices(
         if (
             benchmark_score_stressng_cpu_min
             or benchmark_score_per_price_stressng_cpu_min
+            or order_by in ["score", "score_per_price"]
         ):
             query = query.join(
                 ServerExtra,
@@ -884,6 +1111,7 @@ def search_storage_prices(
     storage_type: options.storage_type = None,
     compliance_framework: options.compliance_framework = None,
     regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
     countries: options.countries = None,
     limit: options.limit = 10,
     page: options.page = None,
@@ -925,6 +1153,9 @@ def search_storage_prices(
 
     if regions:
         conditions.add(StoragePrice.region_id.in_(regions))
+
+    if vendor_regions:
+        conditions.add(vendor_region_filter(vendor_regions, StoragePrice))
 
     if countries:
         joins.add(StoragePrice.region)
@@ -1010,6 +1241,7 @@ def search_traffic_prices(
     green_energy: options.green_energy = None,
     compliance_framework: options.compliance_framework = None,
     regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
     countries: options.countries = None,
     direction: options.direction = [TrafficDirection.OUT],
     monthly_traffic: options.monthly_traffic = 1,
@@ -1044,6 +1276,9 @@ def search_traffic_prices(
 
     if regions:
         conditions.add(TrafficPrice.region_id.in_(regions))
+
+    if vendor_regions:
+        conditions.add(vendor_region_filter(vendor_regions, TrafficPrice))
 
     if countries:
         joins.add(TrafficPrice.region)
