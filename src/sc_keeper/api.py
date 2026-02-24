@@ -27,7 +27,9 @@ from sc_crawler.tables import (
     Zone,
 )
 from sqlalchemy.orm import aliased, contains_eager
-from sqlmodel import Session, String, and_, case, func, or_, select
+from sqlmodel import Session, String, case, func, or_, select
+
+from .helpers import vendor_region_filter
 
 # early validation (before DB imports) of environment variables
 logger = getLogger(__name__)
@@ -445,14 +447,7 @@ def search_servers(
         if regions:
             lp = lp.where(ServerPrice.region_id.in_(regions))
         if vendor_regions:
-            vendor_region_clauses = []
-            for vendor_region in vendor_regions:
-                v, r = vendor_region.split("~")
-                vendor_region_clauses.append(
-                    and_(ServerPrice.vendor_id == v, ServerPrice.region_id == r)
-                )
-            if vendor_region_clauses:
-                lp = lp.where(or_(*vendor_region_clauses))
+            lp = lp.where(vendor_region_filter(vendor_regions, ServerPrice))
         live_price_query = lp.group_by(
             ServerPrice.vendor_id, ServerPrice.server_id
         ).subquery()
@@ -910,14 +905,7 @@ def search_server_prices(
     if regions:
         conditions.add(ServerPrice.region_id.in_(regions))
     if vendor_regions:
-        vendor_region_clauses = []
-        for vendor_region in vendor_regions:
-            v, r = vendor_region.split("~")
-            vendor_region_clauses.append(
-                and_(ServerPrice.vendor_id == v, ServerPrice.region_id == r)
-            )
-        if vendor_region_clauses:
-            conditions.add(or_(*vendor_region_clauses))
+        conditions.add(vendor_region_filter(vendor_regions, ServerPrice))
     if countries:
         joins.add(ServerPrice.region)
         conditions.add(Region.country_id.in_(countries))
@@ -1158,14 +1146,7 @@ def search_storage_prices(
         conditions.add(StoragePrice.region_id.in_(regions))
 
     if vendor_regions:
-        vendor_region_clauses = []
-        for vendor_region in vendor_regions:
-            v, r = vendor_region.split("~")
-            vendor_region_clauses.append(
-                and_(StoragePrice.vendor_id == v, StoragePrice.region_id == r)
-            )
-        if vendor_region_clauses:
-            conditions.add(or_(*vendor_region_clauses))
+        conditions.add(vendor_region_filter(vendor_regions, StoragePrice))
 
     if countries:
         joins.add(StoragePrice.region)
@@ -1288,14 +1269,7 @@ def search_traffic_prices(
         conditions.add(TrafficPrice.region_id.in_(regions))
 
     if vendor_regions:
-        vendor_region_clauses = []
-        for vendor_region in vendor_regions:
-            v, r = vendor_region.split("~")
-            vendor_region_clauses.append(
-                and_(TrafficPrice.vendor_id == v, TrafficPrice.region_id == r)
-            )
-        if vendor_region_clauses:
-            conditions.add(or_(*vendor_region_clauses))
+        conditions.add(vendor_region_filter(vendor_regions, TrafficPrice))
 
     if countries:
         joins.add(TrafficPrice.region)

@@ -7,7 +7,7 @@ from sc_crawler.tables import Server
 from sc_crawler.utils import nesteddefaultdict
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import contains_eager
-from sqlmodel import Session, select
+from sqlmodel import Session, and_, or_, select
 
 from .database import get_db
 from .references import ServerPKs
@@ -54,3 +54,14 @@ def get_server_pks(vendor: str, server: str, db: Session) -> ServerPKs:
         ).one()
     except NoResultFound as e:
         raise HTTPException(status_code=404, detail="Server not found") from e
+
+
+def vendor_region_filter(vendor_regions, model):
+    """Return an OR-filter matching any (vendor_id, region_id) pair in vendor_regions."""
+    return or_(
+        *[
+            and_(model.vendor_id == v, model.region_id == r)
+            for vr in vendor_regions
+            for v, r in [vr.split("~", 1)]
+        ]
+    )

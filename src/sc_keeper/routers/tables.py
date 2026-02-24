@@ -13,12 +13,13 @@ from sc_crawler.tables import (
     Vendor,
     Zone,
 )
-from sqlmodel import Session, and_, or_, select
+from sqlmodel import Session, select
 
 from .. import parameters as options
 from ..auth import User, current_user
 from ..currency import currency_converter
 from ..database import get_db
+from ..helpers import vendor_region_filter
 
 router = APIRouter()
 
@@ -85,14 +86,7 @@ def table_server_prices(
     if region:
         query = query.where(ServerPrice.region_id.in_(region))
     if vendor_regions:
-        vendor_region_clauses = []
-        for vendor_region in vendor_regions:
-            v, r = vendor_region.split("~")
-            vendor_region_clauses.append(
-                and_(ServerPrice.vendor_id == v, ServerPrice.region_id == r)
-            )
-        if vendor_region_clauses:
-            query = query.where(or_(*vendor_region_clauses))
+        query = query.where(vendor_region_filter(vendor_regions, ServerPrice))
     if allocation:
         query = query.where(ServerPrice.allocation == allocation)
     if only_active:
