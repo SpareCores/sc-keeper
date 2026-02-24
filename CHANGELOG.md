@@ -15,6 +15,7 @@ Fix(es):
 - Fix macOS compatibility issue with `iowait` CPU metric logging (not available on Darwin systems).
 - Convert tiered prices to requested currency in the server price search results.
 - Fix `X-Total-Count` header for server search when ordered by price-derived fields and not filtering for active servers.
+- Filter out server prices without a related serverscore when ordering by score or score_per_price.
 
 ‼ Breaking changes:
 
