@@ -7,12 +7,15 @@ New feature(s):
 - New endpoint `/stats` for querying database table statistics with optional vendor and only_active filters.
 - New endpoint `/debug` for querying debug information about the availability of benchmark scores for servers.
 - Include monthly price caps (calculated from tiered prices) in server and server price search results.
+- Add optional country/region filter for the servers endpoint.
+- Add optional `vendor_regions` filter for all endpoints already supporting the `regions` filter for more precise filtering.
 
 Fix(es):
 
 - Upgrade FastAPI from 0.115.13 to 0.128.8.
 - Fix macOS compatibility issue with `iowait` CPU metric logging (not available on Darwin systems).
 - Convert tiered prices to requested currency in the server price search results.
+- Fix `X-Total-Count` header for server search when ordered by price-derived fields and not filtering for active servers.
 - Filter out server prices without a related server score when ordering by score or score_per_price.
 
 ‼ Breaking changes:

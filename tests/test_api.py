@@ -36,8 +36,6 @@ test_general_params = [
 
 test_region_params = [
     {"green_energy": True},
-    {"regions": ["us-west-2"]},
-    {"countries": ["DE"]},
 ]
 
 test_servers_params = [
@@ -61,6 +59,9 @@ test_servers_params = [
     {"gpu_manufacturer": ["NVIDIA", "AMD"]},
     {"gpu_family": ["Turing"]},
     {"gpu_model": ["A100"]},
+    {"countries": ["DE"]},
+    {"regions": ["us-west-2", "eu-central-1"]},
+    {"vendor_regions": ["aws~us-west-2", "aws~eu-central-1"]},
     {"benchmark_id": "bogomips", "benchmark_score_min": 5000},
 ]
 

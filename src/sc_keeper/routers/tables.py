@@ -19,6 +19,7 @@ from .. import parameters as options
 from ..auth import User, current_user
 from ..currency import currency_converter
 from ..database import get_db
+from ..helpers import vendor_region_filter
 
 router = APIRouter()
 
@@ -71,6 +72,7 @@ def table_server(db: Session = Depends(get_db)) -> List[Server]:
 def table_server_prices(
     vendor: options.vendor = None,
     region: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
     allocation: options.allocation = None,
     only_active: options.only_active = True,
     currency: options.currency = None,
@@ -83,6 +85,8 @@ def table_server_prices(
         query = query.where(ServerPrice.vendor_id.in_(vendor))
     if region:
         query = query.where(ServerPrice.region_id.in_(region))
+    if vendor_regions:
+        query = query.where(vendor_region_filter(vendor_regions, ServerPrice))
     if allocation:
         query = query.where(ServerPrice.allocation == allocation)
     if only_active:
