@@ -21,6 +21,7 @@ from .references import (
     GpuModels,
     OrderDir,
     Regions,
+    VendorRegions,
     Vendors,
 )
 
@@ -193,6 +194,18 @@ regions = Annotated[
         json_schema_extra={
             "category_id": FilterCategories.REGION,
             "enum": [m.value for m in Regions],
+        },
+    ),
+]
+
+vendor_regions = Annotated[
+    Optional[List[VendorRegions]],
+    Query(
+        title="Vendor and region id",
+        description="Identifier of the vendor and region, separated by a tilde.",
+        json_schema_extra={
+            "category_id": FilterCategories.REGION,
+            "enum": [m.value for m in VendorRegions],
         },
     ),
 ]

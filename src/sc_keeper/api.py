@@ -27,7 +27,7 @@ from sc_crawler.tables import (
     Zone,
 )
 from sqlalchemy.orm import aliased, contains_eager
-from sqlmodel import Session, String, case, func, or_, select
+from sqlmodel import Session, String, and_, case, func, or_, select
 
 # early validation (before DB imports) of environment variables
 logger = getLogger(__name__)
@@ -336,6 +336,7 @@ def search_servers(
     vendor: options.vendor = None,
     compliance_framework: options.compliance_framework = None,
     regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
     countries: options.countries = None,
     storage_size: options.storage_size = None,
     storage_type: options.storage_type = None,
@@ -395,7 +396,7 @@ def search_servers(
         )
 
     live_price_query = None
-    if regions or countries:
+    if regions or countries or vendor_regions:
         lp = (
             select(
                 ServerPrice.vendor_id,
@@ -443,6 +444,15 @@ def search_servers(
             lp = lp.where(Region.country_id.in_(countries))
         if regions:
             lp = lp.where(ServerPrice.region_id.in_(regions))
+        if vendor_regions:
+            vendor_region_clauses = []
+            for vendor_region in vendor_regions:
+                v, r = vendor_region.split("~")
+                vendor_region_clauses.append(
+                    and_(ServerPrice.vendor_id == v, ServerPrice.region_id == r)
+                )
+            if vendor_region_clauses:
+                lp = lp.where(or_(*vendor_region_clauses))
         live_price_query = lp.group_by(
             ServerPrice.vendor_id, ServerPrice.server_id
         ).subquery()

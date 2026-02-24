@@ -61,6 +61,7 @@ test_servers_params = [
     {"gpu_model": ["A100"]},
     {"countries": ["DE"]},
     {"regions": ["us-west-2", "eu-central-1"]},
+    {"vendor_regions": ["aws~us-west-2", "aws~eu-central-1"]},
     {"benchmark_id": "bogomips", "benchmark_score_min": 5000},
 ]
 

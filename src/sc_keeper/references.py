@@ -35,6 +35,13 @@ with session.sessionmaker as db:
     Vendors = StrEnum(
         "Vendors", {m.vendor_id: m.vendor_id for m in db.exec(select(Vendor)).all()}
     )
+    VendorRegions = StrEnum(
+        "VendorRegions",
+        {
+            m.vendor_id + "~" + m.region_id: m.vendor_id + "~" + m.region_id
+            for m in db.exec(select(Region)).all()
+        },
+    )
     Regions = StrEnum(
         "Regions",
         {m.region_id: m.region_id for m in db.exec(select(Region)).all()},
