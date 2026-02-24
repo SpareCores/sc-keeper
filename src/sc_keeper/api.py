@@ -1109,6 +1109,7 @@ def search_storage_prices(
     storage_type: options.storage_type = None,
     compliance_framework: options.compliance_framework = None,
     regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
     countries: options.countries = None,
     limit: options.limit = 10,
     page: options.page = None,
@@ -1150,6 +1151,16 @@ def search_storage_prices(
 
     if regions:
         conditions.add(StoragePrice.region_id.in_(regions))
+
+    if vendor_regions:
+        vendor_region_clauses = []
+        for vendor_region in vendor_regions:
+            v, r = vendor_region.split("~")
+            vendor_region_clauses.append(
+                and_(StoragePrice.vendor_id == v, StoragePrice.region_id == r)
+            )
+        if vendor_region_clauses:
+            conditions.add(or_(*vendor_region_clauses))
 
     if countries:
         joins.add(StoragePrice.region)
@@ -1235,6 +1246,7 @@ def search_traffic_prices(
     green_energy: options.green_energy = None,
     compliance_framework: options.compliance_framework = None,
     regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
     countries: options.countries = None,
     direction: options.direction = [TrafficDirection.OUT],
     monthly_traffic: options.monthly_traffic = 1,
@@ -1269,6 +1281,16 @@ def search_traffic_prices(
 
     if regions:
         conditions.add(TrafficPrice.region_id.in_(regions))
+
+    if vendor_regions:
+        vendor_region_clauses = []
+        for vendor_region in vendor_regions:
+            v, r = vendor_region.split("~")
+            vendor_region_clauses.append(
+                and_(TrafficPrice.vendor_id == v, TrafficPrice.region_id == r)
+            )
+        if vendor_region_clauses:
+            conditions.add(or_(*vendor_region_clauses))
 
     if countries:
         joins.add(TrafficPrice.region)

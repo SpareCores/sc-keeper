@@ -13,7 +13,7 @@ from sc_crawler.tables import (
     Vendor,
     Zone,
 )
-from sqlmodel import Session, select
+from sqlmodel import Session, and_, or_, select
 
 from .. import parameters as options
 from ..auth import User, current_user
@@ -71,6 +71,7 @@ def table_server(db: Session = Depends(get_db)) -> List[Server]:
 def table_server_prices(
     vendor: options.vendor = None,
     region: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
     allocation: options.allocation = None,
     only_active: options.only_active = True,
     currency: options.currency = None,
@@ -83,6 +84,15 @@ def table_server_prices(
         query = query.where(ServerPrice.vendor_id.in_(vendor))
     if region:
         query = query.where(ServerPrice.region_id.in_(region))
+    if vendor_regions:
+        vendor_region_clauses = []
+        for vendor_region in vendor_regions:
+            v, r = vendor_region.split("~")
+            vendor_region_clauses.append(
+                and_(ServerPrice.vendor_id == v, ServerPrice.region_id == r)
+            )
+        if vendor_region_clauses:
+            query = query.where(or_(*vendor_region_clauses))
     if allocation:
         query = query.where(ServerPrice.allocation == allocation)
     if only_active:
