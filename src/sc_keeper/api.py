@@ -349,6 +349,7 @@ def search_servers(
     gpu_manufacturer: options.gpu_manufacturer = None,
     gpu_family: options.gpu_family = None,
     gpu_model: options.gpu_model = None,
+    currency: options.currency = "USD",
     best_price_allocation: options.best_price_allocation = "ANY",
     limit: options.limit = 25,
     page: options.page = None,
@@ -767,12 +768,33 @@ def search_servers(
             )
             if server_extra.score and server.min_price:
                 server.score_per_price = round(server_extra.score / server.min_price, 4)
-            server.price = server.min_price  # legacy
             server.selected_benchmark_score = benchmark_score
             if benchmark_score and server_extra.score and server.min_price:
                 server.selected_benchmark_score_per_price = (
                     benchmark_score / server.min_price
                 )
+            # don't convert before "per_price" calculations as those as standardized in USD
+            if currency and currency != "USD":
+                server.min_price = round(
+                    currency_converter.convert(server.min_price, "USD", currency), 4
+                )
+                server.min_price_spot = round(
+                    currency_converter.convert(server.min_price_spot, "USD", currency),
+                    4,
+                )
+                server.min_price_ondemand = round(
+                    currency_converter.convert(
+                        server.min_price_ondemand, "USD", currency
+                    ),
+                    4,
+                )
+                server.min_price_ondemand_monthly = round(
+                    currency_converter.convert(
+                        server.min_price_ondemand_monthly, "USD", currency
+                    ),
+                    4,
+                )
+            server.price = server.min_price  # legacy
         serverlist.append(server)
 
     return serverlist
