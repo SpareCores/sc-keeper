@@ -776,31 +776,22 @@ def search_servers(
         # don't convert before "per_price" calculations as those as standardized in USD
         if currency and currency != "USD":
             try:
-                if server.min_price:
-                    server.min_price = round(
-                        currency_converter.convert(server.min_price, "USD", currency), 4
-                    )
-                if server.min_price_spot:
-                    server.min_price_spot = round(
-                        currency_converter.convert(
-                            server.min_price_spot, "USD", currency
-                        ),
-                        4,
-                    )
-                if server.min_price_ondemand:
-                    server.min_price_ondemand = round(
-                        currency_converter.convert(
-                            server.min_price_ondemand, "USD", currency
-                        ),
-                        4,
-                    )
-                if server.min_price_ondemand_monthly:
-                    server.min_price_ondemand_monthly = round(
-                        currency_converter.convert(
-                            server.min_price_ondemand_monthly, "USD", currency
-                        ),
-                        4,
-                    )
+                for attr, ndigits in [
+                    ("min_price", 4),
+                    ("min_price_spot", 4),
+                    ("min_price_ondemand", 4),
+                    ("min_price_ondemand_monthly", 2),
+                ]:
+                    value = getattr(server, attr, None)
+                    if value:
+                        setattr(
+                            server,
+                            attr,
+                            round(
+                                currency_converter.convert(value, "USD", currency),
+                                ndigits,
+                            ),
+                        )
             except ValueError as e:
                 raise HTTPException(
                     status_code=400, detail="Invalid currency code"
