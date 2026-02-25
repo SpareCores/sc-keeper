@@ -558,19 +558,20 @@ def search_servers(
         conditions.add(benchmark_query.c.benchmark_score.isnot(None))
         conditions.add(best_price_ref.isnot(None))
 
-    _live_price_fields = (
-        "min_price",
-        "min_price_spot",
-        "min_price_ondemand",
-        "min_price_ondemand_monthly",
-    )
+    _live_price_best_min_price_map = {
+        BestPriceAllocation.ANY: "min_price",
+        BestPriceAllocation.SPOT_ONLY: "min_price_spot",
+        BestPriceAllocation.ONDEMAND_ONLY: "min_price_ondemand",
+        BestPriceAllocation.MONTHLY: "min_price_ondemand_monthly",
+    }
+    _live_price_order_min_price = _live_price_best_min_price_map[best_price_allocation]
     _live_price_order_fields = {
         "min_price": "min_price",
         "min_price_spot": "min_price_spot",
         "min_price_ondemand": "min_price_ondemand",
         "min_price_ondemand_monthly": "min_price_ondemand_monthly",
-        "score_per_price": "min_price",
-        "selected_benchmark_score_per_price": "min_price",
+        "score_per_price": _live_price_order_min_price,
+        "selected_benchmark_score_per_price": _live_price_order_min_price,
     }
 
     # count all records to be returned in header
@@ -695,7 +696,10 @@ def search_servers(
         elif order_by == "min_price":
             order_field = best_price_ref
         else:
-            if live_price_query is not None and order_by in _live_price_fields:
+            if (
+                live_price_query is not None
+                and order_by in _live_price_best_min_price_map.values()
+            ):
                 order_field = getattr(live_price_query.c, order_by)
             else:
                 order_obj = [o for o in [Server, ServerExtra] if hasattr(o, order_by)]
