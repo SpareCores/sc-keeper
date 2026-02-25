@@ -350,7 +350,7 @@ def search_servers(
     gpu_family: options.gpu_family = None,
     gpu_model: options.gpu_model = None,
     currency: options.currency = "USD",
-    best_price_allocation: options.best_price_allocation = "ANY",
+    best_price_allocation: options.best_price_allocation = BestPriceAllocation.ANY,
     limit: options.limit = 25,
     page: options.page = None,
     order_by: options.order_by = "min_price",
@@ -775,25 +775,31 @@ def search_servers(
                 )
             # don't convert before "per_price" calculations as those as standardized in USD
             if currency and currency != "USD":
-                server.min_price = round(
-                    currency_converter.convert(server.min_price, "USD", currency), 4
-                )
-                server.min_price_spot = round(
-                    currency_converter.convert(server.min_price_spot, "USD", currency),
-                    4,
-                )
-                server.min_price_ondemand = round(
-                    currency_converter.convert(
-                        server.min_price_ondemand, "USD", currency
-                    ),
-                    4,
-                )
-                server.min_price_ondemand_monthly = round(
-                    currency_converter.convert(
-                        server.min_price_ondemand_monthly, "USD", currency
-                    ),
-                    4,
-                )
+                if server.min_price:
+                    server.min_price = round(
+                        currency_converter.convert(server.min_price, "USD", currency), 4
+                    )
+                if server.min_price_spot:
+                    server.min_price_spot = round(
+                        currency_converter.convert(
+                            server.min_price_spot, "USD", currency
+                        ),
+                        4,
+                    )
+                if server.min_price_ondemand:
+                    server.min_price_ondemand = round(
+                        currency_converter.convert(
+                            server.min_price_ondemand, "USD", currency
+                        ),
+                        4,
+                    )
+                if server.min_price_ondemand_monthly:
+                    server.min_price_ondemand_monthly = round(
+                        currency_converter.convert(
+                            server.min_price_ondemand_monthly, "USD", currency
+                        ),
+                        4,
+                    )
             server.price = server.min_price  # legacy
         serverlist.append(server)
 
