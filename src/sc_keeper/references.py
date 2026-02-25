@@ -344,3 +344,12 @@ DebugInfoResponse.model_config["json_schema_extra"] = {
         }
     ]
 }
+
+
+class BestPriceAllocation(StrEnum):
+    """Controls how the server's "best price" is computed: use only spot prices, only on-demand prices, or the lowest available price from any allocation type."""
+
+    ANY = "ANY"
+    SPOT_ONLY = "SPOT_ONLY"
+    ONDEMAND_ONLY = "ONDEMAND_ONLY"
+    MONTHLY = "MONTHLY"

@@ -9,6 +9,8 @@ New feature(s):
 - Include monthly price caps (calculated from tiered prices) in server and server price search results.
 - Add optional country/region filter for the servers endpoint.
 - Add optional `vendor_regions` filter for all endpoints already supporting the `regions` filter for more precise filtering.
+- Add optional `best_price_allocation` configuration parameter for the search servers endpoint to control how the server's "best price" is computed (e.g. use any price, spot only, or on-demand only).
+- Add optional `currency` configuration parameter for the search servers endpoint to convert the prices to a requested currency.
 
 Fix(es):
 
