@@ -688,6 +688,8 @@ def search_servers(
             order_field = benchmark_query.c.benchmark_score / best_price_ref
         elif order_by == "score_per_price":
             order_field = ServerExtra.score / best_price_ref
+        elif order_by == "min_price":
+            order_field = best_price_ref
         else:
             if live_price_query is not None and order_by in _live_price_fields:
                 order_field = getattr(live_price_query.c, order_by)
