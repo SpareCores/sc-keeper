@@ -529,7 +529,7 @@ def search_servers(
     if only_active:
         conditions.add(Server.status == Status.ACTIVE)
         conditions.add(best_price_ref.isnot(None))
-    if best_price_allocation and best_price_allocation != BestPriceAllocation.ANY:
+    if best_price_allocation != BestPriceAllocation.ANY:
         conditions.add(best_price_ref.isnot(None))
 
     # hide servers without value when ordering by the related column
@@ -773,8 +773,9 @@ def search_servers(
                 server.selected_benchmark_score_per_price = (
                     benchmark_score / server.min_price
                 )
-            # don't convert before "per_price" calculations as those as standardized in USD
-            if currency and currency != "USD":
+        # don't convert before "per_price" calculations as those as standardized in USD
+        if currency and currency != "USD":
+            try:
                 if server.min_price:
                     server.min_price = round(
                         currency_converter.convert(server.min_price, "USD", currency), 4
@@ -800,7 +801,11 @@ def search_servers(
                         ),
                         4,
                     )
-            server.price = server.min_price  # legacy
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=400, detail="Invalid currency code"
+                ) from e
+        server.price = server.min_price  # legacy
         serverlist.append(server)
 
     return serverlist
