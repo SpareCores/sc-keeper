@@ -769,9 +769,10 @@ def search_servers(
             )
             server.price = server.min_price  # legacy
             server.selected_benchmark_score = benchmark_score
-            server.selected_benchmark_score_per_price = (
-                benchmark_score / server.min_price
-            )
+            if benchmark_score and server_extra.score and server.min_price:
+                server.selected_benchmark_score_per_price = (
+                    benchmark_score / server.min_price
+                )
         serverlist.append(server)
 
     return serverlist
