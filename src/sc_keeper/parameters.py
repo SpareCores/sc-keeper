@@ -11,6 +11,7 @@ from sc_crawler.table_fields import (
 
 from .helpers import get_server_dict
 from .references import (
+    BestPriceAllocation,
     ComplianceFrameworks,
     Countries,
     CpuFamilies,
@@ -442,6 +443,15 @@ order_by = Annotated[str, Query(description="Order by column.")]
 order_dir = Annotated[OrderDir, Query(description="Order direction.")]
 
 currency = Annotated[Optional[str], Query(description="Currency used for prices.")]
+
+best_price_allocation = Annotated[
+    Optional[BestPriceAllocation],
+    Query(
+        title="Best price allocation strategy",
+        description='Controls how the server\'s "best price" is computed: use only spot prices, only on-demand prices, or the lowest available price from any allocation type.',
+        json_schema_extra={"enum": [e.value for e in BestPriceAllocation]},
+    ),
+]
 
 add_total_count_header = Annotated[
     bool,

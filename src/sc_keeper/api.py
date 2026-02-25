@@ -57,6 +57,7 @@ from .queries import gen_benchmark_query
 from .rate_limit import RateLimitMiddleware, create_rate_limiter
 from .references import (
     BenchmarkConfig,
+    BestPriceAllocation,
     OrderDir,
     RegionPKs,
     ServerPKs,
@@ -348,6 +349,7 @@ def search_servers(
     gpu_manufacturer: options.gpu_manufacturer = None,
     gpu_family: options.gpu_family = None,
     gpu_model: options.gpu_model = None,
+    best_price_allocation: options.best_price_allocation = "ANY",
     limit: options.limit = 25,
     page: options.page = None,
     order_by: options.order_by = "min_price",
@@ -452,6 +454,19 @@ def search_servers(
             ServerPrice.vendor_id, ServerPrice.server_id
         ).subquery()
 
+    if live_price_query is None:
+        best_price_ref = ServerExtra.min_price
+        if best_price_allocation == BestPriceAllocation.SPOT_ONLY:
+            best_price_ref = ServerExtra.min_price_spot
+        if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
+            best_price_ref = ServerExtra.min_price_ondemand
+    else:
+        best_price_ref = live_price_query.c.min_price
+        if best_price_allocation == BestPriceAllocation.SPOT_ONLY:
+            best_price_ref = live_price_query.c.min_price_spot
+        if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
+            best_price_ref = live_price_query.c.min_price_ondemand
+
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
         conditions.add(
@@ -478,24 +493,16 @@ def search_servers(
     if benchmark_score_stressng_cpu_min:
         conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
     if benchmark_score_per_price_stressng_cpu_min:
-        denom = (
-            live_price_query.c.min_price
-            if live_price_query is not None
-            else ServerExtra.min_price
-        )
         conditions.add(
-            ServerExtra.score / denom > benchmark_score_per_price_stressng_cpu_min
+            (ServerExtra.score / best_price_ref)
+            > benchmark_score_per_price_stressng_cpu_min
         )
     if benchmark_score_min:
         conditions.add(benchmark_query.c.benchmark_score >= benchmark_score_min)
     if benchmark_score_per_price_min:
-        denom = (
-            live_price_query.c.min_price
-            if live_price_query is not None
-            else ServerExtra.min_price
-        )
         conditions.add(
-            benchmark_query.c.benchmark_score / denom >= benchmark_score_per_price_min
+            (benchmark_query.c.benchmark_score / best_price_ref)
+            >= benchmark_score_per_price_min
         )
     if memory_min:
         conditions.add(Server.memory_amount >= memory_min * 1024)
@@ -513,29 +520,38 @@ def search_servers(
         conditions.add(Server.gpu_family.in_(gpu_family))
     if gpu_model:
         conditions.add(Server.gpu_model.in_(gpu_model))
-    if only_active:
-        conditions.add(Server.status == Status.ACTIVE)
-        conditions.add(ServerExtra.min_price.isnot(None))
     if storage_type:
         conditions.add(Server.storage_type.in_(storage_type))
     if vendor:
         conditions.add(Server.vendor_id.in_(vendor))
 
+    if only_active:
+        conditions.add(Server.status == Status.ACTIVE)
+        conditions.add(best_price_ref.isnot(None))
+    if best_price_allocation and best_price_allocation != BestPriceAllocation.ANY:
+        conditions.add(best_price_ref.isnot(None))
+
     # hide servers without value when ordering by the related column
     if order_by == "score_per_price":
         conditions.add(ServerExtra.score.isnot(None))
-        conditions.add(ServerExtra.score_per_price.isnot(None))
+        conditions.add(best_price_ref.isnot(None))
     if order_by == "min_price":
-        conditions.add(ServerExtra.min_price.isnot(None))
+        conditions.add(best_price_ref.isnot(None))
     if order_by == "min_price_ondemand":
-        conditions.add(ServerExtra.min_price_ondemand.isnot(None))
+        if live_price_query is not None:
+            conditions.add(live_price_query.c.min_price_ondemand.isnot(None))
+        else:
+            conditions.add(ServerExtra.min_price_ondemand.isnot(None))
     if order_by == "min_price_spot":
-        conditions.add(ServerExtra.min_price_spot.isnot(None))
+        if live_price_query is not None:
+            conditions.add(live_price_query.c.min_price_spot.isnot(None))
+        else:
+            conditions.add(ServerExtra.min_price_spot.isnot(None))
     if order_by == "selected_benchmark_score":
         conditions.add(benchmark_query.c.benchmark_score.isnot(None))
     if order_by == "selected_benchmark_score_per_price":
         conditions.add(benchmark_query.c.benchmark_score.isnot(None))
-        conditions.add(ServerExtra.min_price.isnot(None))
+        conditions.add(best_price_ref.isnot(None))
 
     _live_price_fields = (
         "min_price",
@@ -603,8 +619,6 @@ def search_servers(
                         live_price_query.c, _live_price_order_fields[order_by]
                     ).isnot(None)
                 )
-            if only_active:
-                query = query.where(live_price_query.c.min_price.isnot(None))
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     # actual query
@@ -664,27 +678,15 @@ def search_servers(
                     None
                 )
             )
-        if only_active:
-            query = query.where(live_price_query.c.min_price.isnot(None))
 
     # ordering
     if order_by:
         if order_by == "selected_benchmark_score":
             order_field = benchmark_query.c.benchmark_score
         elif order_by == "selected_benchmark_score_per_price":
-            denom = (
-                live_price_query.c.min_price
-                if live_price_query is not None
-                else ServerExtra.min_price
-            )
-            order_field = benchmark_query.c.benchmark_score / denom
+            order_field = benchmark_query.c.benchmark_score / best_price_ref
         elif order_by == "score_per_price":
-            denom = (
-                live_price_query.c.min_price
-                if live_price_query is not None
-                else ServerExtra.min_price
-            )
-            order_field = ServerExtra.score / denom
+            order_field = ServerExtra.score / best_price_ref
         else:
             if live_price_query is not None and order_by in _live_price_fields:
                 order_field = getattr(live_price_query.c, order_by)
@@ -745,7 +747,6 @@ def search_servers(
         server = ServerPKs.model_validate(server_data)
         with suppress(Exception):
             server.score = server_extra.score
-            server.min_price = lp_min if lp_min is not None else server_extra.min_price
             server.min_price_spot = (
                 lp_spot if lp_spot is not None else server_extra.min_price_spot
             )
@@ -754,19 +755,18 @@ def search_servers(
                 if lp_ondemand is not None
                 else server_extra.min_price_ondemand
             )
+            server.min_price = lp_min if lp_min is not None else server_extra.min_price
+            if best_price_allocation == BestPriceAllocation.SPOT_ONLY:
+                server.min_price = server.min_price_spot
+            if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
+                server.min_price = server.min_price_ondemand
             server.min_price_ondemand_monthly = (
                 lp_monthly
                 if lp_monthly is not None
                 else server_extra.min_price_ondemand_monthly
             )
-            effective_min_price = (
-                lp_min if lp_min is not None else server_extra.min_price
-            )
-            server.score_per_price = (
-                round(server_extra.score / effective_min_price, 4)
-                if server_extra.score and effective_min_price
-                else server_extra.score_per_price
-            )
+            if server_extra.score and server.min_price:
+                server.score_per_price = round(server_extra.score / server.min_price, 4)
             server.price = server.min_price  # legacy
             server.selected_benchmark_score = benchmark_score
             if benchmark_score and server_extra.score and server.min_price:
