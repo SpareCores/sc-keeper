@@ -352,3 +352,4 @@ class BestPriceAllocation(StrEnum):
     ANY = "ANY"
     SPOT_ONLY = "SPOT_ONLY"
     ONDEMAND_ONLY = "ONDEMAND_ONLY"
+    MONTHLY = "MONTHLY"

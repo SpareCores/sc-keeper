@@ -461,12 +461,16 @@ def search_servers(
             best_price_ref = ServerExtra.min_price_spot
         if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
             best_price_ref = ServerExtra.min_price_ondemand
+        if best_price_allocation == BestPriceAllocation.MONTHLY:
+            best_price_ref = ServerExtra.min_price_ondemand_monthly
     else:
         best_price_ref = live_price_query.c.min_price
         if best_price_allocation == BestPriceAllocation.SPOT_ONLY:
             best_price_ref = live_price_query.c.min_price_spot
         if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
             best_price_ref = live_price_query.c.min_price_ondemand
+        if best_price_allocation == BestPriceAllocation.MONTHLY:
+            best_price_ref = live_price_query.c.min_price_ondemand_monthly
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
@@ -758,16 +762,18 @@ def search_servers(
                 if lp_ondemand is not None
                 else server_extra.min_price_ondemand
             )
-            server.min_price = lp_min if lp_min is not None else server_extra.min_price
-            if best_price_allocation == BestPriceAllocation.SPOT_ONLY:
-                server.min_price = server.min_price_spot
-            if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
-                server.min_price = server.min_price_ondemand
             server.min_price_ondemand_monthly = (
                 lp_monthly
                 if lp_monthly is not None
                 else server_extra.min_price_ondemand_monthly
             )
+            server.min_price = lp_min if lp_min is not None else server_extra.min_price
+            if best_price_allocation == BestPriceAllocation.SPOT_ONLY:
+                server.min_price = server.min_price_spot
+            if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
+                server.min_price = server.min_price_ondemand
+            if best_price_allocation == BestPriceAllocation.MONTHLY:
+                server.min_price = server.min_price_ondemand_monthly
             if server_extra.score and server.min_price:
                 server.score_per_price = round(server_extra.score / server.min_price, 4)
             server.selected_benchmark_score = benchmark_score
