@@ -771,7 +771,7 @@ def search_servers(
             if server_extra.score and server.min_price:
                 server.score_per_price = round(server_extra.score / server.min_price, 4)
             server.selected_benchmark_score = benchmark_score
-            if benchmark_score and server_extra.score and server.min_price:
+            if benchmark_score and server.min_price:
                 server.selected_benchmark_score_per_price = (
                     benchmark_score / server.min_price
                 )
