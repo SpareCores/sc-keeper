@@ -114,6 +114,7 @@ def test_rate_limit_custom_credit_cost(client_with_rate_limit):
             blocked_count += 1
         else:
             pytest.fail(f"Unexpected status code: {response.status_code}")
+        sleep(0.1)
 
     assert success_count > 0
     assert success_count < 4
