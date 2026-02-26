@@ -98,9 +98,15 @@ class CurrencyConverter(Thread):
         super().__init__(*args, **kwargs)
 
     def _schedule(self, last_modified: str):
-        """Schedule next check at last_modified + 1 day + 15 minutes; reset backoff."""
+        """Schedule next check at last_modified + 1 day + 15 minutes; reset backoff.
+        If Last-Modified cannot be parsed, degrades to exponential backoff instead of raising.
+        """
         self._last_modified = last_modified
-        self._next_check_at = _next_scheduled(last_modified)
+        try:
+            self._next_check_at = _next_scheduled(last_modified)
+        except (ValueError, TypeError, AttributeError):
+            self._enter_backoff("Last-Modified header could not be parsed")
+            return
         self._backoff_minutes = BACKOFF_MIN_INIT
         logger.debug("Next ECB check scheduled at %s", self._next_check_at.isoformat())
 
