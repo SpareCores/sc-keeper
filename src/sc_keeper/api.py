@@ -882,9 +882,11 @@ def search_server_prices(
         )
 
     if price_max:
-        if currency != "USD":
+        if currency != ServerPrice.currency:
             try:
-                price_max = currency_converter.convert(price_max, currency, "USD")
+                price_max = currency_converter.convert(
+                    price_max, currency, ServerPrice.currency
+                )
             except ValueError as e:
                 raise HTTPException(
                     status_code=400, detail="Invalid currency code"
