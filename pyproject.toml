@@ -8,8 +8,8 @@ version = "0.3.5"
 requires-python = ">= 3.11"
 dependencies = [
   "safe-exit",
-  "sparecores-crawler~=0.3",
-  "sparecores-data",
+  "sparecores-crawler>=0.3,<0.4",
+  "sparecores-data>=0.4.1",
   "fastapi==0.128.8",
   "uvicorn",
   "psutil",
