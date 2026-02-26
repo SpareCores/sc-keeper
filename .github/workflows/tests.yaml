@@ -1,5 +1,5 @@
 name: Unit tests
-on: [push]
+on: [ push ]
 
 jobs:
   build:
@@ -9,7 +9,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          python-version: 3.12
       - name: Install tox
         run: pip install tox
       - name: Install local pkg

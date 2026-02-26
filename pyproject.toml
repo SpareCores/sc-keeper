@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sparecores-keeper"
 version = "0.3.5"
-requires-python = ">= 3.11"
+requires-python = ">= 3.12"
 dependencies = [
   "sparecores-crawler==0.3.5",
   "sparecores-data==0.3.3",
