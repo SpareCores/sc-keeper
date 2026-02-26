@@ -882,16 +882,8 @@ def search_server_prices(
         )
 
     if price_max:
-        if currency != ServerPrice.currency:
-            try:
-                price_max = currency_converter.convert(
-                    price_max, currency, ServerPrice.currency
-                )
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=400, detail="Invalid currency code"
-                ) from e
-        conditions.add(ServerPrice.price <= price_max)
+        if currency not in currency_converter.converter.currencies:
+            raise HTTPException(status_code=400, detail="Invalid currency code")
 
     if vcpus_min:
         joins.add(ServerPrice.server)
@@ -978,6 +970,11 @@ def search_server_prices(
                 & (Server.server_id == ServerExtra.server_id),
                 isouter=True,
             )
+        if price_max:
+            query = query.join(
+                Currency,
+                (ServerPrice.currency == Currency.base) & (Currency.quote == currency),
+            )
         for condition in conditions:
             query = query.where(condition)
         if benchmark_score_per_price_stressng_cpu_min:
@@ -985,6 +982,8 @@ def search_server_prices(
                 ServerExtra.score / ServerPrice.price
                 > benchmark_score_per_price_stressng_cpu_min
             )
+        if price_max:
+            query = query.where((ServerPrice.price * Currency.rate) <= price_max)
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     # actual query
@@ -998,6 +997,11 @@ def search_server_prices(
         & (Server.server_id == ServerExtra.server_id),
         isouter=True,
     )
+    if price_max:
+        query = query.join(
+            Currency,
+            (ServerPrice.currency == Currency.base) & (Currency.quote == currency),
+        )
 
     for condition in conditions:
         query = query.where(condition)
@@ -1006,6 +1010,8 @@ def search_server_prices(
             ServerExtra.score / ServerPrice.price
             > benchmark_score_per_price_stressng_cpu_min
         )
+    if price_max:
+        query = query.where((ServerPrice.price * Currency.rate) <= price_max)
 
     # ordering
     if order_by:
