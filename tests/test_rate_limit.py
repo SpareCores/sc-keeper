@@ -106,7 +106,6 @@ def test_rate_limit_custom_credit_cost(client_with_rate_limit):
 
     for _ in range(5):
         response = client_with_rate_limit.get("/servers", params={"limit": 1})
-        sleep(1)
         if response.status_code == 200:
             success_count += 1
             # verify the cost header shows 3 credits

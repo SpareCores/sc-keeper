@@ -26,7 +26,7 @@ Fix(es):
 
 ‼ Breaking changes:
 
-- Minimum required Python version upgraded from 3.8 to 3.12.
+- Minimum required Python version upgraded from 3.8 to 3.11.
 
 ## January 2026
 
