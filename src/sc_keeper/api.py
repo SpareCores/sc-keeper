@@ -881,9 +881,8 @@ def search_server_prices(
             )
         )
 
-    if currency and currency not in ["USD", "EUR"]:
-        if currency not in currency_converter.converter.currencies:
-            raise HTTPException(status_code=400, detail="Invalid currency code")
+    if currency and currency not in currency_converter.converter.currencies:
+        raise HTTPException(status_code=400, detail="Invalid currency code")
 
     if vcpus_min:
         joins.add(ServerPrice.server)
