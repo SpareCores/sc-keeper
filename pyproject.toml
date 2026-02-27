@@ -20,6 +20,7 @@ authors = [
   { name="Attila Nagy" },
   { name="Gergely Daroczi" },
   { name="Balazs Hodobay" },
+  { name="Tamas Hidvegi" },
 ]
 maintainers = [
   { name="Spare Cores team", email="pkg@sparecores.com" }
