@@ -23,6 +23,7 @@ Fix(es):
 - Fix `X-Total-Count` header for server search when ordered by price-derived fields and not filtering for active
   servers.
 - Filter out server prices without a related server score when ordering by score or score_per_price.
+- Fix `price_max` calculation and currency checking in `/server_prices` endpoint.
 
 ‼ Breaking changes:
 
