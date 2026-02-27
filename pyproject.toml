@@ -5,10 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sparecores-keeper"
 version = "0.3.5"
-requires-python = ">= 3.12"
+requires-python = ">= 3.11"
 dependencies = [
-  "sparecores-crawler==0.3.5",
-  "sparecores-data==0.3.3",
+  "safe-exit",
+  "sparecores-crawler>=0.3,<0.4",
+  "sparecores-data>=0.4.1",
   "fastapi==0.128.8",
   "uvicorn",
   "psutil",
@@ -16,13 +17,13 @@ dependencies = [
   "httpx",
 ]
 authors = [
-  { name = "Attila Nagy" },
-  { name = "Gergely Daroczi" },
-  { name = "Balazs Hodobay" },
-  { name = "Tamás Hidvégi" },
+  { name="Attila Nagy" },
+  { name="Gergely Daroczi" },
+  { name="Balazs Hodobay" },
+  { name="Tamas Hidvegi" },
 ]
 maintainers = [
-  { name = "Spare Cores team", email = "pkg@sparecores.com" }
+  { name="Spare Cores team", email="pkg@sparecores.com" }
 ]
 description = "API for SC Data."
 readme = "README.md"
@@ -49,32 +50,32 @@ where = ["src"]
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
-  ".bzr",
-  ".direnv",
-  ".eggs",
-  ".git",
-  ".git-rewrite",
-  ".hg",
-  ".ipynb_checkpoints",
-  ".mypy_cache",
-  ".nox",
-  ".pants.d",
-  ".pyenv",
-  ".pytest_cache",
-  ".pytype",
-  ".ruff_cache",
-  ".svn",
-  ".tox",
-  ".venv",
-  ".vscode",
-  "__pypackages__",
-  "_build",
-  "buck-out",
-  "build",
-  "dist",
-  "node_modules",
-  "site-packages",
-  "venv",
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
 ]
 
 # Same as Black.
