@@ -195,6 +195,9 @@ def get_similar_servers(
                 serveri.min_price = server[1].min_price
                 serveri.min_price_spot = server[1].min_price_spot
                 serveri.min_price_ondemand = server[1].min_price_ondemand
+                serveri.min_price_ondemand_monthly = server[
+                    1
+                ].min_price_ondemand_monthly
             serveri.price = serveri.min_price  # legacy
         serverlist.append(serveri)
 
