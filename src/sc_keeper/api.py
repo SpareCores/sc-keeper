@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.docs import get_redoc_html
-from sc_crawler.table_fields import Allocation, Status, TrafficDirection
+from sc_crawler.table_fields import Status, TrafficDirection
 from sc_crawler.tables import (
     Benchmark,
     BenchmarkScore,
@@ -53,7 +53,7 @@ from .crawler_extend import calculate_tiered_price
 from .currency import currency_converter
 from .database import get_db
 from .logger import LogMiddleware
-from .queries import gen_benchmark_query
+from .queries import gen_benchmark_query, gen_live_price_query
 from .rate_limit import RateLimitMiddleware, create_rate_limiter
 from .references import (
     BenchmarkConfig,
@@ -400,60 +400,7 @@ def search_servers(
             detail="benchmark_id is required when ordering by benchmark_score or benchmark_score_per_price",
         )
 
-    live_price_query = None
-    if regions or countries or vendor_regions:
-        lp = (
-            select(
-                ServerPrice.vendor_id,
-                ServerPrice.server_id,
-                func.round(func.min(ServerPrice.price * Currency.rate), 4).label(
-                    "min_price"
-                ),
-                func.min(
-                    case(
-                        (
-                            ServerPrice.allocation == Allocation.SPOT,
-                            func.round(ServerPrice.price * Currency.rate, 4),
-                        )
-                    )
-                ).label("min_price_spot"),
-                func.min(
-                    case(
-                        (
-                            ServerPrice.allocation == Allocation.ONDEMAND,
-                            func.round(ServerPrice.price * Currency.rate, 4),
-                        )
-                    )
-                ).label("min_price_ondemand"),
-                func.min(
-                    case(
-                        (
-                            ServerPrice.allocation == Allocation.ONDEMAND,
-                            func.round(ServerPrice.price_monthly * Currency.rate, 2),
-                        )
-                    )
-                ).label("min_price_ondemand_monthly"),
-            )
-            .where(ServerPrice.status == Status.ACTIVE)
-            .join(
-                Currency,
-                (ServerPrice.currency == Currency.base) & (Currency.quote == "USD"),
-            )
-        )
-        if countries:
-            lp = lp.join(
-                Region,
-                (ServerPrice.vendor_id == Region.vendor_id)
-                & (ServerPrice.region_id == Region.region_id),
-            )
-            lp = lp.where(Region.country_id.in_(countries))
-        if regions:
-            lp = lp.where(ServerPrice.region_id.in_(regions))
-        if vendor_regions:
-            lp = lp.where(vendor_region_filter(vendor_regions, ServerPrice))
-        live_price_query = lp.group_by(
-            ServerPrice.vendor_id, ServerPrice.server_id
-        ).subquery()
+    live_price_query = gen_live_price_query(countries, regions, vendor_regions)
 
     if live_price_query is None:
         best_price_ref = ServerExtra.min_price

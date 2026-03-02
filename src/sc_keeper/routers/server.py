@@ -22,6 +22,7 @@ from .. import parameters as options
 from ..currency import currency_converter
 from ..database import get_db
 from ..helpers import get_server_dict, get_server_pks
+from ..queries import gen_live_price_query
 from ..references import ServerPKs
 
 router = APIRouter()
@@ -48,6 +49,8 @@ def get_similar_servers(
     ],
     benchmark_id: options.benchmark_id = "stress_ng:cpu_all",
     benchmark_config: options.benchmark_id = "",
+    countries: options.countries = None,
+    regions: options.regions = None,
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
     """Search similar servers to the provided one.
@@ -66,6 +69,8 @@ def get_similar_servers(
     per price.
     """
     serverobj = get_server_pks(vendor, server, db)
+
+    live_price_query = gen_live_price_query(countries, regions)
 
     query = (
         select(Server, ServerExtra)
