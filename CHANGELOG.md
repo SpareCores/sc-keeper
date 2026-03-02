@@ -14,6 +14,7 @@ New feature(s):
   server's "best price" is computed (e.g. use any price, spot only, or on-demand only).
 - Add optional `currency` configuration parameter for the search servers endpoint to convert the prices to a requested
   currency.
+- Add optional `countries` and `regions` query filters for the `/server/{vendor}/{server}/prices` and `/server/{vendor}/{server}/similar_servers/{by}/{num}` endpoints.
 
 Fix(es):
 

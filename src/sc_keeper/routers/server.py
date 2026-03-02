@@ -12,6 +12,7 @@ from sc_crawler.table_bases import ServerBase
 from sc_crawler.table_fields import Status
 from sc_crawler.tables import (
     BenchmarkScore,
+    Region,
     Server,
     ServerPrice,
 )
@@ -229,16 +230,18 @@ def get_server_prices(
                 detail="Max 1 country can be queried at a time without authentication.",
             )
 
+    query = select(ServerPrice)
+    if countries:
+        query = query.join(ServerPrice.region)
     query = (
-        select(ServerPrice)
-        .where(ServerPrice.status == Status.ACTIVE)
+        query.where(ServerPrice.status == Status.ACTIVE)
         .where(ServerPrice.vendor_id == vendor_id)
         .where(ServerPrice.server_id == server_id)
     )
-    if countries is not None:
-        query.where(ServerPrice.region.country_id.in_(countries))
-    if regions is not None:
-        query.where(ServerPrice.region_id.in_(regions))
+    if countries:
+        query = query.where(Region.country_id.in_(countries))
+    if regions:
+        query = query.where(ServerPrice.region_id.in_(regions))
     prices = db.exec(query).all()
 
     if currency:
