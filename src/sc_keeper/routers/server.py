@@ -206,18 +206,41 @@ def get_similar_servers(
 
 @router.get("/server/{vendor}/{server}/prices")
 def get_server_prices(
+    request: Request,
     server_args: options.server_args,
-    db: Session = Depends(get_db),
     currency: options.currency = None,
+    countries: options.countries = None,
+    regions: options.regions = None,
+    db: Session = Depends(get_db),
 ) -> List[ServerPrice]:
     """Query the current prices of a single server by its vendor id and server id."""
     vendor_id, server_id = server_args
-    prices = db.exec(
+
+    user = getattr(request.state, "user", None)
+    if not user:
+        if len(regions or []) > 3:
+            raise HTTPException(
+                status_code=400,
+                detail="Max 3 regions can be queried at a time without authentication.",
+            )
+        if len(countries or []) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Max 1 country can be queried at a time without authentication.",
+            )
+
+    query = (
         select(ServerPrice)
         .where(ServerPrice.status == Status.ACTIVE)
         .where(ServerPrice.vendor_id == vendor_id)
         .where(ServerPrice.server_id == server_id)
-    ).all()
+    )
+    if countries is not None:
+        query.where(ServerPrice.region.country_id.in_(countries))
+    if regions is not None:
+        query.where(ServerPrice.region_id.in_(regions))
+    prices = db.exec(query).all()
+
     if currency:
         for price in prices:
             if hasattr(price, "price") and hasattr(price, "currency"):
