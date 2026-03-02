@@ -169,6 +169,12 @@ def get_similar_servers(
                         ),
                     )
                 )
+                .select_from(ServerExtra)
+                .join(
+                    live_price_query,
+                    (ServerExtra.vendor_id == live_price_query.c.vendor_id)
+                    & (ServerExtra.server_id == live_price_query.c.server_id),
+                )
                 .where(ServerExtra.vendor_id == serverobj.vendor_id)
                 .where(ServerExtra.server_id == serverobj.server_id)
             ).first()
