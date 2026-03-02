@@ -6,6 +6,7 @@ from fastapi import (
     Depends,
     HTTPException,
     Path,
+    Request,
 )
 from sc_crawler.table_bases import ServerBase
 from sc_crawler.table_fields import Status
@@ -14,7 +15,7 @@ from sc_crawler.tables import (
     Server,
     ServerPrice,
 )
-from sqlmodel import Session, and_, func, not_, select
+from sqlmodel import Session, and_, case, func, not_, select
 
 from sc_keeper.views import ServerExtra
 
@@ -37,6 +38,7 @@ def get_server_without_relations(server_args: options.server_args) -> ServerBase
 
 @router.get("/server/{vendor}/{server}/similar_servers/{by}/{num}")
 def get_similar_servers(
+    request: Request,
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
     by: Annotated[
@@ -47,10 +49,10 @@ def get_similar_servers(
         int,
         Path(description="Number of servers to get.", le=100),
     ],
-    benchmark_id: options.benchmark_id = "stress_ng:cpu_all",
-    benchmark_config: options.benchmark_id = "",
     countries: options.countries = None,
     regions: options.regions = None,
+    benchmark_id: options.benchmark_id = "stress_ng:cpu_all",
+    benchmark_config: options.benchmark_id = "",
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
     """Search similar servers to the provided one.
@@ -70,22 +72,51 @@ def get_similar_servers(
     """
     serverobj = get_server_pks(vendor, server, db)
 
+    user = getattr(request.state, "user", None)
+    if not user:
+        if len(regions or []) > 3:
+            raise HTTPException(
+                status_code=400,
+                detail="Max 3 regions can be queried at a time without authentication.",
+            )
+        if len(countries or []) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Max 1 country can be queried at a time without authentication.",
+            )
+
     live_price_query = gen_live_price_query(countries, regions)
 
-    query = (
-        select(Server, ServerExtra)
-        .join(
+    if live_price_query is not None:
+        query = select(
+            Server,
             ServerExtra,
-            (Server.vendor_id == ServerExtra.vendor_id)
-            & (Server.server_id == ServerExtra.server_id),
-            isouter=True,
+            live_price_query.c.min_price,
+            live_price_query.c.min_price_spot,
+            live_price_query.c.min_price_ondemand,
+            live_price_query.c.min_price_ondemand_monthly,
         )
-        .where(
-            not_(
-                and_(
-                    Server.vendor_id == serverobj.vendor_id,
-                    Server.server_id == serverobj.server_id,
-                )
+    else:
+        query = select(Server, ServerExtra)
+
+    query = query.join(
+        ServerExtra,
+        (Server.vendor_id == ServerExtra.vendor_id)
+        & (Server.server_id == ServerExtra.server_id),
+        isouter=True,
+    )
+    if live_price_query is not None:
+        query = query.join(
+            live_price_query,
+            (Server.vendor_id == live_price_query.c.vendor_id)
+            & (Server.server_id == live_price_query.c.server_id),
+        )
+
+    query = query.where(
+        not_(
+            and_(
+                Server.vendor_id == serverobj.vendor_id,
+                Server.server_id == serverobj.server_id,
             )
         )
     )
@@ -117,11 +148,29 @@ def get_similar_servers(
         )
 
     if by == "score_per_price":
-        target_score_per_price = db.exec(
-            select(ServerExtra.score_per_price)
-            .where(ServerExtra.vendor_id == serverobj.vendor_id)
-            .where(ServerExtra.server_id == serverobj.server_id)
-        ).first()
+        if live_price_query is None:
+            target_score_per_price = db.exec(
+                select(ServerExtra.score_per_price)
+                .where(ServerExtra.vendor_id == serverobj.vendor_id)
+                .where(ServerExtra.server_id == serverobj.server_id)
+            ).first()
+        else:
+            target_score_per_price = db.exec(
+                select(
+                    case(
+                        (
+                            (live_price_query.c.min_price.is_(None))
+                            | (live_price_query.c.min_price == 0),
+                            None,
+                        ),
+                        else_=func.round(
+                            ServerExtra.score / live_price_query.c.min_price, 4
+                        ),
+                    )
+                )
+                .where(ServerExtra.vendor_id == serverobj.vendor_id)
+                .where(ServerExtra.server_id == serverobj.server_id)
+            ).first()
         if target_score_per_price is None:
             return []
         query = query.where(ServerExtra.score_per_price.isnot(None)).order_by(
@@ -135,11 +184,18 @@ def get_similar_servers(
         serveri = ServerPKs.model_validate(server[0])
         with suppress(Exception):
             serveri.score = server[1].score
-            serveri.min_price = server[1].min_price
-            serveri.min_price_spot = server[1].min_price_spot
-            serveri.min_price_ondemand = server[1].min_price_ondemand
-            serveri.price = serveri.min_price  # legacy
             serveri.score_per_price = server[1].score_per_price
+        with suppress(Exception):
+            if live_price_query is not None:
+                serveri.min_price = server[2]
+                serveri.min_price_spot = server[3]
+                serveri.min_price_ondemand = server[4]
+                serveri.min_price_ondemand_monthly = server[5]
+            else:
+                serveri.min_price = server[1].min_price
+                serveri.min_price_spot = server[1].min_price_spot
+                serveri.min_price_ondemand = server[1].min_price_ondemand
+            serveri.price = serveri.min_price  # legacy
         serverlist.append(serveri)
 
     return serverlist
