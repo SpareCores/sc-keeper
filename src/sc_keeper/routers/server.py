@@ -149,15 +149,16 @@ def get_similar_servers(
         )
 
     if by == "score_per_price":
-        if live_price_query is None:
-            target_score_per_price = db.exec(
-                select(ServerExtra.score_per_price)
-                .where(ServerExtra.vendor_id == serverobj.vendor_id)
-                .where(ServerExtra.server_id == serverobj.server_id)
-            ).first()
-        else:
-            target_score_per_price = db.exec(
-                select(
+        target_score_per_price = db.exec(
+            select(ServerExtra.score_per_price)
+            .where(ServerExtra.vendor_id == serverobj.vendor_id)
+            .where(ServerExtra.server_id == serverobj.server_id)
+        ).first()
+        if target_score_per_price is None:
+            return []
+        if live_price_query is not None:
+            query = query.where(ServerExtra.score.isnot(None)).order_by(
+                func.abs(
                     case(
                         (
                             (live_price_query.c.min_price.is_(None))
@@ -168,21 +169,13 @@ def get_similar_servers(
                             ServerExtra.score / live_price_query.c.min_price, 4
                         ),
                     )
+                    - target_score_per_price
                 )
-                .select_from(ServerExtra)
-                .join(
-                    live_price_query,
-                    (ServerExtra.vendor_id == live_price_query.c.vendor_id)
-                    & (ServerExtra.server_id == live_price_query.c.server_id),
-                )
-                .where(ServerExtra.vendor_id == serverobj.vendor_id)
-                .where(ServerExtra.server_id == serverobj.server_id)
-            ).first()
-        if target_score_per_price is None:
-            return []
-        query = query.where(ServerExtra.score_per_price.isnot(None)).order_by(
-            func.abs(ServerExtra.score_per_price - target_score_per_price)
-        )
+            )
+        else:
+            query = query.where(ServerExtra.score_per_price.isnot(None)).order_by(
+                func.abs(ServerExtra.score_per_price - target_score_per_price)
+            )
 
     servers = db.exec(query.limit(num)).all()
 
