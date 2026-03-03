@@ -307,7 +307,18 @@ def check_filter_limits(
     user = getattr(request.state, "user", None)
     if user:
         return
-    if (len(regions or []) + len(vendor_regions or [])) > max_regions:
+    regions_set = set(regions or [])
+    if vendor_regions:
+        for vr in vendor_regions:
+            try:
+                _, r = vr.split("~", 1)
+                regions_set.add(r)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid vendor_region format: {vr}. Expected 'vendor_id~region_id'.",
+                )
+    if len(regions_set) > max_regions:
         raise HTTPException(
             status_code=400,
             detail=f"Max {max_regions} {'regions' if max_regions > 1 else 'region'} can be queried at a time without authentication.",
