@@ -51,6 +51,7 @@ def get_similar_servers(
         int,
         Path(description="Number of servers to get.", le=100),
     ],
+    server_region: options.server_region = None,
     countries: options.countries = None,
     vendor_regions: options.vendor_regions = None,
     benchmark_id: options.benchmark_id = None,
@@ -142,8 +143,25 @@ def get_similar_servers(
         )
 
     if by == "score_per_price":
+        if server_region is None:
+            raise HTTPException(
+                status_code=400,
+                detail="The server_region parameter is required when sorting by score_per_price.",
+            )
+        source_live_price_query = gen_live_price_query(
+            vendor_regions=[f"{serverobj.vendor_id}~{server_region}"]
+        )
+        if source_live_price_query is None:
+            return []
         target_score_per_price = db.exec(
-            select(ServerExtra.score_per_price)
+            select(
+                func.round(ServerExtra.score / source_live_price_query.c.min_price, 4)
+            )
+            .join(
+                source_live_price_query,
+                (ServerExtra.vendor_id == source_live_price_query.c.vendor_id)
+                & (ServerExtra.server_id == source_live_price_query.c.server_id),
+            )
             .where(ServerExtra.vendor_id == serverobj.vendor_id)
             .where(ServerExtra.server_id == serverobj.server_id)
         ).first()

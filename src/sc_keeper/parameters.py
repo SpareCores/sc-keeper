@@ -211,6 +211,18 @@ vendor_regions = Annotated[
     ),
 ]
 
+server_region = Annotated[
+    Optional[str],
+    Query(
+        title="Server region",
+        description="Region where the server is located.",
+        json_schema_extra={
+            "category_id": FilterCategories.REGION,
+            "enum": [m.value for m in Regions],
+        },
+    ),
+]
+
 compliance_framework = Annotated[
     Optional[List[ComplianceFrameworks]],
     Query(
