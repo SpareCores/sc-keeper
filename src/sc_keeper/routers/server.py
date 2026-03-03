@@ -21,9 +21,10 @@ from sqlmodel import Session, and_, case, func, not_, select
 from sc_keeper.views import ServerExtra
 
 from .. import parameters as options
+from ..auth import check_filter_limits
 from ..currency import currency_converter
 from ..database import get_db
-from ..helpers import get_server_dict, get_server_pks
+from ..helpers import get_server_dict, get_server_pks, vendor_region_filter
 from ..queries import gen_live_price_query
 from ..references import ServerPKs
 
@@ -51,9 +52,10 @@ def get_similar_servers(
         Path(description="Number of servers to get.", le=100),
     ],
     countries: options.countries = None,
-    regions: options.regions = None,
-    benchmark_id: options.benchmark_id = "stress_ng:cpu_all",
-    benchmark_config: options.benchmark_id = "",
+    vendor_regions: options.vendor_regions = None,
+    benchmark_id: options.benchmark_id = None,
+    benchmark_config: options.benchmark_config = None,
+    currency: options.currency = None,
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
     """Search similar servers to the provided one.
@@ -71,22 +73,13 @@ def get_similar_servers(
     instead of using the multi-core SCore, it uses the SCore
     per price.
     """
+    check_filter_limits(request, countries, vendor_regions=vendor_regions)
+
     serverobj = get_server_pks(vendor, server, db)
 
-    user = getattr(request.state, "user", None)
-    if not user:
-        if len(regions or []) > 3:
-            raise HTTPException(
-                status_code=400,
-                detail="Max 3 regions can be queried at a time without authentication.",
-            )
-        if len(countries or []) > 1:
-            raise HTTPException(
-                status_code=400,
-                detail="Max 1 country can be queried at a time without authentication.",
-            )
-
-    live_price_query = gen_live_price_query(countries, regions)
+    live_price_query = gen_live_price_query(
+        countries=countries, vendor_regions=vendor_regions
+    )
 
     if live_price_query is not None:
         query = select(
@@ -208,26 +201,15 @@ def get_similar_servers(
 def get_server_prices(
     request: Request,
     server_args: options.server_args,
-    currency: options.currency = None,
     countries: options.countries = None,
-    regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
+    currency: options.currency = None,
     db: Session = Depends(get_db),
 ) -> List[ServerPrice]:
     """Query the current prices of a single server by its vendor id and server id."""
     vendor_id, server_id = server_args
 
-    user = getattr(request.state, "user", None)
-    if not user:
-        if len(regions or []) > 3:
-            raise HTTPException(
-                status_code=400,
-                detail="Max 3 regions can be queried at a time without authentication.",
-            )
-        if len(countries or []) > 1:
-            raise HTTPException(
-                status_code=400,
-                detail="Max 1 country can be queried at a time without authentication.",
-            )
+    check_filter_limits(request, countries, vendor_regions=vendor_regions)
 
     query = select(ServerPrice)
     if countries:
@@ -239,8 +221,8 @@ def get_server_prices(
     )
     if countries:
         query = query.where(Region.country_id.in_(countries))
-    if regions:
-        query = query.where(ServerPrice.region_id.in_(regions))
+    if vendor_regions:
+        query = query.where(vendor_region_filter(vendor_regions, ServerPrice))
     prices = db.exec(query).all()
 
     if currency:

@@ -14,6 +14,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from . import parameters as options
 from .redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -272,3 +273,47 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
             )
         response = await call_next(request)
         return response
+
+
+def check_filter_limits(
+    request: Request,
+    countries: options.countries = None,
+    regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
+    max_countries: int = 1,
+    max_regions: int = 3,
+) -> None:
+    """Enforce filter count limits for unauthenticated requests.
+
+    Raises HTTP 400 if an unauthenticated request exceeds the allowed number
+    of filter values. Authenticated users (i.e. requests with a valid token
+    resolved by AuthMiddleware) bypass all limits.
+
+    The combined count of `regions` and `vendor_regions` is checked against
+    `max_regions`, since they are alternative ways to filter by region and
+    their total should stay within a reasonable bound.
+
+    Args:
+        request: The incoming FastAPI request (used to check auth state).
+        countries: List of country filter values provided by the caller.
+        regions: List of region filter values provided by the caller.
+        vendor_regions: List of vendor-region filter values provided by the caller.
+        max_countries: Maximum number of country values allowed without auth.
+        max_regions: Maximum combined number of region and vendor-region values allowed without auth.
+
+    Raises:
+        HTTPException: 400 if any filter exceeds the allowed limit for unauthenticated requests.
+    """
+    user = getattr(request.state, "user", None)
+    if user:
+        return
+    if (len(regions or []) + len(vendor_regions or [])) > max_regions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Max {max_regions} {'regions' if max_regions > 1 else 'region'} can be queried at a time without authentication.",
+        )
+    if len(countries or []) > max_countries:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Max {max_countries} {'countries' if max_countries > 1 else 'country'} can be queried at a time without authentication.",
+        )

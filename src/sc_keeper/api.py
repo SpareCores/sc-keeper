@@ -47,7 +47,7 @@ if environ.get("AUTH_TOKEN_INTROSPECTION_URL"):
 # ruff: noqa: E402
 from . import parameters as options
 from . import routers
-from .auth import AuthGuardMiddleware, AuthMiddleware
+from .auth import AuthGuardMiddleware, AuthMiddleware, check_filter_limits
 from .cache import CacheHeaderMiddleware
 from .crawler_extend import calculate_tiered_price
 from .currency import currency_converter
@@ -358,6 +358,8 @@ def search_servers(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
+    check_filter_limits(request, countries, regions, vendor_regions)
+
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the servers table
     if compliance_framework:
@@ -368,19 +370,6 @@ def search_servers(
         )
         compliant_vendors = db.exec(query).all()
         vendor = list(set(vendor or []) & set(compliant_vendors))
-
-    user = getattr(request.state, "user", None)
-    if not user:
-        if max(len(regions or []), len(vendor_regions or [])) > 3:
-            raise HTTPException(
-                status_code=400,
-                detail="Max 3 regions can be queried at a time without authentication.",
-            )
-        if len(countries or []) > 1:
-            raise HTTPException(
-                status_code=400,
-                detail="Max 1 country can be queried at a time without authentication.",
-            )
 
     # keep track of filter conditions
     conditions = set()
@@ -763,6 +752,7 @@ def search_servers(
 
 @app.get("/server_prices", tags=["Query Resources"])
 def search_server_prices(
+    request: Request,
     response: Response,
     partial_name_or_id: options.partial_name_or_id = None,
     # although it's relatively expensive to set a dummy filter,
@@ -801,6 +791,8 @@ def search_server_prices(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
+    check_filter_limits(request, countries, regions, vendor_regions)
+
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the prices table
     if compliance_framework:
