@@ -9,6 +9,7 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, and_, or_, select
 
+from .currency import currency_converter
 from .database import get_db
 from .references import ServerPKs
 
@@ -65,3 +66,33 @@ def vendor_region_filter(vendor_regions, model):
             for v, r in [vr.split("~", 1)]
         ]
     )
+
+
+def update_server_price_currency(prices, currency):
+    for price in prices:
+        if currency:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        4,
+                    )
+                    if price.price_tiered:
+                        for tier in price.price_tiered:
+                            tier.price = round(
+                                currency_converter.convert(
+                                    tier.price, price.currency, currency
+                                ),
+                                4,
+                            )
+                    if price.price_monthly:
+                        price.price_monthly = round(
+                            currency_converter.convert(
+                                price.price_monthly, price.currency, currency
+                            ),
+                            2,
+                        )
+                    price.currency = currency
+    return prices

@@ -6,7 +6,7 @@ from json import dumps as json_dumps
 from json import loads as json_loads
 from os import environ
 from threading import Lock
-from typing import Optional
+from typing import List, Optional
 
 import httpx
 from fastapi import HTTPException, Request, Response, Security, status
@@ -14,7 +14,6 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from . import parameters as options
 from .redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -277,9 +276,9 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
 
 def check_filter_limits(
     request: Request,
-    countries: options.countries = None,
-    regions: options.regions = None,
-    vendor_regions: options.vendor_regions = None,
+    countries: Optional[List[str]] = None,
+    regions: Optional[List[str]] = None,
+    vendor_regions: Optional[List[str]] = None,
     max_countries: int = 1,
     max_regions: int = 3,
 ) -> None:

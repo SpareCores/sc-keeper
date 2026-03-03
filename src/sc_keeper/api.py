@@ -29,7 +29,7 @@ from sc_crawler.tables import (
 from sqlalchemy.orm import aliased, contains_eager
 from sqlmodel import Session, String, case, func, or_, select
 
-from .helpers import vendor_region_filter
+from .helpers import update_server_price_currency, vendor_region_filter
 
 # early validation (before DB imports) of environment variables
 logger = getLogger(__name__)
@@ -1055,34 +1055,7 @@ def search_server_prices(
             price.server.price = price.server.min_price  # legacy
         prices.append(price)
 
-    # update prices to currency requested
-    for price in prices:
-        if currency:
-            if hasattr(price, "price") and hasattr(price, "currency"):
-                if price.currency != currency:
-                    price.price = round(
-                        currency_converter.convert(
-                            price.price, price.currency, currency
-                        ),
-                        4,
-                    )
-                    if price.price_tiered:
-                        for tier in price.price_tiered:
-                            tier.price = round(
-                                currency_converter.convert(
-                                    tier.price, price.currency, currency
-                                ),
-                                4,
-                            )
-                    if price.price_monthly:
-                        price.price_monthly = round(
-                            currency_converter.convert(
-                                price.price_monthly, price.currency, currency
-                            ),
-                            2,
-                        )
-                    price.currency = currency
-    return prices
+    return update_server_price_currency(prices, currency)
 
 
 @app.get("/storage_prices", tags=["Query Resources"])

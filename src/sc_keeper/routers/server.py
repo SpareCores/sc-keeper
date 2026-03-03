@@ -24,9 +24,14 @@ from .. import parameters as options
 from ..auth import check_filter_limits
 from ..currency import currency_converter
 from ..database import get_db
-from ..helpers import get_server_dict, get_server_pks, vendor_region_filter
+from ..helpers import (
+    get_server_dict,
+    get_server_pks,
+    update_server_price_currency,
+    vendor_region_filter,
+)
 from ..queries import gen_live_price_query
-from ..references import ServerPKs
+from ..references import ServerPKs, ServerPriceWithPKs
 
 router = APIRouter()
 
@@ -148,19 +153,18 @@ def get_similar_servers(
                 status_code=400,
                 detail="The server_region parameter is required when sorting by score_per_price.",
             )
-        source_live_price_query = gen_live_price_query(
+        target_live_price_query = gen_live_price_query(
             vendor_regions=[f"{serverobj.vendor_id}~{server_region}"]
         )
-        if source_live_price_query is None:
-            return []
         target_score_per_price = db.exec(
             select(
-                func.round(ServerExtra.score / source_live_price_query.c.min_price, 4)
+                func.round(ServerExtra.score / target_live_price_query.c.min_price, 4)
             )
+            .select_from(ServerExtra)
             .join(
-                source_live_price_query,
-                (ServerExtra.vendor_id == source_live_price_query.c.vendor_id)
-                & (ServerExtra.server_id == source_live_price_query.c.server_id),
+                target_live_price_query,
+                (ServerExtra.vendor_id == target_live_price_query.c.vendor_id)
+                & (ServerExtra.server_id == target_live_price_query.c.server_id),
             )
             .where(ServerExtra.vendor_id == serverobj.vendor_id)
             .where(ServerExtra.server_id == serverobj.server_id)
@@ -195,13 +199,13 @@ def get_similar_servers(
         serveri = ServerPKs.model_validate(server[0])
         with suppress(Exception):
             serveri.score = server[1].score
-            serveri.score_per_price = server[1].score_per_price
-        with suppress(Exception):
+            serveri.price = serveri.min_price  # legacy
             if live_price_query is not None:
                 serveri.min_price = server[2]
                 serveri.min_price_spot = server[3]
                 serveri.min_price_ondemand = server[4]
                 serveri.min_price_ondemand_monthly = server[5]
+                serveri.score_per_price = round(serveri.score / serveri.min_price, 4)
             else:
                 serveri.min_price = server[1].min_price
                 serveri.min_price_spot = server[1].min_price_spot
@@ -209,9 +213,8 @@ def get_similar_servers(
                 serveri.min_price_ondemand_monthly = server[
                     1
                 ].min_price_ondemand_monthly
-            serveri.price = serveri.min_price  # legacy
+                serveri.score_per_price = server[1].score_per_price
         serverlist.append(serveri)
-
     return serverlist
 
 
@@ -221,11 +224,14 @@ def get_server_prices(
     server_args: options.server_args,
     countries: options.countries = None,
     vendor_regions: options.vendor_regions = None,
-    currency: options.currency = None,
+    currency: options.currency = "USD",
     db: Session = Depends(get_db),
-) -> List[ServerPrice]:
+) -> List[ServerPriceWithPKs]:
     """Query the current prices of a single server by its vendor id and server id."""
     vendor_id, server_id = server_args
+
+    if currency and currency not in currency_converter.converter.currencies:
+        raise HTTPException(status_code=400, detail="Invalid currency code")
 
     check_filter_limits(request, countries, vendor_regions=vendor_regions)
 
@@ -241,26 +247,18 @@ def get_server_prices(
         query = query.where(Region.country_id.in_(countries))
     if vendor_regions:
         query = query.where(vendor_region_filter(vendor_regions, ServerPrice))
-    prices = db.exec(query).all()
 
-    if currency:
-        for price in prices:
-            if hasattr(price, "price") and hasattr(price, "currency"):
-                if price.currency != currency:
-                    db.expunge(price)
-                    try:
-                        price.price = round(
-                            currency_converter.convert(
-                                price.price, price.currency, currency
-                            ),
-                            4,
-                        )
-                    except ValueError as e:
-                        raise HTTPException(
-                            status_code=400, detail="Invalid currency code"
-                        ) from e
-                    price.currency = currency
-    return prices
+    results = db.exec(query).all()
+
+    prices = []
+    for result in results:
+        if not result:
+            continue
+        price = ServerPriceWithPKs.model_validate(result)
+        price.price_monthly = result.price_monthly
+        prices.append(price)
+
+    return update_server_price_currency(prices, currency)
 
 
 @router.get("/server/{vendor}/{server}/benchmarks")
