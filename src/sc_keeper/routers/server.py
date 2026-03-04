@@ -82,6 +82,9 @@ def get_similar_servers(
     """
     check_filter_limits(request, countries, vendor_regions=vendor_regions)
 
+    if currency and currency not in currency_converter.converter.currencies:
+        raise HTTPException(status_code=400, detail="Invalid currency code")
+
     serverobj = get_server_pks(vendor, server, db)
 
     live_price_query = gen_live_price_query(
@@ -215,6 +218,7 @@ def get_similar_servers(
                     1
                 ].min_price_ondemand_monthly
                 serveri.score_per_price = server[1].score_per_price
+        serveri = update_server_price_currency(serveri, currency)
         serverlist.append(serveri)
     return serverlist
 
@@ -263,7 +267,7 @@ def get_server_prices(
         price.price_monthly = result.price_monthly
         prices.append(price)
 
-    return update_server_price_currency(prices, currency)
+    return [update_server_price_currency(price, currency) for price in prices]
 
 
 @router.get("/server/{vendor}/{server}/benchmarks")

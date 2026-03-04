@@ -68,31 +68,38 @@ def vendor_region_filter(vendor_regions, model):
     )
 
 
-def update_server_price_currency(prices, currency):
-    for price in prices:
-        if currency:
-            if hasattr(price, "price") and hasattr(price, "currency"):
-                if price.currency != currency:
-                    price.price = round(
-                        currency_converter.convert(
-                            price.price, price.currency, currency
-                        ),
-                        4,
-                    )
-                    if price.price_tiered:
-                        for tier in price.price_tiered:
-                            tier.price = round(
-                                currency_converter.convert(
-                                    tier.price, price.currency, currency
-                                ),
-                                4,
-                            )
-                    if price.price_monthly:
-                        price.price_monthly = round(
-                            currency_converter.convert(
-                                price.price_monthly, price.currency, currency
-                            ),
-                            2,
-                        )
-                    price.currency = currency
-    return prices
+def update_server_price_currency(
+    server_obj,
+    to_currency: str = "USD",
+    price_ndigits: int = 4,
+    monthly_price_ndigits: int = 2,
+):
+    from_currency = getattr(server_obj, "currency", "USD")
+    if from_currency != to_currency:
+        for attr, ndigits in [
+            ("price", price_ndigits),
+            ("price_monthly", monthly_price_ndigits),
+            ("min_price", price_ndigits),
+            ("min_price_spot", price_ndigits),
+            ("min_price_ondemand", price_ndigits),
+            ("min_price_ondemand_monthly", monthly_price_ndigits),
+        ]:
+            value = getattr(server_obj, attr, None)
+            if value:
+                setattr(
+                    server_obj,
+                    attr,
+                    round(
+                        currency_converter.convert(value, from_currency, to_currency),
+                        ndigits,
+                    ),
+                )
+        if hasattr(server_obj, "price_tiered") and server_obj.price_tiered:
+            for tier in server_obj.price_tiered:
+                tier.price = round(
+                    currency_converter.convert(tier.price, from_currency, to_currency),
+                    price_ndigits,
+                )
+        if hasattr(server_obj, "currency"):
+            server_obj.currency = to_currency
+    return server_obj

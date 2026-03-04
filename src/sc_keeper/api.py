@@ -360,6 +360,9 @@ def search_servers(
 ) -> List[ServerPKs]:
     check_filter_limits(request, countries, regions, vendor_regions)
 
+    if currency and currency not in currency_converter.converter.currencies:
+        raise HTTPException(status_code=400, detail="Invalid currency code")
+
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the servers table
     if compliance_framework:
@@ -721,30 +724,9 @@ def search_servers(
                 server.selected_benchmark_score_per_price = (
                     benchmark_score / server.min_price
                 )
-        # don't convert before "per_price" calculations as those as standardized in USD
-        if currency and currency != "USD":
-            try:
-                for attr, ndigits in [
-                    ("min_price", 4),
-                    ("min_price_spot", 4),
-                    ("min_price_ondemand", 4),
-                    ("min_price_ondemand_monthly", 2),
-                ]:
-                    value = getattr(server, attr, None)
-                    if value:
-                        setattr(
-                            server,
-                            attr,
-                            round(
-                                currency_converter.convert(value, "USD", currency),
-                                ndigits,
-                            ),
-                        )
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=400, detail="Invalid currency code"
-                ) from e
         server.price = server.min_price  # legacy
+        # don't convert before "per_price" calculations as those as standardized in USD
+        server = update_server_price_currency(server, currency)
         serverlist.append(server)
 
     return serverlist
@@ -793,6 +775,9 @@ def search_server_prices(
 ) -> List[ServerPriceWithPKs]:
     check_filter_limits(request, countries, regions, vendor_regions)
 
+    if currency and currency not in currency_converter.converter.currencies:
+        raise HTTPException(status_code=400, detail="Invalid currency code")
+
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the prices table
     if compliance_framework:
@@ -819,9 +804,6 @@ def search_server_prices(
                 Server.display_name.ilike(ilike),
             )
         )
-
-    if currency and currency not in currency_converter.converter.currencies:
-        raise HTTPException(status_code=400, detail="Invalid currency code")
 
     if vcpus_min:
         joins.add(ServerPrice.server)
@@ -1055,7 +1037,7 @@ def search_server_prices(
             price.server.price = price.server.min_price  # legacy
         prices.append(price)
 
-    return update_server_price_currency(prices, currency)
+    return [update_server_price_currency(price, currency) for price in prices]
 
 
 @app.get("/storage_prices", tags=["Query Resources"])
