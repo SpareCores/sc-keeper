@@ -389,36 +389,36 @@ class CpuSpeedSnapPoints(Enum):
 
 
 class CpuL1CacheSnapPoints(Enum):
-    """Predefined snap points for CPU L1 cache filtering, based on common values in the dataset (in MiB)."""
+    """Predefined snap points for CPU L1 cache filtering, based on common values in the dataset (in KiB)."""
 
-    KIB_32 = 0.03125
-    KIB_64 = 0.0625
-    KIB_128 = 0.125
-    KIB_256 = 0.25
-    KIB_512 = 0.5
-    MIB_1 = 1
-    MIB_2 = 2
-    MIB_4 = 4
-    MIB_6 = 6
-    MIB_12 = 12
+    KIB_32 = 32
+    KIB_64 = 64
+    KIB_128 = 128
+    KIB_256 = 256
+    KIB_512 = 512
+    MIB_1 = 1024
+    MIB_2 = 2048
+    MIB_4 = 4096
+    MIB_6 = 6144
+    MIB_12 = 12288
 
 
 class CpuL2CacheSnapPoints(Enum):
-    """Predefined snap points for CPU L2 cache filtering, based on common values in the dataset (in MiB)."""
+    """Predefined snap points for CPU L2 cache filtering, based on common values in the dataset (in KiB)."""
 
-    KIB_256 = 0.25
-    KIB_512 = 0.5
-    MIB_1 = 1
-    MIB_2 = 2
-    MIB_4 = 4
-    MIB_8 = 8
-    MIB_16 = 16
-    MIB_32 = 32
-    MIB_50 = 50
-    MIB_64 = 64
-    MIB_100 = 100
-    MIB_200 = 200
-    MIB_400 = 400
+    KIB_256 = 256
+    KIB_512 = 512
+    MIB_1 = 1024
+    MIB_2 = 2048
+    MIB_4 = 4096
+    MIB_8 = 8192
+    MIB_16 = 16384
+    MIB_32 = 32768
+    MIB_50 = 51200
+    MIB_64 = 65536
+    MIB_100 = 102400
+    MIB_200 = 204800
+    MIB_400 = 409600
 
 
 class CpuL3CacheSnapPoints(Enum):

@@ -255,33 +255,33 @@ cpu_speed_min = Annotated[
 ]
 
 cpu_l1_cache_min = Annotated[
-    Optional[float],
+    Optional[int],
     Query(
         title="Minimum L1 cache size",
-        description="Minimum L1 cache size in MiBs.",
+        description="Minimum L1 cache size in KiBs.",
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "enum": [e.value for e in CpuL1CacheSnapPoints],
-            "unit": "MiB",
+            "unit": "KiB",
         },
     ),
 ]
 
 cpu_l2_cache_min = Annotated[
-    Optional[float],
+    Optional[int],
     Query(
         title="Minimum L2 cache size",
-        description="Minimum L2 cache size in MiBs.",
+        description="Minimum L2 cache size in KiBs.",
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "enum": [e.value for e in CpuL2CacheSnapPoints],
-            "unit": "MiB",
+            "unit": "KiB",
         },
     ),
 ]
 
 cpu_l3_cache_min = Annotated[
-    Optional[float],
+    Optional[int],
     Query(
         title="Minimum L3 cache size",
         description="Minimum L3 cache size in MiBs.",
