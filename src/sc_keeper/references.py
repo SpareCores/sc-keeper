@@ -353,3 +353,78 @@ class BestPriceAllocation(StrEnum):
     SPOT_ONLY = "SPOT_ONLY"
     ONDEMAND_ONLY = "ONDEMAND_ONLY"
     MONTHLY = "MONTHLY"
+
+
+class NetworkSpeedSnapPoints(Enum):
+    """Predefined snap points for network speed filtering, based on common values in the dataset."""
+
+    MBPS_500 = 0.5
+    GBPS_1 = 1
+    GBPS_5 = 5
+    GBPS_10 = 10
+    GBPS_25 = 25
+    GBPS_50 = 50
+    GBPS_100 = 100
+    GBPS_500 = 500
+    GBPS_1000 = 1000
+    GBPS_10000 = 10000
+    GBPS_25000 = 25000
+
+
+class CpuSpeedSnapPoints(Enum):
+    """Predefined snap points for CPU speed filtering, based on common values in the dataset."""
+
+    GHZ_2_0 = 2.0
+    GHZ_2_5 = 2.5
+    GHZ_3_0 = 3.0
+    GHZ_3_5 = 3.5
+    GHZ_4_0 = 4.0
+    GHZ_4_5 = 4.5
+    GHZ_5_0 = 5.0
+
+
+class CpuL1CacheSnapPoints(Enum):
+    """Predefined snap points for CPU L1 cache filtering, based on common values in the dataset (in bytes)."""
+
+    KB_32 = 32768
+    KB_64 = 65536
+    KB_128 = 131072
+    KB_256 = 262144
+    KB_512 = 524288
+    MB_1 = 1048576
+    MB_2 = 2097152
+    MB_4 = 4194304
+    MB_6 = 6291456
+    MB_12 = 12582912
+
+
+class CpuL2CacheSnapPoints(Enum):
+    """Predefined snap points for CPU L2 cache filtering, based on common values in the dataset (in bytes)."""
+
+    MB_1 = 1048576
+    MB_2 = 2097152
+    MB_4 = 4194304
+    MB_8 = 8388608
+    MB_16 = 16777216
+    MB_32 = 33554432
+    MB_50 = 52428800
+    MB_64 = 67108864
+    MB_100 = 104857600
+    MB_200 = 209715200
+    MB_400 = 419430400
+
+
+class CpuL3CacheSnapPoints(Enum):
+    """Predefined snap points for CPU L3 cache filtering, based on common values in the dataset (in bytes)."""
+
+    MB_4 = 4194304
+    MB_16 = 16777216
+    MB_32 = 33554432
+    MB_48 = 50331648
+    MB_64 = 67108864
+    MB_96 = 100663296
+    MB_128 = 134217728
+    MB_192 = 201326592
+    MB_256 = 268435456
+    MB_512 = 536870912
+    GB_1 = 1073741824
