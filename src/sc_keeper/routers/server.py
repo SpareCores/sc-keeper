@@ -16,7 +16,6 @@ from sc_crawler.tables import (
     Server,
     ServerPrice,
 )
-from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, and_, case, func, not_, select
 
 from sc_keeper.views import ServerExtra
@@ -32,7 +31,7 @@ from ..helpers import (
     vendor_region_filter,
 )
 from ..queries import gen_benchmark_query, gen_live_price_query
-from ..references import ServerPKs, ServerPriceWithPKs
+from ..references import ServerPKs
 
 router = APIRouter()
 
