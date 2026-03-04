@@ -31,7 +31,7 @@ from ..helpers import (
     update_server_price_currency,
     vendor_region_filter,
 )
-from ..queries import gen_live_price_query
+from ..queries import gen_benchmark_query, gen_live_price_query
 from ..references import ServerPKs, ServerPriceWithPKs
 
 router = APIRouter()
@@ -87,21 +87,24 @@ def get_similar_servers(
 
     serverobj = get_server_pks(vendor, server, db)
 
-    live_price_query = gen_live_price_query(
-        countries=countries, vendor_regions=vendor_regions
-    )
+    live_price_query = gen_live_price_query(countries, vendor_regions=vendor_regions)
 
+    benchmark_query = gen_benchmark_query(benchmark_id, benchmark_config)
+
+    select_entities = [Server, ServerExtra]
     if live_price_query is not None:
-        query = select(
-            Server,
-            ServerExtra,
-            live_price_query.c.min_price,
-            live_price_query.c.min_price_spot,
-            live_price_query.c.min_price_ondemand,
-            live_price_query.c.min_price_ondemand_monthly,
+        select_entities.extend(
+            [
+                live_price_query.c.min_price,
+                live_price_query.c.min_price_spot,
+                live_price_query.c.min_price_ondemand,
+                live_price_query.c.min_price_ondemand_monthly,
+            ]
         )
-    else:
-        query = select(Server, ServerExtra)
+    if benchmark_id:
+        select_entities.append(benchmark_query.c.benchmark_score)
+
+    query = select(*select_entities)
 
     query = query.join(
         ServerExtra,
@@ -115,6 +118,13 @@ def get_similar_servers(
             (Server.vendor_id == live_price_query.c.vendor_id)
             & (Server.server_id == live_price_query.c.server_id),
         )
+    if benchmark_id:
+        query = query.join(
+            benchmark_query,
+            (Server.vendor_id == benchmark_query.c.vendor_id)
+            & (Server.server_id == benchmark_query.c.server_id),
+            isouter=True,
+        )
 
     query = query.where(
         not_(
@@ -123,7 +133,7 @@ def get_similar_servers(
                 Server.server_id == serverobj.server_id,
             )
         )
-    )
+    ).where(Server.status == Status.ACTIVE)
 
     if by == "family":
         query = (
@@ -218,6 +228,12 @@ def get_similar_servers(
                     1
                 ].min_price_ondemand_monthly
                 serveri.score_per_price = server[1].score_per_price
+            if benchmark_id:
+                serveri.selected_benchmark_score = server[-1]
+                serveri.selected_benchmark_score_per_price = round(
+                    serveri.selected_benchmark_score / serveri.min_price, 4
+                )
+        serveri.price = serveri.min_price  # legacy
         serveri = update_server_price_currency(serveri, currency)
         serverlist.append(serveri)
     return serverlist
