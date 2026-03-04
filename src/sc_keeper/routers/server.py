@@ -16,6 +16,7 @@ from sc_crawler.tables import (
     Server,
     ServerPrice,
 )
+from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, and_, case, func, not_, select
 
 from sc_keeper.views import ServerExtra
@@ -61,7 +62,7 @@ def get_similar_servers(
     vendor_regions: options.vendor_regions = None,
     benchmark_id: options.benchmark_id = None,
     benchmark_config: options.benchmark_config = None,
-    currency: options.currency = None,
+    currency: options.currency = "USD",
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
     """Search similar servers to the provided one.
@@ -235,11 +236,11 @@ def get_server_prices(
 
     check_filter_limits(request, countries, vendor_regions=vendor_regions)
 
-    query = select(ServerPrice)
-    if countries:
-        query = query.join(ServerPrice.region)
     query = (
-        query.where(ServerPrice.status == Status.ACTIVE)
+        select(ServerPrice)
+        .join(ServerPrice.region)
+        .join(Region.country)
+        .where(ServerPrice.status == Status.ACTIVE)
         .where(ServerPrice.vendor_id == vendor_id)
         .where(ServerPrice.server_id == server_id)
     )
@@ -247,6 +248,10 @@ def get_server_prices(
         query = query.where(Region.country_id.in_(countries))
     if vendor_regions:
         query = query.where(vendor_region_filter(vendor_regions, ServerPrice))
+
+    query = query.options(
+        contains_eager(ServerPrice.region).contains_eager(Region.country)
+    )
 
     results = db.exec(query).all()
 
