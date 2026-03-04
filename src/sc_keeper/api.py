@@ -502,7 +502,7 @@ def search_servers(
         conditions.add(Server.cpu_allocation.in_(cpu_allocation))
     if cpu_speed_min:
         conditions.add(Server.cpu_speed >= cpu_speed_min)
-    # cpu caches is stored in bytes, but filter is in MB
+    # cpu caches is stored in bytes, but filter is in MiB
     if cpu_l1_cache_min:
         conditions.add(Server.cpu_l1_cache >= cpu_l1_cache_min * 1024 * 1024)
     if cpu_l2_cache_min:

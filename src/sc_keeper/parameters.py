@@ -236,6 +236,7 @@ network_speed_min = Annotated[
         json_schema_extra={
             "category_id": FilterCategories.TRAFFIC,
             "enum": [e.value for e in NetworkSpeedSnapPoints],
+            "unit": "Gbps",
         },
     ),
 ]
@@ -248,6 +249,7 @@ cpu_speed_min = Annotated[
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "enum": [e.value for e in CpuSpeedSnapPoints],
+            "unit": "GHz",
         },
     ),
 ]
@@ -260,6 +262,7 @@ cpu_l1_cache_min = Annotated[
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "enum": [e.value for e in CpuL1CacheSnapPoints],
+            "unit": "MiB",
         },
     ),
 ]
@@ -272,18 +275,20 @@ cpu_l2_cache_min = Annotated[
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "enum": [e.value for e in CpuL2CacheSnapPoints],
+            "unit": "MiB",
         },
     ),
 ]
 
 cpu_l3_cache_min = Annotated[
-    Optional[int],
+    Optional[float],
     Query(
         title="Minimum L3 cache size",
         description="Minimum L3 cache size in MiBs.",
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "enum": [e.value for e in CpuL3CacheSnapPoints],
+            "unit": "MiB",
         },
     ),
 ]
