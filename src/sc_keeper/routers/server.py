@@ -247,7 +247,7 @@ def get_server_prices(
     vendor_regions: options.vendor_regions = None,
     currency: options.currency = "USD",
     db: Session = Depends(get_db),
-) -> List[ServerPriceWithPKs]:
+) -> List[ServerPrice]:
     """Query the current prices of a single server by its vendor id and server id."""
     vendor_id, server_id = server_args
 
@@ -256,11 +256,11 @@ def get_server_prices(
 
     check_filter_limits(request, countries, vendor_regions=vendor_regions)
 
+    query = select(ServerPrice)
+    if countries:
+        query = query.join(ServerPrice.region)
     query = (
-        select(ServerPrice)
-        .join(ServerPrice.region)
-        .join(Region.country)
-        .where(ServerPrice.status == Status.ACTIVE)
+        query.where(ServerPrice.status == Status.ACTIVE)
         .where(ServerPrice.vendor_id == vendor_id)
         .where(ServerPrice.server_id == server_id)
     )
@@ -268,22 +268,14 @@ def get_server_prices(
         query = query.where(Region.country_id.in_(countries))
     if vendor_regions:
         query = query.where(vendor_region_filter(vendor_regions, ServerPrice))
-
-    query = query.options(
-        contains_eager(ServerPrice.region).contains_eager(Region.country)
-    )
-
     results = db.exec(query).all()
 
     prices = []
-    for result in results:
-        if not result:
-            continue
-        price = ServerPriceWithPKs.model_validate(result)
-        price.price_monthly = result.price_monthly
-        prices.append(price)
+    for price in results:
+        price = ServerPrice.model_validate(price)
+        prices.append(update_server_price_currency(price, currency))
 
-    return [update_server_price_currency(price, currency) for price in prices]
+    return prices
 
 
 @router.get("/server/{vendor}/{server}/benchmarks")
