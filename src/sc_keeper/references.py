@@ -358,6 +358,9 @@ class BestPriceAllocation(StrEnum):
 class NetworkSpeedSnapPoints(Enum):
     """Predefined snap points for network speed filtering, based on common values in the dataset."""
 
+    MBPS_10 = 0.01
+    MBPS_50 = 0.05
+    MBPS_100 = 0.1
     MBPS_500 = 0.5
     GBPS_1 = 1
     GBPS_5 = 5
@@ -374,6 +377,8 @@ class NetworkSpeedSnapPoints(Enum):
 class CpuSpeedSnapPoints(Enum):
     """Predefined snap points for CPU speed filtering, based on common values in the dataset."""
 
+    GHZ_1_0 = 1.0
+    GHZ_1_5 = 1.5
     GHZ_2_0 = 2.0
     GHZ_2_5 = 2.5
     GHZ_3_0 = 3.0
@@ -401,6 +406,8 @@ class CpuL1CacheSnapPoints(Enum):
 class CpuL2CacheSnapPoints(Enum):
     """Predefined snap points for CPU L2 cache filtering, based on common values in the dataset (in bytes)."""
 
+    KB_256 = 262144
+    KB_512 = 524288
     MB_1 = 1048576
     MB_2 = 2097152
     MB_4 = 4194304
