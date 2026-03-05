@@ -60,10 +60,9 @@ class LogMiddleware(BaseHTTPMiddleware):
         request_time = time()
         request_resources = getrusage(RUSAGE_SELF)
         # some attributes (e.g. iowait, io_counters) not available on Mac OS
-        request_cpu_times = Process().cpu_times()
-        request_io = (
-            Process().io_counters() if hasattr(Process(), "io_counters") else None
-        )
+        p = Process()
+        request_cpu_times = p.cpu_times()
+        request_io = p.io_counters() if hasattr(p, "io_counters") else None
 
         request_info = {
             "method": request.method,
@@ -108,10 +107,8 @@ class LogMiddleware(BaseHTTPMiddleware):
         current_time = time()
         current_resources = getrusage(RUSAGE_SELF)
         # some attributes (e.g. iowait, io_counters) not available on Mac OS
-        current_cpu_times = Process().cpu_times()
-        current_io = (
-            Process().io_counters() if hasattr(Process(), "io_counters") else None
-        )
+        current_cpu_times = p.cpu_times()
+        current_io = p.io_counters() if hasattr(p, "io_counters") else None
 
         response.headers["X-Request-ID"] = get_request_id()
         content_length = response.headers.get("content-length")
@@ -159,7 +156,8 @@ class LogMiddleware(BaseHTTPMiddleware):
                     "iowait": _cpu_times_diff("iowait"),
                     "read_bytes": _io_diff("read_bytes"),
                     "write_bytes": _io_diff("write_bytes"),
-                    "max_rss": current_resources.ru_maxrss,
+                    "rss": int(p.memory_info().rss / 1024 / 1024),
+                    "max_rss": int(current_resources.ru_maxrss / 1024),
                 },
             },
         )
