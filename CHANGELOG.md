@@ -1,3 +1,10 @@
+## March 2026
+
+New feature(s):
+
+- Added `network_speed_min`, `cpu_speed_min`, `cpu_l1_cache_min`, `cpu_l2_cache_min`, and `cpu_l3_cache_min` fields to
+  the server search endpoint with predefined ranges for filtering.
+
 ## February 2026
 
 New feature(s):
