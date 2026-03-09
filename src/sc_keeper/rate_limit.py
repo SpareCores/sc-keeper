@@ -1,9 +1,8 @@
 import logging
-import time
 from collections import defaultdict
 from os import environ
 from threading import Lock, Thread
-from time import sleep
+from time import sleep, time
 from typing import Optional
 from uuid import uuid4
 
@@ -54,8 +53,7 @@ class InMemoryRateLimiter(RateLimiter):
         """Periodically remove keys whose sliding-window entries have all expired."""
         while True:
             sleep(self.window_seconds)
-            now = time.time()
-            window_start = now - self.window_seconds
+            window_start = time() - self.window_seconds
             with self._lock:
                 stale_keys = [
                     key
@@ -87,7 +85,7 @@ class InMemoryRateLimiter(RateLimiter):
             tuple[bool, int]: (allowed, remaining_credits)
         """
         limit = credits_per_minute or self.credits_per_minute
-        now = time.time()
+        now = time()
         window_start = now - self.window_seconds
 
         with self._lock:
@@ -172,7 +170,7 @@ class RedisRateLimiter(RateLimiter):
             tuple[bool, int]: (allowed, remaining_credits)
         """
         limit = credits_per_minute or self.credits_per_minute
-        now = time.time()
+        now = time()
         window_start = now - self.window_seconds
         request_id = kwargs.get("request_id", str(uuid4()))
         member_id = f"{request_id}:{credit_cost}"
