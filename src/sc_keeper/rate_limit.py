@@ -24,6 +24,7 @@ CUSTOM_RATE_LIMIT_COSTS: dict[str, int] = {
     "/servers": 3,
     "/server_prices": 5,
     "/table/server_prices": 10,
+    "/benchmark_score_stats": 10,
 }
 # penalty credits for 401 unauthorized responses
 UNAUTHORIZED_PENALTY_CREDITS = 10
