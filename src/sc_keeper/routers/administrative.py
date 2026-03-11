@@ -294,9 +294,6 @@ def get_benchmark_score_stats(
         def _key(v):
             if isinstance(v, (int, float)):
                 return (0, float(v))
-            # keep bool stable (SQLite may emit 0/1 as int; if bool, sort after numbers)
-            if isinstance(v, bool):
-                return (1, int(v))
             # JSON values can come as strings; try numeric sorting if possible
             if isinstance(v, str):
                 try:
