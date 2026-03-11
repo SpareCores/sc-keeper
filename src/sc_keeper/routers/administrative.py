@@ -1,7 +1,10 @@
+from collections import defaultdict
 from importlib.metadata import version
+from typing import List
 
 from fastapi import APIRouter, Depends, Security
 from sc_crawler.tables import (
+    Benchmark,
     BenchmarkScore,
     Region,
     Server,
@@ -15,7 +18,12 @@ from sqlmodel import Session, case, func, select, text
 from .. import parameters as options
 from ..auth import User, current_user
 from ..database import get_db, session
-from ..references import DebugInfoResponse, HealthcheckResponse
+from ..references import (
+    BenchmarkHistogram,
+    BenchmarkScoreStatsItem,
+    DebugInfoResponse,
+    HealthcheckResponse,
+)
 from ..views import ServerExtra
 
 router = APIRouter()
@@ -190,3 +198,86 @@ def get_debug_info(db: Session = Depends(get_db)) -> DebugInfoResponse:
         "servers": servers,
         "benchmark_families": benchmark_families,
     }
+
+
+NUM_HISTOGRAM_BINS = 20
+
+
+@router.get("/benchmark_score_stats")
+def get_benchmark_score_stats(
+    db: Session = Depends(get_db),
+) -> List[BenchmarkScoreStatsItem]:
+    """Return aggregate stats and score distribution histograms for each benchmark.
+
+    For every benchmark in the Benchmark table, returns:
+    - Basic benchmark metadata (name, framework, unit, etc.)
+    - Count of active, non-null score records
+    - Count of distinct (vendor_id, server_id) pairs
+    - A 20-bin histogram of the score distribution (breakpoints + per-bucket counts)
+    """
+
+    benchmarks = db.exec(select(Benchmark).order_by(Benchmark.benchmark_id)).all()
+
+    scores_query = select(
+        BenchmarkScore.benchmark_id,
+        BenchmarkScore.vendor_id,
+        BenchmarkScore.server_id,
+        BenchmarkScore.score,
+    ).where(
+        BenchmarkScore.status == Status.ACTIVE,
+        BenchmarkScore.score.isnot(None),
+    )
+    scores_data = db.exec(scores_query).all()
+
+    scores_by_benchmark: dict[str, list[float]] = defaultdict(list)
+    servers_by_benchmark: dict[str, set[tuple[str, str]]] = defaultdict(set)
+    for benchmark_id, vendor_id, server_id, score in scores_data:
+        scores_by_benchmark[benchmark_id].append(score)
+        servers_by_benchmark[benchmark_id].add((vendor_id, server_id))
+
+    result = []
+    for benchmark in benchmarks:
+        bid = benchmark.benchmark_id
+        scores = scores_by_benchmark.get(bid, [])
+        count = len(scores)
+        count_servers = len(servers_by_benchmark.get(bid, set()))
+
+        histogram = None
+        if count > 0:
+            min_val = min(scores)
+            max_val = max(scores)
+
+            if min_val == max_val:
+                # All scores identical – widen the range slightly so buckets have width
+                half = abs(min_val) * 0.05 if min_val != 0 else 1.0
+                min_val = min_val - half
+                max_val = max_val + half
+
+            step = (max_val - min_val) / NUM_HISTOGRAM_BINS
+            breakpoints = [min_val + i * step for i in range(NUM_HISTOGRAM_BINS + 1)]
+
+            counts = [0] * NUM_HISTOGRAM_BINS
+            for score in scores:
+                idx = int((score - breakpoints[0]) / step)
+                # Clamp: the maximum value lands exactly on the last breakpoint
+                idx = min(idx, NUM_HISTOGRAM_BINS - 1)
+                counts[idx] += 1
+
+            histogram = BenchmarkHistogram(breakpoints=breakpoints, counts=counts)
+
+        result.append(
+            BenchmarkScoreStatsItem(
+                benchmark_id=bid,
+                name=benchmark.name,
+                description=benchmark.description,
+                framework=benchmark.framework,
+                measurement=benchmark.measurement,
+                unit=benchmark.unit,
+                higher_is_better=benchmark.higher_is_better,
+                count=count,
+                count_servers=count_servers,
+                histogram=histogram,
+            )
+        )
+
+    return result

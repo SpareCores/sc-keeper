@@ -346,6 +346,68 @@ DebugInfoResponse.model_config["json_schema_extra"] = {
 }
 
 
+class BenchmarkHistogram(BaseModel):
+    """Histogram data for a benchmark score distribution."""
+
+    breakpoints: List[float] = Field(
+        description="NUM_BINS + 1 boundary values defining the edges of each bucket"
+    )
+    counts: List[int] = Field(
+        description="Number of scores falling in each bucket (length == len(breakpoints) - 1)"
+    )
+
+
+class BenchmarkScoreStatsItem(BaseModel):
+    """Aggregate statistics and score distribution for a single benchmark."""
+
+    benchmark_id: str = Field(description="Unique identifier of the benchmark")
+    name: str = Field(description="Human-friendly name of the benchmark")
+    description: Optional[str] = Field(
+        default=None, description="Short description of the benchmark"
+    )
+    framework: str = Field(description="The benchmark framework/software/tool used")
+    measurement: Optional[str] = Field(
+        default=None, description="Name of the measurement recorded"
+    )
+    unit: Optional[str] = Field(
+        default=None, description="Optional unit of measurement for the score"
+    )
+    higher_is_better: bool = Field(
+        description="Whether a higher score indicates better performance"
+    )
+    count: int = Field(
+        description="Total number of active, non-null benchmark score records"
+    )
+    count_servers: int = Field(
+        description="Number of distinct (vendor_id, server_id) pairs with scores"
+    )
+    histogram: Optional[BenchmarkHistogram] = Field(
+        default=None,
+        description="Score distribution histogram; None when no scores are available",
+    )
+
+
+BenchmarkScoreStatsItem.model_config["json_schema_extra"] = {
+    "examples": [
+        {
+            "benchmark_id": "stress_ng:cpu_all",
+            "name": "stress-ng CPU (all methods)",
+            "description": "Stress CPU using all available stress methods",
+            "framework": "stress_ng",
+            "measurement": "bogo_ops_per_second",
+            "unit": "bogo ops/s",
+            "higher_is_better": True,
+            "count": 1234,
+            "count_servers": 456,
+            "histogram": {
+                "breakpoints": [100.0, 200.0, 300.0],
+                "counts": [50, 100],
+            },
+        }
+    ]
+}
+
+
 class BestPriceAllocation(StrEnum):
     """Controls how the server's "best price" is computed: use only spot prices, only on-demand prices, or the lowest available price from any allocation type."""
 
