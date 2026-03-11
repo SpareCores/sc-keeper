@@ -202,6 +202,51 @@ def get_debug_info(db: Session = Depends(get_db)) -> DebugInfoResponse:
 
 NUM_HISTOGRAM_BINS = 20
 
+# per-benchmark aggregates (count, count_servers, min, max) for ACTIVE non-null scores.
+_AGGREGATE_SCORES_SQL = text("""
+    SELECT
+        benchmark_id,
+        count(*) AS cnt,
+        count(DISTINCT vendor_id || ':' || server_id) AS cnt_servers,
+        min(score) AS min_s,
+        max(score) AS max_s
+    FROM benchmark_score
+    WHERE status = :status AND score IS NOT NULL
+    GROUP BY benchmark_id
+""").bindparams(status=Status.ACTIVE.name)
+
+# histogram bin counts per benchmark using a CTE for min/max, then bin index in SQL.
+# note that bin min/max ranges are NOT returned, only the bin index and count
+_HISTOGRAM_BINS_SQL = text("""
+    WITH bounds AS (
+        SELECT
+            benchmark_id,
+            min(score) AS lo,
+            max(score) AS hi
+        FROM benchmark_score
+        WHERE status = :status AND score IS NOT NULL
+        GROUP BY benchmark_id
+    )
+    SELECT
+        s.benchmark_id,
+        CASE
+            WHEN b.hi = b.lo THEN 0
+            WHEN (s.score - b.lo) * 1.0 / (b.hi - b.lo) * :num_bins >= :num_bins THEN :max_bin
+            WHEN (s.score - b.lo) * 1.0 / (b.hi - b.lo) * :num_bins < 0 THEN 0
+            ELSE CAST((s.score - b.lo) * 1.0 / (b.hi - b.lo) * :num_bins AS INTEGER)
+        END AS bin,
+        count(*) AS cnt
+    FROM benchmark_score s
+    JOIN bounds b ON s.benchmark_id = b.benchmark_id
+    WHERE s.status = :status AND s.score IS NOT NULL
+    GROUP BY s.benchmark_id, bin
+    ORDER BY s.benchmark_id, bin
+""").bindparams(
+    status=Status.ACTIVE.name,
+    num_bins=NUM_HISTOGRAM_BINS,
+    max_bin=NUM_HISTOGRAM_BINS - 1,
+)
+
 
 @router.get("/benchmark_score_stats")
 def get_benchmark_score_stats(
@@ -214,55 +259,44 @@ def get_benchmark_score_stats(
     - Count of active, non-null score records
     - Count of distinct (vendor_id, server_id) pairs
     - A 20-bin histogram of the score distribution (breakpoints + per-bucket counts)
+
+    Aggregation and histogram binning are done in SQL to avoid transferring
+    millions of BenchmarkScore rows.
+    Due to the complexity of the query, not using sqlalchemy markup.
     """
 
     benchmarks = db.exec(select(Benchmark).order_by(Benchmark.benchmark_id)).all()
 
-    scores_query = select(
-        BenchmarkScore.benchmark_id,
-        BenchmarkScore.vendor_id,
-        BenchmarkScore.server_id,
-        BenchmarkScore.score,
-    ).where(
-        BenchmarkScore.status == Status.ACTIVE,
-        BenchmarkScore.score.isnot(None),
-    )
-    scores_data = db.exec(scores_query).all()
+    agg_rows = db.exec(_AGGREGATE_SCORES_SQL).all()
+    agg_by_benchmark = {row[0]: row for row in agg_rows}
 
-    scores_by_benchmark: dict[str, list[float]] = defaultdict(list)
-    servers_by_benchmark: dict[str, set[tuple[str, str]]] = defaultdict(set)
-    for benchmark_id, vendor_id, server_id, score in scores_data:
-        scores_by_benchmark[benchmark_id].append(score)
-        servers_by_benchmark[benchmark_id].add((vendor_id, server_id))
+    bin_rows = db.exec(_HISTOGRAM_BINS_SQL).all()
+    bins_by_benchmark: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    for row in bin_rows:
+        bins_by_benchmark[row[0]].append((row[1], row[2]))
 
     result = []
     for benchmark in benchmarks:
         bid = benchmark.benchmark_id
-        scores = scores_by_benchmark.get(bid, [])
-        count = len(scores)
-        count_servers = len(servers_by_benchmark.get(bid, set()))
+        agg = agg_by_benchmark.get(bid)
+        count = agg[1] if agg else 0
+        count_servers = agg[2] if agg else 0
 
         histogram = None
-        if count > 0:
-            min_val = min(scores)
-            max_val = max(scores)
-
+        if agg and count > 0:
+            min_val = agg[3]
+            max_val = agg[4]
+            # recompute bin min/max for histogram as not passed from SQL
             if min_val == max_val:
-                # All scores identical – widen the range slightly so buckets have width
                 half = abs(min_val) * 0.05 if min_val != 0 else 1.0
                 min_val = min_val - half
                 max_val = max_val + half
-
             step = (max_val - min_val) / NUM_HISTOGRAM_BINS
             breakpoints = [min_val + i * step for i in range(NUM_HISTOGRAM_BINS + 1)]
-
             counts = [0] * NUM_HISTOGRAM_BINS
-            for score in scores:
-                idx = int((score - breakpoints[0]) / step)
-                # Clamp: the maximum value lands exactly on the last breakpoint
-                idx = min(idx, NUM_HISTOGRAM_BINS - 1)
-                counts[idx] += 1
-
+            for bin_idx, cnt in bins_by_benchmark.get(bid, []):
+                if 0 <= bin_idx < NUM_HISTOGRAM_BINS:
+                    counts[bin_idx] = cnt
             histogram = BenchmarkHistogram(breakpoints=breakpoints, counts=counts)
 
         result.append(
