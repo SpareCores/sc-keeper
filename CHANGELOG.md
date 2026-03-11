@@ -1,3 +1,13 @@
+## March 2026
+
+New feature(s):
+
+- New endpoint `/benchmark_score_stats` for querying benchmark config and score statistics.
+
+Fix(es):
+
+- Background thread to clean-up expired in-memory rate-limit keys.
+
 ## February 2026
 
 New feature(s):

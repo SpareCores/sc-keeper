@@ -316,14 +316,13 @@ def get_benchmark_score_stats(
         config_fields = (
             benchmark.config_fields if isinstance(benchmark.config_fields, dict) else {}
         )
-        if isinstance(config_fields, dict):
-            for config_key, description in config_fields.items():
-                configs[config_key] = {
-                    "description": description,
-                    "examples": _sorted_examples(
-                        config_values.get(bid, {}).get(config_key, set())
-                    ),
-                }
+        for config_key, description in config_fields.items():
+            configs[config_key] = {
+                "description": description,
+                "examples": _sorted_examples(
+                    config_values.get(bid, {}).get(config_key, set())
+                ),
+            }
 
         histogram = None
         if agg and count > 0:
