@@ -1,8 +1,8 @@
 import logging
-import time
 from collections import defaultdict
 from os import environ
-from threading import Lock
+from threading import Lock, Thread
+from time import sleep, time
 from typing import Optional
 from uuid import uuid4
 
@@ -44,6 +44,26 @@ class InMemoryRateLimiter(RateLimiter):
         self._lock = Lock()
         # credit consumption history: {key: [(timestamp, credits), ...]}
         self.windows: dict[str, list[tuple[float, int]]] = defaultdict(list)
+        # background thread to evict keys whose entries have all expired,
+        # preventing unbounded dict growth from unique IPs/users over time
+        self._cleanup_thread = Thread(target=self._cleanup_loop, daemon=True)
+        self._cleanup_thread.start()
+
+    def _cleanup_loop(self):
+        """Periodically remove keys whose sliding-window entries have all expired."""
+        while True:
+            sleep(self.window_seconds)
+            window_start = time() - self.window_seconds
+            with self._lock:
+                stale_keys = [
+                    key
+                    for key, entries in self.windows.items()
+                    if not any(ts > window_start for ts, _ in entries)
+                ]
+                for key in stale_keys:
+                    del self.windows[key]
+            if stale_keys:
+                logger.debug("Evicted %d stale rate-limit keys", len(stale_keys))
 
     def is_allowed(
         self,
@@ -65,7 +85,7 @@ class InMemoryRateLimiter(RateLimiter):
             tuple[bool, int]: (allowed, remaining_credits)
         """
         limit = credits_per_minute or self.credits_per_minute
-        now = time.time()
+        now = time()
         window_start = now - self.window_seconds
 
         with self._lock:
@@ -150,7 +170,7 @@ class RedisRateLimiter(RateLimiter):
             tuple[bool, int]: (allowed, remaining_credits)
         """
         limit = credits_per_minute or self.credits_per_minute
-        now = time.time()
+        now = time()
         window_start = now - self.window_seconds
         request_id = kwargs.get("request_id", str(uuid4()))
         member_id = f"{request_id}:{credit_cost}"
