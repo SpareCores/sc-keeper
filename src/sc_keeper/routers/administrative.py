@@ -247,6 +247,16 @@ _HISTOGRAM_BINS_SQL = text("""
     max_bin=NUM_HISTOGRAM_BINS - 1,
 )
 
+_BENCHMARK_CONFIG_VALUES_SQL = text("""
+    SELECT DISTINCT
+        bs.benchmark_id AS benchmark_id,
+        je.key AS config_key,
+        je.value AS config_value
+    FROM benchmark_score bs, json_each(bs.config) je
+    WHERE bs.status = :status AND bs.score IS NOT NULL AND bs.config IS NOT NULL AND je.value IS NOT NULL
+    ORDER BY bs.benchmark_id, je.key
+""").bindparams(status=Status.ACTIVE.name)
+
 
 @router.get("/benchmark_score_stats")
 def get_benchmark_score_stats(
@@ -275,12 +285,48 @@ def get_benchmark_score_stats(
     for row in bin_rows:
         bins_by_benchmark[row[0]].append((row[1], row[2]))
 
+    config_rows = db.exec(_BENCHMARK_CONFIG_VALUES_SQL).all()
+    config_values: dict[str, dict[str, set]] = defaultdict(lambda: defaultdict(set))
+    for benchmark_id, config_key, config_value in config_rows:
+        config_values[benchmark_id][config_key].add(config_value)
+
+    def _sorted_examples(values: set) -> list:
+        def _key(v):
+            if isinstance(v, (int, float)):
+                return (0, float(v))
+            # keep bool stable (SQLite may emit 0/1 as int; if bool, sort after numbers)
+            if isinstance(v, bool):
+                return (1, int(v))
+            # JSON values can come as strings; try numeric sorting if possible
+            if isinstance(v, str):
+                try:
+                    return (0, float(v))
+                except ValueError:
+                    return (2, v)
+            return (3, str(v))
+
+        return sorted(values, key=_key)
+
     result = []
     for benchmark in benchmarks:
         bid = benchmark.benchmark_id
         agg = agg_by_benchmark.get(bid)
         count = agg[1] if agg else 0
         count_servers = agg[2] if agg else 0
+
+        # merge Benchmark.config_fields with observed example values from BenchmarkScore.config
+        configs: dict = {}
+        config_fields = (
+            benchmark.config_fields if isinstance(benchmark.config_fields, dict) else {}
+        )
+        if isinstance(config_fields, dict):
+            for config_key, description in config_fields.items():
+                configs[config_key] = {
+                    "description": description,
+                    "examples": _sorted_examples(
+                        config_values.get(bid, {}).get(config_key, set())
+                    ),
+                }
 
         histogram = None
         if agg and count > 0:
@@ -308,6 +354,7 @@ def get_benchmark_score_stats(
                 measurement=benchmark.measurement,
                 unit=benchmark.unit,
                 higher_is_better=benchmark.higher_is_better,
+                configs=configs,
                 count=count,
                 count_servers=count_servers,
                 histogram=histogram,

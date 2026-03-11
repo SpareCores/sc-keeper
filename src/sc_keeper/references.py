@@ -375,6 +375,14 @@ class BenchmarkScoreStatsItem(BaseModel):
     higher_is_better: bool = Field(
         description="Whether a higher score indicates better performance"
     )
+    configs: dict = Field(
+        default_factory=dict,
+        description=(
+            "Benchmark config fields enriched with example values. "
+            "Keys come from Benchmark.config_fields; each value includes the original "
+            "description plus an 'examples' list of unique observed config values."
+        ),
+    )
     count: int = Field(
         description="Total number of active, non-null benchmark score records"
     )
@@ -397,6 +405,12 @@ BenchmarkScoreStatsItem.model_config["json_schema_extra"] = {
             "measurement": "bogo_ops_per_second",
             "unit": "bogo ops/s",
             "higher_is_better": True,
+            "configs": {
+                "cores": {
+                    "description": "Stressing a single core or all cores.",
+                    "examples": ["All Cores", "Single-Core Performance"],
+                }
+            },
             "count": 1234,
             "count_servers": 456,
             "histogram": {
