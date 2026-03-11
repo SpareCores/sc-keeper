@@ -354,6 +354,11 @@ def get_benchmark_score_stats(
                 measurement=benchmark.measurement,
                 unit=benchmark.unit,
                 higher_is_better=benchmark.higher_is_better,
+                status=(
+                    benchmark.status.name
+                    if hasattr(benchmark.status, "name")
+                    else benchmark.status
+                ),
                 configs=configs,
                 count=count,
                 count_servers=count_servers,

@@ -375,6 +375,7 @@ class BenchmarkScoreStatsItem(BaseModel):
     higher_is_better: bool = Field(
         description="Whether a higher score indicates better performance"
     )
+    status: str = Field(description="Benchmark status (e.g., 'ACTIVE', 'INACTIVE')")
     configs: dict = Field(
         default_factory=dict,
         description=(
@@ -405,6 +406,7 @@ BenchmarkScoreStatsItem.model_config["json_schema_extra"] = {
             "measurement": "bogo_ops_per_second",
             "unit": "bogo ops/s",
             "higher_is_better": True,
+            "status": "ACTIVE",
             "configs": {
                 "cores": {
                     "description": "Stressing a single core or all cores.",
