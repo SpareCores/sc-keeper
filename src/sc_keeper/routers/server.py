@@ -301,7 +301,6 @@ def get_similar_servers(
         serveri = ServerPKs.model_validate(server[0])
         with suppress(Exception):
             serveri.score = server[1].score
-            serveri.price = serveri.min_price  # legacy
             if live_price_query is not None:
                 serveri.min_price = server[2]
                 serveri.min_price_spot = server[3]
