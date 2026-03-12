@@ -21,7 +21,6 @@ from sqlmodel import Session, and_, case, func, not_, select
 from sc_keeper.views import ServerExtra
 
 from .. import parameters as options
-from ..auth import check_filter_limits
 from ..currency import currency_converter
 from ..database import get_db
 from ..helpers import (
@@ -32,6 +31,7 @@ from ..helpers import (
 )
 from ..queries import gen_benchmark_query, gen_live_price_query
 from ..references import ServerPKs
+from ..validators import check_currency, check_filter_limits
 
 router = APIRouter()
 
@@ -79,10 +79,11 @@ def get_similar_servers(
     instead of using the multi-core SCore, it uses the SCore
     per price.
     """
-    check_filter_limits(request, countries, vendor_regions=vendor_regions)
+    check_filter_limits(
+        request, countries, vendor_regions=vendor_regions, benchmark_id=benchmark_id
+    )
 
-    if currency and currency not in currency_converter.converter.currencies:
-        raise HTTPException(status_code=400, detail="Invalid currency code")
+    check_currency(currency)
 
     serverobj = get_server_pks(vendor, server, db)
 
@@ -250,8 +251,7 @@ def get_server_prices(
     """Query the current prices of a single server by its vendor id and server id."""
     vendor_id, server_id = server_args
 
-    if currency and currency not in currency_converter.converter.currencies:
-        raise HTTPException(status_code=400, detail="Invalid currency code")
+    check_currency(currency)
 
     check_filter_limits(request, countries, vendor_regions=vendor_regions)
 

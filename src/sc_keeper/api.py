@@ -47,7 +47,7 @@ if environ.get("AUTH_TOKEN_INTROSPECTION_URL"):
 # ruff: noqa: E402
 from . import parameters as options
 from . import routers
-from .auth import AuthGuardMiddleware, AuthMiddleware, check_filter_limits
+from .auth import AuthGuardMiddleware, AuthMiddleware
 from .cache import CacheHeaderMiddleware
 from .crawler_extend import calculate_tiered_price
 from .currency import currency_converter
@@ -66,6 +66,7 @@ from .references import (
     TrafficPriceWithPKsWithMonthlyTraffic,
 )
 from .sentry import before_send as sentry_before_send
+from .validators import check_currency, check_filter_limits
 from .views import Currency, ServerExtra
 
 if environ.get("SENTRY_DSN"):
@@ -360,8 +361,7 @@ def search_servers(
 ) -> List[ServerPKs]:
     check_filter_limits(request, countries, regions, vendor_regions)
 
-    if currency and currency not in currency_converter.converter.currencies:
-        raise HTTPException(status_code=400, detail="Invalid currency code")
+    check_currency(currency)
 
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the servers table
@@ -724,9 +724,9 @@ def search_servers(
                 server.selected_benchmark_score_per_price = (
                     benchmark_score / server.min_price
                 )
-        server.price = server.min_price  # legacy
         # don't convert before "per_price" calculations as those as standardized in USD
         server = update_server_price_currency(server, currency)
+        server.price = server.min_price  # legacy
         serverlist.append(server)
 
     return serverlist
@@ -775,8 +775,7 @@ def search_server_prices(
 ) -> List[ServerPriceWithPKs]:
     check_filter_limits(request, countries, regions, vendor_regions)
 
-    if currency and currency not in currency_converter.converter.currencies:
-        raise HTTPException(status_code=400, detail="Invalid currency code")
+    check_currency(currency)
 
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the prices table
