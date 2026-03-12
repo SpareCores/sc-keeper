@@ -91,6 +91,14 @@ def get_similar_servers(
 
     benchmark_query = gen_benchmark_query(benchmark_id, benchmark_config)
 
+    _best_min_price_map = {
+        BestPriceAllocation.ANY: "min_price",
+        BestPriceAllocation.SPOT_ONLY: "min_price_spot",
+        BestPriceAllocation.ONDEMAND_ONLY: "min_price_ondemand",
+        BestPriceAllocation.MONTHLY: "min_price_ondemand_monthly",
+    }
+    _best_min_price_attr = _best_min_price_map[best_price_allocation]
+
     select_entities = [Server, ServerExtra]
     if live_price_query is not None:
         select_entities.extend(
@@ -188,7 +196,9 @@ def get_similar_servers(
             db.exec(
                 select(
                     func.round(
-                        ServerExtra.score / target_live_price_query.c.min_price, 4
+                        ServerExtra.score
+                        / target_live_price_query.c[_best_min_price_attr],
+                        4,
                     )
                 )
                 .select_from(ServerExtra)
@@ -205,7 +215,7 @@ def get_similar_servers(
                 select(
                     func.round(
                         benchmark_query.c.benchmark_score
-                        / target_live_price_query.c.min_price,
+                        / target_live_price_query.c[_best_min_price_attr],
                         4,
                     )
                 )
@@ -230,12 +240,14 @@ def get_similar_servers(
                     func.abs(
                         case(
                             (
-                                (live_price_query.c.min_price.is_(None))
-                                | (live_price_query.c.min_price == 0),
+                                (live_price_query.c[_best_min_price_attr].is_(None))
+                                | (live_price_query.c[_best_min_price_attr] == 0),
                                 None,
                             ),
                             else_=func.round(
-                                ServerExtra.score / live_price_query.c.min_price, 4
+                                ServerExtra.score
+                                / live_price_query.c[_best_min_price_attr],
+                                4,
                             ),
                         )
                         - target_score_per_price
@@ -248,13 +260,13 @@ def get_similar_servers(
                     func.abs(
                         case(
                             (
-                                (live_price_query.c.min_price.is_(None))
-                                | (live_price_query.c.min_price == 0),
+                                (live_price_query.c[_best_min_price_attr].is_(None))
+                                | (live_price_query.c[_best_min_price_attr] == 0),
                                 None,
                             ),
                             else_=func.round(
                                 benchmark_query.c.benchmark_score
-                                / live_price_query.c.min_price,
+                                / live_price_query.c[_best_min_price_attr],
                                 4,
                             ),
                         )
@@ -270,12 +282,13 @@ def get_similar_servers(
                 if benchmark_id is None
                 else query.where(
                     benchmark_query.c.benchmark_score.isnot(None)
-                    & ServerExtra.min_price.isnot(None)
-                    & ServerExtra.min_price
+                    & getattr(ServerExtra, _best_min_price_attr).isnot(None)
+                    & getattr(ServerExtra, _best_min_price_attr)
                     != 0
                 ).order_by(
                     func.abs(
-                        benchmark_query.c.benchmark_score / ServerExtra.min_price
+                        benchmark_query.c.benchmark_score
+                        / getattr(ServerExtra, _best_min_price_attr)
                         - target_score_per_price
                     )
                 )
@@ -308,8 +321,8 @@ def get_similar_servers(
                 serveri.selected_benchmark_score_per_price = round(
                     serveri.selected_benchmark_score / serveri.min_price, 4
                 )
-        serveri.price = serveri.min_price  # legacy
         serveri = update_server_price_currency(serveri, currency)
+        serveri.price = serveri.min_price  # legacy
         serverlist.append(serveri)
     return serverlist
 
