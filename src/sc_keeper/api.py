@@ -359,7 +359,7 @@ def search_servers(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
-    check_filter_limits(request, countries, regions, vendor_regions, benchmark_id)
+    check_filter_limits(request, countries, regions, vendor_regions)
 
     check_currency(currency)
 
