@@ -2,11 +2,13 @@ from collections import ChainMap
 from json import dumps
 from statistics import stdev
 from time import time
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from sc_keeper.api import app
+from sc_keeper.auth import User
 
 client = TestClient(app)
 
@@ -105,7 +107,13 @@ test_traffic_prices_params = [
 )
 @pytest.mark.parametrize("params", test_servers_params, ids=params_id_func)
 def test_servers_with_params(params, totals):
-    response = client.get("/servers", params=params | bool_total_header(totals))
+    with patch(
+            "sc_keeper.auth.extract_user_from_request",
+            new=AsyncMock(return_value=User(user_id="test-user")),
+    ):
+        response = client.get(
+            "/servers", params=params | bool_total_header(totals)
+        )
     # expect OK status within a reasonable time
     assert response.status_code == 200
     assert response.elapsed.total_seconds() < 1
