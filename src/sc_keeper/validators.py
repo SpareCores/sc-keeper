@@ -40,6 +40,7 @@ def check_filter_limits(
 
     Raises:
         HTTPException: 400 if any filter exceeds the allowed limit for unauthenticated requests.
+        HTTPException: 401 if benchmark_id is provided without authentication.
     """
     user = getattr(request.state, "user", None)
     if user:
