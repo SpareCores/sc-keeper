@@ -66,9 +66,14 @@ def _get_name(server_column_name: str) -> str:
 def _get_unit(server_column_name: str) -> str:
     mapping = {
         "cpu_speed": "GHz",
-        "cpu_l1_cache": "byte",
-        "cpu_l2_cache": "byte",
-        "cpu_l3_cache": "byte",
+        "cpu_l1d_cache": "KiB",
+        "cpu_l1d_cache_total": "KiB",
+        "cpu_l1i_cache": "KiB",
+        "cpu_l1i_cache_total": "KiB",
+        "cpu_l2_cache": "KiB",
+        "cpu_l2_cache_total": "KiB",
+        "cpu_l3_cache": "KiB",
+        "cpu_l3_cache_total": "KiB",
         "memory_amount": "MiB",
         "memory_speed": "Mhz",
         "gpu_memory_min": "MiB",
