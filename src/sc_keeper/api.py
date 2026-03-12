@@ -78,9 +78,6 @@ if environ.get("SENTRY_DSN"):
     )
 
 
-db = next(get_db())
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
@@ -92,6 +89,7 @@ async def lifespan(app: FastAPI):
 # ##############################################################################
 # Load examples for the API docs
 
+db = next(get_db())
 example_data = {
     "benchmark": db.exec(
         select(Benchmark).where(Benchmark.benchmark_id == "geekbench:hdr")
@@ -109,6 +107,7 @@ example_data = {
         select(ServerPrice).where(ServerPrice.vendor_id == "aws").limit(5)
     ).all(),
 }
+db.close()
 
 Benchmark.model_config["json_schema_extra"] = {
     "examples": [example_data["benchmark"].model_dump()]
