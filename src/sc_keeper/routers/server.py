@@ -16,7 +16,7 @@ from sc_crawler.tables import (
     Server,
     ServerPrice,
 )
-from sqlmodel import Session, and_, case, func, not_, select
+from sqlmodel import Session, and_, func, not_, select
 
 from sc_keeper.views import ServerExtra
 
@@ -48,7 +48,14 @@ def get_similar_servers(
     vendor: Annotated[str, Path(description="Vendor ID.")],
     server: Annotated[str, Path(description="Server ID or API reference.")],
     by: Annotated[
-        Literal["family", "specs", "score", "score_per_price"],
+        Literal[
+            "family",
+            "specs",
+            "score",
+            "score_per_price",
+            "benchmark_score",
+            "benchmark_score_per_price",
+        ],
         Path(description="Algorithm to look for similar servers."),
     ],
     num: Annotated[
@@ -158,139 +165,181 @@ def get_similar_servers(
         )
 
     if by == "score":
-        target_score = (
-            db.exec(
-                select(ServerExtra.score)
-                .where(ServerExtra.vendor_id == serverobj.vendor_id)
-                .where(ServerExtra.server_id == serverobj.server_id)
-            ).first()
-            if benchmark_id is None
-            else db.exec(
-                select(benchmark_query.c.benchmark_score)
-                .select_from(benchmark_query)
-                .where(benchmark_query.c.vendor_id == serverobj.vendor_id)
-                .where(benchmark_query.c.server_id == serverobj.server_id)
-            ).first()
-        )
-        if target_score is None:
+        baseline_score = db.exec(
+            select(ServerExtra.score)
+            .where(ServerExtra.vendor_id == serverobj.vendor_id)
+            .where(ServerExtra.server_id == serverobj.server_id)
+        ).first()
+        if baseline_score is None:
             return []
-        if benchmark_id is None:
-            query = query.where(ServerExtra.score.isnot(None)).order_by(
-                func.abs(ServerExtra.score - target_score)
-            )
-        else:
-            query = query.where(benchmark_query.c.benchmark_score.isnot(None)).order_by(
-                func.abs(benchmark_query.c.benchmark_score - target_score)
-            )
+        query = query.where(ServerExtra.score.isnot(None)).order_by(
+            func.abs(ServerExtra.score - baseline_score)
+        )
 
     if by == "score_per_price":
-        if server_region is None:
-            raise HTTPException(
-                status_code=400,
-                detail="The server_region parameter is required when sorting by score_per_price.",
+        if server_region is not None:
+            baseline_live_price_query = gen_live_price_query(
+                vendor_regions=[f"{serverobj.vendor_id}~{server_region}"]
             )
-        target_live_price_query = gen_live_price_query(
-            vendor_regions=[f"{serverobj.vendor_id}~{server_region}"]
-        )
-        target_score_per_price = (
-            db.exec(
+            baseline_score_per_price = db.exec(
                 select(
                     func.round(
                         ServerExtra.score
-                        / target_live_price_query.c[_best_min_price_attr],
+                        / baseline_live_price_query.c[_best_min_price_attr],
                         4,
                     )
                 )
                 .select_from(ServerExtra)
                 .join(
-                    target_live_price_query,
-                    (ServerExtra.vendor_id == target_live_price_query.c.vendor_id)
-                    & (ServerExtra.server_id == target_live_price_query.c.server_id),
+                    baseline_live_price_query,
+                    (ServerExtra.vendor_id == baseline_live_price_query.c.vendor_id)
+                    & (ServerExtra.server_id == baseline_live_price_query.c.server_id),
                 )
                 .where(ServerExtra.vendor_id == serverobj.vendor_id)
                 .where(ServerExtra.server_id == serverobj.server_id)
             ).first()
-            if benchmark_id is None
-            else db.exec(
+        else:
+            baseline_score_per_price = db.exec(
                 select(
                     func.round(
-                        benchmark_query.c.benchmark_score
-                        / target_live_price_query.c[_best_min_price_attr],
+                        ServerExtra.score / getattr(ServerExtra, _best_min_price_attr),
                         4,
                     )
+                ).where(
+                    and_(
+                        ServerExtra.vendor_id == serverobj.vendor_id,
+                        ServerExtra.server_id == serverobj.server_id,
+                    )
                 )
-                .select_from(benchmark_query)
-                .join(
-                    target_live_price_query,
-                    (benchmark_query.c.vendor_id == target_live_price_query.c.vendor_id)
-                    & (
-                        benchmark_query.c.server_id
-                        == target_live_price_query.c.server_id
-                    ),
-                )
-                .where(benchmark_query.c.vendor_id == serverobj.vendor_id)
-                .where(benchmark_query.c.server_id == serverobj.server_id)
             ).first()
-        )
-        if target_score_per_price is None:
+        if baseline_score_per_price is None:
             return []
         if live_price_query is not None:
             query = (
-                query.where(ServerExtra.score.isnot(None)).order_by(
+                query.where(ServerExtra.score.isnot(None))
+                .where(live_price_query.c[_best_min_price_attr].isnot(None))
+                .order_by(
                     func.abs(
-                        case(
-                            (
-                                (live_price_query.c[_best_min_price_attr].is_(None))
-                                | (live_price_query.c[_best_min_price_attr] == 0),
-                                None,
-                            ),
-                            else_=func.round(
-                                ServerExtra.score
-                                / live_price_query.c[_best_min_price_attr],
-                                4,
-                            ),
+                        func.round(
+                            ServerExtra.score
+                            / live_price_query.c[_best_min_price_attr],
+                            4,
                         )
-                        - target_score_per_price
-                    )
-                )
-                if benchmark_id is None
-                else query.where(
-                    benchmark_query.c.benchmark_score.isnot(None)
-                ).order_by(
-                    func.abs(
-                        case(
-                            (
-                                (live_price_query.c[_best_min_price_attr].is_(None))
-                                | (live_price_query.c[_best_min_price_attr] == 0),
-                                None,
-                            ),
-                            else_=func.round(
-                                benchmark_query.c.benchmark_score
-                                / live_price_query.c[_best_min_price_attr],
-                                4,
-                            ),
-                        )
-                        - target_score_per_price
+                        - baseline_score_per_price
                     )
                 )
             )
         else:
             query = (
-                query.where(ServerExtra.score_per_price.isnot(None)).order_by(
-                    func.abs(ServerExtra.score_per_price - target_score_per_price)
-                )
-                if benchmark_id is None
-                else query.where(
-                    benchmark_query.c.benchmark_score.isnot(None)
-                    & getattr(ServerExtra, _best_min_price_attr).isnot(None)
-                    & getattr(ServerExtra, _best_min_price_attr)
-                    != 0
-                ).order_by(
+                query.where(ServerExtra.score.isnot(None))
+                .where(getattr(ServerExtra, _best_min_price_attr).isnot(None))
+                .order_by(
                     func.abs(
-                        benchmark_query.c.benchmark_score
-                        / getattr(ServerExtra, _best_min_price_attr)
-                        - target_score_per_price
+                        func.round(
+                            ServerExtra.score
+                            / getattr(ServerExtra, _best_min_price_attr),
+                            4,
+                        )
+                        - baseline_score_per_price
                     )
+                )
+            )
+
+    if by == "benchmark_score":
+        if benchmark_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Ordering by benchmark_score requires a benchmark_id.",
+            )
+        baseline_score = db.exec(
+            select(benchmark_query.c.benchmark_score)
+            .select_from(benchmark_query)
+            .where(benchmark_query.c.vendor_id == serverobj.vendor_id)
+            .where(benchmark_query.c.server_id == serverobj.server_id)
+        ).first()
+        if baseline_score is None:
+            return []
+        query = query.where(benchmark_query.c.benchmark_score.isnot(None)).order_by(
+            func.abs(benchmark_query.c.benchmark_score - baseline_score)
+        )
+
+    if by == "benchmark_score_per_price":
+        if benchmark_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Ordering by benchmark_score_per_price requires a benchmark_id.",
+            )
+        if server_region is not None:
+            baseline_live_price_query = gen_live_price_query(
+                vendor_regions=[f"{serverobj.vendor_id}~{server_region}"]
+            )
+            baseline_score_per_price = db.exec(
+                select(
+                    func.round(
+                        benchmark_query.c.benchmark_score
+                        / baseline_live_price_query.c[_best_min_price_attr],
+                        4,
+                    )
+                )
+                .select_from(benchmark_query)
+                .join(
+                    baseline_live_price_query,
+                    (
+                        benchmark_query.c.vendor_id
+                        == baseline_live_price_query.c.vendor_id
+                    )
+                    & (
+                        benchmark_query.c.server_id
+                        == baseline_live_price_query.c.server_id
+                    ),
+                )
+                .where(benchmark_query.c.vendor_id == serverobj.vendor_id)
+                .where(benchmark_query.c.server_id == serverobj.server_id)
+            ).first()
+        else:
+            baseline_score_per_price = db.exec(
+                select(
+                    func.round(
+                        benchmark_query.c.benchmark_score
+                        / getattr(ServerExtra, _best_min_price_attr),
+                        4,
+                    )
+                )
+                .select_from(benchmark_query)
+                .join(
+                    ServerExtra,
+                    (benchmark_query.c.vendor_id == ServerExtra.vendor_id)
+                    & (benchmark_query.c.server_id == ServerExtra.server_id),
+                )
+                .where(benchmark_query.c.vendor_id == serverobj.vendor_id)
+                .where(benchmark_query.c.server_id == serverobj.server_id)
+            ).first()
+        if baseline_score_per_price is None:
+            return []
+        if live_price_query is not None:
+            query = (
+                query.where(benchmark_query.c.benchmark_score.isnot(None))
+                .where(live_price_query.c[_best_min_price_attr].isnot(None))
+                .order_by(
+                    func.abs(
+                        func.round(
+                            benchmark_query.c.benchmark_score
+                            / live_price_query.c[_best_min_price_attr],
+                            4,
+                        )
+                        - baseline_score_per_price
+                    )
+                )
+            )
+        else:
+            query = query.where(
+                benchmark_query.c.benchmark_score.isnot(None)
+                & getattr(ServerExtra, _best_min_price_attr).isnot(None)
+            ).order_by(
+                func.abs(
+                    benchmark_query.c.benchmark_score
+                    / getattr(ServerExtra, _best_min_price_attr)
+                    - baseline_score_per_price
                 )
             )
 
@@ -306,7 +355,9 @@ def get_similar_servers(
                 serveri.min_price_spot = server[3]
                 serveri.min_price_ondemand = server[4]
                 serveri.min_price_ondemand_monthly = server[5]
-                serveri.score_per_price = round(serveri.score / serveri.min_price, 4)
+                serveri.score_per_price = round(
+                    serveri.score / getattr(serveri, _best_min_price_attr), 4
+                )
             else:
                 serveri.min_price = server[1].min_price
                 serveri.min_price_spot = server[1].min_price_spot
@@ -314,7 +365,9 @@ def get_similar_servers(
                 serveri.min_price_ondemand_monthly = server[
                     1
                 ].min_price_ondemand_monthly
-                serveri.score_per_price = server[1].score_per_price
+                serveri.score_per_price = round(
+                    server[1].score / getattr(server[1], _best_min_price_attr), 4
+                )
             if benchmark_id:
                 serveri.selected_benchmark_score = server[-1]
                 serveri.selected_benchmark_score_per_price = round(
