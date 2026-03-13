@@ -355,9 +355,6 @@ def get_similar_servers(
                 serveri.min_price_spot = server[3]
                 serveri.min_price_ondemand = server[4]
                 serveri.min_price_ondemand_monthly = server[5]
-                serveri.score_per_price = round(
-                    serveri.score / getattr(serveri, _best_min_price_attr), 4
-                )
             else:
                 serveri.min_price = server[1].min_price
                 serveri.min_price_spot = server[1].min_price_spot
@@ -365,13 +362,15 @@ def get_similar_servers(
                 serveri.min_price_ondemand_monthly = server[
                     1
                 ].min_price_ondemand_monthly
-                serveri.score_per_price = round(
-                    server[1].score / getattr(server[1], _best_min_price_attr), 4
-                )
+            serveri.score_per_price = round(
+                serveri.score / getattr(serveri, _best_min_price_attr), 4
+            )
             if benchmark_id:
                 serveri.selected_benchmark_score = server[-1]
                 serveri.selected_benchmark_score_per_price = round(
-                    serveri.selected_benchmark_score / serveri.min_price, 4
+                    serveri.selected_benchmark_score
+                    / getattr(serveri, _best_min_price_attr),
+                    4,
                 )
         serveri = update_server_price_currency(serveri, currency)
         serveri.price = serveri.min_price  # legacy
