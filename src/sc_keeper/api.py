@@ -734,7 +734,6 @@ def search_servers(
 
 @app.get("/server_prices", tags=["Query Resources"])
 def search_server_prices(
-    request: Request,
     response: Response,
     partial_name_or_id: options.partial_name_or_id = None,
     # although it's relatively expensive to set a dummy filter,
