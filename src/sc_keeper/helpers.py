@@ -74,6 +74,14 @@ def update_server_price_currency(
     price_ndigits: int = 4,
     monthly_price_ndigits: int = 2,
 ):
+    """In-place conversion of server price attributes to the target currency.
+
+    Args:
+        server_obj: The server object to update, e.g. ServerBase or ServerPKs.
+        to_currency: The target currency code, default is USD.
+        price_ndigits: The number of decimal places to round the price to, default is 4.
+        monthly_price_ndigits: The number of decimal places to round the monthly price to, default is 2.
+    """
     from_currency = getattr(server_obj, "currency", "USD")
     if from_currency != to_currency:
         for attr, ndigits in [
