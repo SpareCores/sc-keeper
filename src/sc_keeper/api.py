@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.docs import get_redoc_html
-from sc_crawler.table_fields import Allocation, Status, TrafficDirection
+from sc_crawler.table_fields import Status, TrafficDirection
 from sc_crawler.tables import (
     Benchmark,
     BenchmarkScore,
@@ -29,7 +29,7 @@ from sc_crawler.tables import (
 from sqlalchemy.orm import aliased, contains_eager
 from sqlmodel import Session, String, case, func, or_, select
 
-from .helpers import vendor_region_filter
+from .helpers import update_server_price_currency, vendor_region_filter
 
 # early validation (before DB imports) of environment variables
 logger = getLogger(__name__)
@@ -53,7 +53,7 @@ from .crawler_extend import calculate_tiered_price
 from .currency import currency_converter
 from .database import get_db
 from .logger import LogMiddleware
-from .queries import gen_benchmark_query
+from .queries import gen_benchmark_query, gen_live_price_query
 from .rate_limit import RateLimitMiddleware, create_rate_limiter
 from .references import (
     BenchmarkConfig,
@@ -66,6 +66,7 @@ from .references import (
     TrafficPriceWithPKsWithMonthlyTraffic,
 )
 from .sentry import before_send as sentry_before_send
+from .validators import check_currency, check_filter_limits
 from .views import Currency, ServerExtra
 
 if environ.get("SENTRY_DSN"):
@@ -358,6 +359,10 @@ def search_servers(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
+    check_filter_limits(request, countries, regions, vendor_regions)
+
+    check_currency(currency)
+
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the servers table
     if compliance_framework:
@@ -368,19 +373,6 @@ def search_servers(
         )
         compliant_vendors = db.exec(query).all()
         vendor = list(set(vendor or []) & set(compliant_vendors))
-
-    user = getattr(request.state, "user", None)
-    if not user:
-        if max(len(regions or []), len(vendor_regions or [])) > 3:
-            raise HTTPException(
-                status_code=400,
-                detail="Max 3 regions can be queried at a time without authentication.",
-            )
-        if len(countries or []) > 1:
-            raise HTTPException(
-                status_code=400,
-                detail="Max 1 country can be queried at a time without authentication.",
-            )
 
     # keep track of filter conditions
     conditions = set()
@@ -400,60 +392,7 @@ def search_servers(
             detail="benchmark_id is required when ordering by benchmark_score or benchmark_score_per_price",
         )
 
-    live_price_query = None
-    if regions or countries or vendor_regions:
-        lp = (
-            select(
-                ServerPrice.vendor_id,
-                ServerPrice.server_id,
-                func.round(func.min(ServerPrice.price * Currency.rate), 4).label(
-                    "min_price"
-                ),
-                func.min(
-                    case(
-                        (
-                            ServerPrice.allocation == Allocation.SPOT,
-                            func.round(ServerPrice.price * Currency.rate, 4),
-                        )
-                    )
-                ).label("min_price_spot"),
-                func.min(
-                    case(
-                        (
-                            ServerPrice.allocation == Allocation.ONDEMAND,
-                            func.round(ServerPrice.price * Currency.rate, 4),
-                        )
-                    )
-                ).label("min_price_ondemand"),
-                func.min(
-                    case(
-                        (
-                            ServerPrice.allocation == Allocation.ONDEMAND,
-                            func.round(ServerPrice.price_monthly * Currency.rate, 2),
-                        )
-                    )
-                ).label("min_price_ondemand_monthly"),
-            )
-            .where(ServerPrice.status == Status.ACTIVE)
-            .join(
-                Currency,
-                (ServerPrice.currency == Currency.base) & (Currency.quote == "USD"),
-            )
-        )
-        if countries:
-            lp = lp.join(
-                Region,
-                (ServerPrice.vendor_id == Region.vendor_id)
-                & (ServerPrice.region_id == Region.region_id),
-            )
-            lp = lp.where(Region.country_id.in_(countries))
-        if regions:
-            lp = lp.where(ServerPrice.region_id.in_(regions))
-        if vendor_regions:
-            lp = lp.where(vendor_region_filter(vendor_regions, ServerPrice))
-        live_price_query = lp.group_by(
-            ServerPrice.vendor_id, ServerPrice.server_id
-        ).subquery()
+    live_price_query = gen_live_price_query(countries, regions, vendor_regions)
 
     if live_price_query is None:
         best_price_ref = ServerExtra.min_price
@@ -786,28 +725,7 @@ def search_servers(
                     benchmark_score / server.min_price
                 )
         # don't convert before "per_price" calculations as those as standardized in USD
-        if currency and currency != "USD":
-            try:
-                for attr, ndigits in [
-                    ("min_price", 4),
-                    ("min_price_spot", 4),
-                    ("min_price_ondemand", 4),
-                    ("min_price_ondemand_monthly", 2),
-                ]:
-                    value = getattr(server, attr, None)
-                    if value:
-                        setattr(
-                            server,
-                            attr,
-                            round(
-                                currency_converter.convert(value, "USD", currency),
-                                ndigits,
-                            ),
-                        )
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=400, detail="Invalid currency code"
-                ) from e
+        server = update_server_price_currency(server, currency)
         server.price = server.min_price  # legacy
         serverlist.append(server)
 
@@ -854,6 +772,8 @@ def search_server_prices(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
+    check_currency(currency)
+
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the prices table
     if compliance_framework:
@@ -880,9 +800,6 @@ def search_server_prices(
                 Server.display_name.ilike(ilike),
             )
         )
-
-    if currency and currency not in currency_converter.converter.currencies:
-        raise HTTPException(status_code=400, detail="Invalid currency code")
 
     if vcpus_min:
         joins.add(ServerPrice.server)
@@ -1116,34 +1033,7 @@ def search_server_prices(
             price.server.price = price.server.min_price  # legacy
         prices.append(price)
 
-    # update prices to currency requested
-    for price in prices:
-        if currency:
-            if hasattr(price, "price") and hasattr(price, "currency"):
-                if price.currency != currency:
-                    price.price = round(
-                        currency_converter.convert(
-                            price.price, price.currency, currency
-                        ),
-                        4,
-                    )
-                    if price.price_tiered:
-                        for tier in price.price_tiered:
-                            tier.price = round(
-                                currency_converter.convert(
-                                    tier.price, price.currency, currency
-                                ),
-                                4,
-                            )
-                    if price.price_monthly:
-                        price.price_monthly = round(
-                            currency_converter.convert(
-                                price.price_monthly, price.currency, currency
-                            ),
-                            2,
-                        )
-                    price.currency = currency
-    return prices
+    return [update_server_price_currency(price, currency) for price in prices]
 
 
 @app.get("/storage_prices", tags=["Query Resources"])
