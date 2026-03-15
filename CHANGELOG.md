@@ -3,10 +3,20 @@
 New feature(s):
 
 - New endpoint `/benchmark_score_stats` for querying benchmark config and score statistics.
+- Add optional `countries` and `vendor_regions` query filters for the `/server/{vendor}/{server}/prices` and
+  `/server/{vendor}/{server}/similar_servers/{by}/{num}` endpoints.
+- Add `benchmark_score` and `benchmark_score_per_price` ordering options to
+  `/server/{vendor}/{server}/similar_servers/{by}/{num}` endpoint.
+- Add optional `currency`, `benchmark_id`, `benchmark_config`, `server_region` and `best_price_allocation` query
+  parameters for the `/server/{vendor}/{server}/similar_servers/{by}/{num}` endpoint.
 
 Fix(es):
 
 - Background thread to clean-up expired in-memory rate-limit keys.
+- Add currency checking for all price related endpoints.
+- Add country, region and vendor_region filter limiting for endpoints supporting these filters.
+- Restrict `benchmark_id` filtering to authenticated users at `/server/{vendor}/{server}/similar_servers/{by}/{num}`
+  endpoint.
 
 ## February 2026
 
