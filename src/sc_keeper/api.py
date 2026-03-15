@@ -773,8 +773,6 @@ def search_server_prices(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
-    check_filter_limits(request, countries, regions, vendor_regions)
-
     check_currency(currency)
 
     # compliance frameworks are defined at the vendor level,

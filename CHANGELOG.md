@@ -13,10 +13,6 @@ New feature(s):
 Fix(es):
 
 - Background thread to clean-up expired in-memory rate-limit keys.
-- Add currency checking for all price related endpoints.
-- Add country, region and vendor_region filter limiting for endpoints supporting these filters.
-- Restrict `benchmark_id` filtering to authenticated users at `/server/{vendor}/{server}/similar_servers/{by}/{num}`
-  endpoint.
 
 ## February 2026
 
