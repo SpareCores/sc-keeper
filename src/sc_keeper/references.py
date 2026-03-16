@@ -556,4 +556,3 @@ class CpuL3CacheTotalSnapPoints(Enum):
     GIB_1 = 1024
     GIB_2 = 2048
     GIB_4 = 4096
-
