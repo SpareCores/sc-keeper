@@ -26,6 +26,17 @@ def _get_category(server_column_name: str) -> str:
         "observed_at",
     ]:
         return "meta"
+    if server_column_name in [
+        "cpu_l1d_cache",
+        "cpu_l1d_cache_total",
+        "cpu_l1i_cache",
+        "cpu_l1i_cache_total",
+        "cpu_l2_cache",
+        "cpu_l2_cache_total",
+        "cpu_l3_cache",
+        "cpu_l3_cache_total",
+    ]:
+        return "cpu_cache"
     if server_column_name in ["vcpus", "hypervisor"] or server_column_name.startswith(
         "cpu"
     ):

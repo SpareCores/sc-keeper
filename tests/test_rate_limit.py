@@ -47,6 +47,7 @@ def client_with_rate_limit(monkeypatch):
         RATE_LIMIT_BACKEND="memory",
         RATE_LIMIT_CREDITS_PER_MINUTE="10",
         RATE_LIMIT_DEFAULT_CREDIT_COST="1",
+        KEEPER_TESTING="1",
     )
     return TestClient(app)
 
