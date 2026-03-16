@@ -1,7 +1,10 @@
+from collections import defaultdict
 from importlib.metadata import version
+from typing import List
 
 from fastapi import APIRouter, Depends, Security
 from sc_crawler.tables import (
+    Benchmark,
     BenchmarkScore,
     Region,
     Server,
@@ -15,7 +18,12 @@ from sqlmodel import Session, case, func, select, text
 from .. import parameters as options
 from ..auth import User, current_user
 from ..database import get_db, session
-from ..references import DebugInfoResponse, HealthcheckResponse
+from ..references import (
+    BenchmarkHistogram,
+    BenchmarkScoreStatsItem,
+    DebugInfoResponse,
+    HealthcheckResponse,
+)
 from ..views import ServerExtra
 
 router = APIRouter()
@@ -190,3 +198,168 @@ def get_debug_info(db: Session = Depends(get_db)) -> DebugInfoResponse:
         "servers": servers,
         "benchmark_families": benchmark_families,
     }
+
+
+NUM_HISTOGRAM_BINS = 20
+
+# per-benchmark aggregates (count, count_servers, min, max) for ACTIVE non-null scores.
+_AGGREGATE_SCORES_SQL = text("""
+    SELECT
+        benchmark_id,
+        count(*) AS cnt,
+        count(DISTINCT vendor_id || ':' || server_id) AS cnt_servers,
+        min(score) AS min_s,
+        max(score) AS max_s
+    FROM benchmark_score
+    WHERE status = :status AND score IS NOT NULL
+    GROUP BY benchmark_id
+""").bindparams(status=Status.ACTIVE.name)
+
+# histogram bin counts per benchmark using a CTE for min/max, then bin index in SQL.
+# note that bin min/max ranges are NOT returned, only the bin index and count
+_HISTOGRAM_BINS_SQL = text("""
+    WITH bounds AS (
+        SELECT
+            benchmark_id,
+            min(score) AS lo,
+            max(score) AS hi
+        FROM benchmark_score
+        WHERE status = :status AND score IS NOT NULL
+        GROUP BY benchmark_id
+    )
+    SELECT
+        s.benchmark_id,
+        CASE
+            WHEN b.hi = b.lo THEN 0
+            WHEN (s.score - b.lo) * 1.0 / (b.hi - b.lo) * :num_bins >= :num_bins THEN :max_bin
+            WHEN (s.score - b.lo) * 1.0 / (b.hi - b.lo) * :num_bins < 0 THEN 0
+            ELSE CAST((s.score - b.lo) * 1.0 / (b.hi - b.lo) * :num_bins AS INTEGER)
+        END AS bin,
+        count(*) AS cnt
+    FROM benchmark_score s
+    JOIN bounds b ON s.benchmark_id = b.benchmark_id
+    WHERE s.status = :status AND s.score IS NOT NULL
+    GROUP BY s.benchmark_id, bin
+    ORDER BY s.benchmark_id, bin
+""").bindparams(
+    status=Status.ACTIVE.name,
+    num_bins=NUM_HISTOGRAM_BINS,
+    max_bin=NUM_HISTOGRAM_BINS - 1,
+)
+
+_BENCHMARK_CONFIG_VALUES_SQL = text("""
+    SELECT DISTINCT
+        bs.benchmark_id AS benchmark_id,
+        je.key AS config_key,
+        je.value AS config_value
+    FROM benchmark_score bs, json_each(bs.config) je
+    WHERE bs.status = :status AND bs.score IS NOT NULL AND bs.config IS NOT NULL AND je.value IS NOT NULL
+    ORDER BY bs.benchmark_id, je.key
+""").bindparams(status=Status.ACTIVE.name)
+
+
+@router.get("/benchmark_score_stats")
+def get_benchmark_score_stats(
+    db: Session = Depends(get_db),
+) -> List[BenchmarkScoreStatsItem]:
+    """Return aggregate stats and score distribution histograms for each benchmark.
+
+    For every benchmark in the Benchmark table, returns:
+    - Basic benchmark metadata (name, framework, unit, etc.)
+    - Count of active, non-null score records
+    - Count of distinct (vendor_id, server_id) pairs
+    - A 20-bin histogram of the score distribution (breakpoints + per-bucket counts)
+
+    Aggregation and histogram binning are done in SQL to avoid transferring
+    millions of BenchmarkScore rows.
+    Due to the complexity of the query, not using sqlalchemy markup.
+    """
+
+    benchmarks = db.exec(select(Benchmark).order_by(Benchmark.benchmark_id)).all()
+
+    agg_rows = db.exec(_AGGREGATE_SCORES_SQL).all()
+    agg_by_benchmark = {row[0]: row for row in agg_rows}
+
+    bin_rows = db.exec(_HISTOGRAM_BINS_SQL).all()
+    bins_by_benchmark: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    for row in bin_rows:
+        bins_by_benchmark[row[0]].append((row[1], row[2]))
+
+    config_rows = db.exec(_BENCHMARK_CONFIG_VALUES_SQL).all()
+    config_values: dict[str, dict[str, set]] = defaultdict(lambda: defaultdict(set))
+    for benchmark_id, config_key, config_value in config_rows:
+        config_values[benchmark_id][config_key].add(config_value)
+
+    def _sorted_examples(values: set) -> list:
+        def _key(v):
+            if isinstance(v, (int, float)):
+                return (0, float(v))
+            # JSON values can come as strings; try numeric sorting if possible
+            if isinstance(v, str):
+                try:
+                    return (0, float(v))
+                except ValueError:
+                    return (2, v)
+            return (3, str(v))
+
+        return sorted(values, key=_key)
+
+    result = []
+    for benchmark in benchmarks:
+        bid = benchmark.benchmark_id
+        agg = agg_by_benchmark.get(bid)
+        count = agg[1] if agg else 0
+        count_servers = agg[2] if agg else 0
+
+        # merge Benchmark.config_fields with observed example values from BenchmarkScore.config
+        configs: dict = {}
+        config_fields = (
+            benchmark.config_fields if isinstance(benchmark.config_fields, dict) else {}
+        )
+        for config_key, description in config_fields.items():
+            configs[config_key] = {
+                "description": description,
+                "examples": _sorted_examples(
+                    config_values.get(bid, {}).get(config_key, set())
+                ),
+            }
+
+        histogram = None
+        if agg and count > 0:
+            min_val = agg[3]
+            max_val = agg[4]
+            # recompute bin min/max for histogram as not passed from SQL
+            if min_val == max_val:
+                half = abs(min_val) * 0.05 if min_val != 0 else 1.0
+                min_val = min_val - half
+                max_val = max_val + half
+            step = (max_val - min_val) / NUM_HISTOGRAM_BINS
+            breakpoints = [min_val + i * step for i in range(NUM_HISTOGRAM_BINS + 1)]
+            counts = [0] * NUM_HISTOGRAM_BINS
+            for bin_idx, cnt in bins_by_benchmark.get(bid, []):
+                if 0 <= bin_idx < NUM_HISTOGRAM_BINS:
+                    counts[bin_idx] = cnt
+            histogram = BenchmarkHistogram(breakpoints=breakpoints, counts=counts)
+
+        result.append(
+            BenchmarkScoreStatsItem(
+                benchmark_id=bid,
+                name=benchmark.name,
+                description=benchmark.description,
+                framework=benchmark.framework,
+                measurement=benchmark.measurement,
+                unit=benchmark.unit,
+                higher_is_better=benchmark.higher_is_better,
+                status=(
+                    benchmark.status.name
+                    if hasattr(benchmark.status, "name")
+                    else benchmark.status
+                ),
+                configs=configs,
+                count=count,
+                count_servers=count_servers,
+                histogram=histogram,
+            )
+        )
+
+    return result

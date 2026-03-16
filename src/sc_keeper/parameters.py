@@ -216,6 +216,18 @@ vendor_regions = Annotated[
     ),
 ]
 
+server_region = Annotated[
+    Optional[str],
+    Query(
+        title="Server region",
+        description="Region of the baseline server, used for score_per_price ordering to find servers with a similar score_per_price.",
+        json_schema_extra={
+            "category_id": FilterCategories.REGION,
+            "enum": [m.value for m in Regions],
+        },
+    ),
+]
+
 compliance_framework = Annotated[
     Optional[List[ComplianceFrameworks]],
     Query(
