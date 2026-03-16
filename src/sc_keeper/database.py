@@ -62,7 +62,9 @@ class Database(Thread):
                 "sqlite:///" + abspath(tmpfile),
                 connect_args={"check_same_thread": False},
                 echo=bool(environ.get("KEEPER_DEBUG", False)),
-                poolclass=NullPool if bool(environ.get("KEEPER_TESTING", False)) else None,
+                poolclass=NullPool
+                if bool(environ.get("KEEPER_TESTING", False))
+                else None,
             )
             with engine.connect() as conn:
                 # minimal gain for read ops with the below PRAGMA configs
