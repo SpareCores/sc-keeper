@@ -9,8 +9,9 @@ New feature(s):
   `/server/{vendor}/{server}/similar_servers/{by}/{num}` endpoint.
 - Add optional `currency`, `benchmark_id`, `benchmark_config`, `server_region` and `best_price_allocation` query
   parameters for the `/server/{vendor}/{server}/similar_servers/{by}/{num}` endpoint.
-- Added `network_speed_min`, `cpu_speed_min`, `cpu_l1_cache_min`, `cpu_l2_cache_min`, and `cpu_l3_cache_min` fields to
-  the server search endpoint with predefined ranges for filtering.
+- Added `network_speed_min`, `cpu_speed_min`, `cpu_l1d_cache_min`, `cpu_l1d_cache_total_min`, `cpu_l1i_cache_min`,
+  `cpu_l1i_cache_total_min`, `cpu_l2_cache_min`, `cpu_l2_cache_total_min`, `cpu_l3_cache_min`, and
+  `cpu_l3_cache_total_min` filters for the `/servers` with predefined ranges for filtering.
 
 Fix(es):
 

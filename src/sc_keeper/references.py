@@ -239,6 +239,7 @@ class FilterCategories(Enum):
     PRICE = "price"
     PERFORMANCE = "performance"
     PROCESSOR = "processor"
+    CPU_CACHE = "cpu_cache"
     MEMORY = "memory"
     REGION = "region"
     VENDOR = "vendor"
@@ -470,12 +471,26 @@ class CpuL1CacheSnapPoints(Enum):
     """Predefined snap points for CPU L1 cache filtering, based on common values in the dataset (in KiB)."""
 
     KIB_32 = 32
+    KIB_48 = 48
     KIB_64 = 64
     KIB_128 = 128
+
+
+class CpuL1CacheTotalSnapPoints(Enum):
+    """Predefined snap points for total CPU L1 cache filtering, based on common values in the dataset (in KiB)."""
+
+    KIB_32 = 32
+    KIB_64 = 64
+    KIB_128 = 128
+    KIB_192 = 192
     KIB_256 = 256
+    KIB_384 = 384
     KIB_512 = 512
+    KIB_768 = 768
     MIB_1 = 1024
+    MIB_1_5 = 1536
     MIB_2 = 2048
+    MIB_3 = 3072
     MIB_4 = 4096
     MIB_6 = 6144
     MIB_12 = 12288
@@ -489,20 +504,46 @@ class CpuL2CacheSnapPoints(Enum):
     MIB_1 = 1024
     MIB_2 = 2048
     MIB_4 = 4096
+
+
+class CpuL2CacheTotalSnapPoints(Enum):
+    """Predefined snap points for total CPU L2 cache filtering, based on common values in the dataset (in KiB)."""
+
+    KIB_256 = 256
+    KIB_512 = 512
+    MIB_1 = 1024
+    MIB_2 = 2048
+    MIB_4 = 4096
     MIB_8 = 8192
     MIB_16 = 16384
+    MIB_24 = 24576
     MIB_32 = 32768
-    MIB_50 = 51200
+    MIB_48 = 49152
     MIB_64 = 65536
-    MIB_100 = 102400
-    MIB_200 = 204800
-    MIB_400 = 409600
+    MIB_96 = 98304
+    MIB_128 = 131072
+    MIB_192 = 196608
+    MIB_384 = 393216
 
 
 class CpuL3CacheSnapPoints(Enum):
     """Predefined snap points for CPU L3 cache filtering, based on common values in the dataset (in MiB)."""
 
     MIB_4 = 4
+    MIB_8 = 8
+    MIB_16 = 16
+    MIB_32 = 32
+    MIB_48 = 48
+    MIB_64 = 64
+    MIB_128 = 128
+    MIB_256 = 256
+    MIB_480 = 480
+
+
+class CpuL3CacheTotalSnapPoints(Enum):
+    """Predefined snap points for total CPU L3 cache filtering, based on common values in the dataset (in MiB)."""
+
+    MIB_8 = 8
     MIB_16 = 16
     MIB_32 = 32
     MIB_48 = 48
@@ -511,5 +552,8 @@ class CpuL3CacheSnapPoints(Enum):
     MIB_128 = 128
     MIB_192 = 192
     MIB_256 = 256
-    MIB_512 = 512
+    MIB_480 = 480
     GIB_1 = 1024
+    GIB_2 = 2048
+    GIB_4 = 4096
+

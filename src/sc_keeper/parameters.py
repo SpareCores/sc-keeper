@@ -16,8 +16,11 @@ from .references import (
     Countries,
     CpuFamilies,
     CpuL1CacheSnapPoints,
+    CpuL1CacheTotalSnapPoints,
     CpuL2CacheSnapPoints,
+    CpuL2CacheTotalSnapPoints,
     CpuL3CacheSnapPoints,
+    CpuL3CacheTotalSnapPoints,
     CpuManufacturers,
     CpuSpeedSnapPoints,
     FilterCategories,
@@ -266,14 +269,53 @@ cpu_speed_min = Annotated[
     ),
 ]
 
-cpu_l1_cache_min = Annotated[
+cpu_l1d_cache_min = Annotated[
     Optional[int],
     Query(
-        title="Minimum L1 cache size",
-        description="Minimum L1 cache size in KiBs.",
+        title="Minimum L1 data cache size",
+        description="Minimum L1 data cache size in KiBs.",
         json_schema_extra={
-            "category_id": FilterCategories.PROCESSOR,
+            "category_id": FilterCategories.CPU_CACHE,
             "enum": [e.value for e in CpuL1CacheSnapPoints],
+            "unit": "KiB",
+        },
+    ),
+]
+
+cpu_l1d_cache_total_min = Annotated[
+    Optional[int],
+    Query(
+        title="Minimum L1 data cache size across all cores",
+        description="Minimum L1 data cache size across all cores in KiBs.",
+        json_schema_extra={
+            "category_id": FilterCategories.CPU_CACHE,
+            "enum": [e.value for e in CpuL1CacheTotalSnapPoints],
+            "unit": "KiB",
+        },
+    ),
+]
+
+cpu_l1i_cache_min = Annotated[
+    Optional[int],
+    Query(
+        title="Minimum L1 instruction cache size",
+        description="Minimum L1 instruction cache size in KiBs.",
+        json_schema_extra={
+            "category_id": FilterCategories.CPU_CACHE,
+            "enum": [e.value for e in CpuL1CacheSnapPoints],
+            "unit": "KiB",
+        },
+    ),
+]
+
+cpu_l1i_cache_total_min = Annotated[
+    Optional[int],
+    Query(
+        title="Minimum L1 instruction cache size across all cores",
+        description="Minimum L1 instruction cache size across all cores in KiBs.",
+        json_schema_extra={
+            "category_id": FilterCategories.CPU_CACHE,
+            "enum": [e.value for e in CpuL1CacheTotalSnapPoints],
             "unit": "KiB",
         },
     ),
@@ -285,8 +327,21 @@ cpu_l2_cache_min = Annotated[
         title="Minimum L2 cache size",
         description="Minimum L2 cache size in KiBs.",
         json_schema_extra={
-            "category_id": FilterCategories.PROCESSOR,
+            "category_id": FilterCategories.CPU_CACHE,
             "enum": [e.value for e in CpuL2CacheSnapPoints],
+            "unit": "KiB",
+        },
+    ),
+]
+
+cpu_l2_cache_total_min = Annotated[
+    Optional[int],
+    Query(
+        title="Minimum L2 cache size across all cores",
+        description="Minimum L2 cache size across all cores in KiBs.",
+        json_schema_extra={
+            "category_id": FilterCategories.CPU_CACHE,
+            "enum": [e.value for e in CpuL2CacheTotalSnapPoints],
             "unit": "KiB",
         },
     ),
@@ -298,8 +353,21 @@ cpu_l3_cache_min = Annotated[
         title="Minimum L3 cache size",
         description="Minimum L3 cache size in MiBs.",
         json_schema_extra={
-            "category_id": FilterCategories.PROCESSOR,
+            "category_id": FilterCategories.CPU_CACHE,
             "enum": [e.value for e in CpuL3CacheSnapPoints],
+            "unit": "MiB",
+        },
+    ),
+]
+
+cpu_l3_cache_total_min = Annotated[
+    Optional[int],
+    Query(
+        title="Minimum L3 cache size across all cores",
+        description="Minimum L3 cache size across all cores in MiBs.",
+        json_schema_extra={
+            "category_id": FilterCategories.CPU_CACHE,
+            "enum": [e.value for e in CpuL3CacheTotalSnapPoints],
             "unit": "MiB",
         },
     ),

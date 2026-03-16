@@ -330,9 +330,14 @@ def search_servers(
     cpu_family: options.cpu_family = None,
     cpu_allocation: options.cpu_allocation = None,
     cpu_speed_min: options.cpu_speed_min = None,
-    cpu_l1_cache_min: options.cpu_l1_cache_min = None,
+    cpu_l1d_cache_min: options.cpu_l1d_cache_min = None,
+    cpu_l1d_cache_total_min: options.cpu_l1d_cache_total_min = None,
+    cpu_l1i_cache_min: options.cpu_l1i_cache_min = None,
+    cpu_l1i_cache_total_min: options.cpu_l1i_cache_total_min = None,
     cpu_l2_cache_min: options.cpu_l2_cache_min = None,
+    cpu_l2_cache_total_min: options.cpu_l2_cache_total_min = None,
     cpu_l3_cache_min: options.cpu_l3_cache_min = None,
+    cpu_l3_cache_total_min: options.cpu_l3_cache_total_min = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
     benchmark_id: options.benchmark_id = None,
@@ -441,13 +446,23 @@ def search_servers(
         conditions.add(Server.cpu_allocation.in_(cpu_allocation))
     if cpu_speed_min:
         conditions.add(Server.cpu_speed >= cpu_speed_min)
-    # cpu caches is stored in bytes, but l1-l2 filters are in KiB, l3 filter is in MiB
-    if cpu_l1_cache_min:
-        conditions.add(Server.cpu_l1_cache >= cpu_l1_cache_min * 1024)
+    if cpu_l1d_cache_min:
+        conditions.add(Server.cpu_l1d_cache >= cpu_l1d_cache_min)
+    if cpu_l1d_cache_total_min:
+        conditions.add(Server.cpu_l1d_cache_total >= cpu_l1d_cache_total_min)
+    if cpu_l1i_cache_min:
+        conditions.add(Server.cpu_l1i_cache >= cpu_l1i_cache_min)
+    if cpu_l1i_cache_total_min:
+        conditions.add(Server.cpu_l1i_cache_total >= cpu_l1i_cache_total_min)
     if cpu_l2_cache_min:
-        conditions.add(Server.cpu_l2_cache >= cpu_l2_cache_min * 1024)
+        conditions.add(Server.cpu_l2_cache >= cpu_l2_cache_min)
+    if cpu_l2_cache_total_min:
+        conditions.add(Server.cpu_l2_cache_total >= cpu_l2_cache_total_min)
+    # cpu l3 cache is stored in KiB, but l3 filter is in MiB
     if cpu_l3_cache_min:
-        conditions.add(Server.cpu_l3_cache >= cpu_l3_cache_min * 1024 * 1024)
+        conditions.add(Server.cpu_l3_cache >= cpu_l3_cache_min * 1024)
+    if cpu_l3_cache_total_min:
+        conditions.add(Server.cpu_l3_cache_total >= cpu_l3_cache_total_min * 1024)
     if benchmark_score_stressng_cpu_min:
         conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
     if benchmark_score_per_price_stressng_cpu_min:
