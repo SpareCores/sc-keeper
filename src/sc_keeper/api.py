@@ -52,6 +52,7 @@ from .cache import CacheHeaderMiddleware
 from .crawler_extend import calculate_tiered_price
 from .currency import currency_converter
 from .database import get_db
+from .limits import heavy_job_dep
 from .logger import LogMiddleware
 from .queries import gen_benchmark_query
 from .rate_limit import RateLimitMiddleware, create_rate_limiter
@@ -813,7 +814,11 @@ def search_servers(
     return serverlist
 
 
-@app.get("/server_prices", tags=["Query Resources"])
+@app.get(
+    "/server_prices",
+    tags=["Query Resources"],
+    dependencies=[Depends(heavy_job_dep)],
+)
 def search_server_prices(
     response: Response,
     partial_name_or_id: options.partial_name_or_id = None,
