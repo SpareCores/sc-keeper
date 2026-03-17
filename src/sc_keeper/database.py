@@ -9,6 +9,7 @@ from time import sleep, time
 
 import safe_exit
 from sc_data import db
+from sqlalchemy.pool import NullPool
 from sqlmodel import Session, create_engine, delete, insert, text
 
 from .crawler_extend import extenders
@@ -61,6 +62,7 @@ class Database(Thread):
                 "sqlite:///" + abspath(tmpfile),
                 connect_args={"check_same_thread": False},
                 echo=bool(environ.get("KEEPER_DEBUG", False)),
+                poolclass=NullPool,
             )
             with engine.connect() as conn:
                 # minimal gain for read ops with the below PRAGMA configs
