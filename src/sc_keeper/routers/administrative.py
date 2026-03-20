@@ -18,6 +18,7 @@ from sqlmodel import Session, case, func, select, text
 from .. import parameters as options
 from ..auth import User, current_user
 from ..database import get_db, session
+from ..limits import heavy_job_dep
 from ..references import (
     BenchmarkHistogram,
     BenchmarkScoreStatsItem,
@@ -81,7 +82,7 @@ def get_stats(
     }
 
 
-@router.get("/debug")
+@router.get("/debug", dependencies=[Depends(heavy_job_dep)])
 def get_debug_info(db: Session = Depends(get_db)) -> DebugInfoResponse:
     """Return debug information about the availability of benchmark scores for servers.
 
@@ -258,7 +259,7 @@ _BENCHMARK_CONFIG_VALUES_SQL = text("""
 """).bindparams(status=Status.ACTIVE.name)
 
 
-@router.get("/benchmark_score_stats")
+@router.get("/benchmark_score_stats", dependencies=[Depends(heavy_job_dep)])
 def get_benchmark_score_stats(
     db: Session = Depends(get_db),
 ) -> List[BenchmarkScoreStatsItem]:

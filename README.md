@@ -44,6 +44,11 @@ Custom credit costs per route can be configured in `src/sc_keeper/rate_limit.py`
 via the `CUSTOM_RATE_LIMIT_COSTS` dictionary. Routes not listed default to
 `RATE_LIMIT_DEFAULT_CREDIT_COST` credits per request.
 
+Furthermore, the number of concurrent heavy jobs can be limited to avoid overloading the database:
+
+- `HEAVY_JOBS_MAX_CONCURRENT` - Maximum number of concurrent heavy jobs (default: `2`)
+- `HEAVY_JOBS_ACQUIRE_TIMEOUT_SEC` - Timeout in seconds for acquiring a heavy job permit (default: `2.0`)
+
 Authentication uses OAuth 2.0 token introspection for token validation. Token
 validation is automatically enabled if `AUTH_TOKEN_INTROSPECTION_URL` is set.
 Supports any OAuth 2.0-compatible identity provider that implements token
