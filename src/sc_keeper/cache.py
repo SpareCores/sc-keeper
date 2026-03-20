@@ -11,7 +11,7 @@ class CacheHeaderMiddleware(BaseHTTPMiddleware):
         ttl = 60 * 60
         # lower TTL for server prices
         if "server" in request.url.path and "prices" in request.url.path:
-            ttl = 60 * 10
+            ttl = 60 * 15
         # skip cache for authenticated endpoints and a few specific paths
         if (
             getattr(request.state, "auth_required", False)
@@ -21,5 +21,11 @@ class CacheHeaderMiddleware(BaseHTTPMiddleware):
             response.headers["Cache-Control"] = "private, no-store"
             ttl = 0
         if ttl > 0:
-            response.headers["Cache-Control"] = f"public, max-age={ttl}"
+            # allow serving stale content while revalidating in the background
+            stale_ttl = max(60 * 15, int(ttl * 0.25))
+            # bridge short (max 30 mins) downtime by serving stale content while the cluster gets back online
+            error_ttl = 60 * 30
+            response.headers["Cache-Control"] = (
+                f"public, max-age={ttl}, stale-while-revalidate={stale_ttl}, stale-if-error={error_ttl}"
+            )
         return response
