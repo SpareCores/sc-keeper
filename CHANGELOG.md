@@ -13,9 +13,15 @@ New feature(s):
   `cpu_l1i_cache_total_min`, `cpu_l2_cache_min`, `cpu_l2_cache_total_min`, `cpu_l3_cache_min`, and
   `cpu_l3_cache_total_min` filters for the `/servers` with predefined ranges for filtering.
 
+Performance improvements:
+
+- Aggressive content caching with multi-layer CDN.
+- Fallback to stale content while revalidating in the background and serving error content for a short period of time.
+
 Fix(es):
 
 - Background thread to clean-up expired in-memory rate-limit keys.
+- Disable content caching for error responses.
 
 ## February 2026
 
