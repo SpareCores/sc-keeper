@@ -1416,7 +1416,6 @@ def search_benchmark_configs(
         "Geekbench",
         "Passmark",
         "Memory bandwidth",
-        "Membench",
         "OpenSSL",
         "Compression algos",
         "Static web server",
