@@ -1361,12 +1361,21 @@ def search_benchmark_configs(
     db: Session = Depends(get_db),
 ) -> List[BenchmarkConfig]:
     query = (
-        select(BenchmarkScore.benchmark_id, func.cast(BenchmarkScore.config, String))
-        .distinct()
+        select(
+            BenchmarkScore.benchmark_id,
+            func.cast(BenchmarkScore.config, String),
+            BenchmarkScore.framework_version,
+            func.max(BenchmarkScore.kernel_version).label("kernel_version"),
+        )
         .where(BenchmarkScore.status == Status.ACTIVE)
+        .group_by(
+            BenchmarkScore.benchmark_id,
+            BenchmarkScore.framework_version,
+            BenchmarkScore.config,
+        )
         .order_by(
             BenchmarkScore.benchmark_id,
-            func.json_extract(BenchmarkScore.config, "$.key1"),
+            BenchmarkScore.framework_version,
         )
     )
     results = db.exec(query).all()
@@ -1395,6 +1404,8 @@ def search_benchmark_configs(
             result["category"] = "stress-ng"
         if result["benchmark_id"].startswith("llm_speed"):
             result["category"] = "LLM inference speed"
+        if result["benchmark_id"].startswith("membench"):
+            result["category"] = "Memory bandwidth"
         # keep original order
         result["original_order"] = i
         results[i] = result
@@ -1405,6 +1416,7 @@ def search_benchmark_configs(
         "Geekbench",
         "Passmark",
         "Memory bandwidth",
+        "Membench",
         "OpenSSL",
         "Compression algos",
         "Static web server",

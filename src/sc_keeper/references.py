@@ -250,6 +250,8 @@ class FilterCategories(Enum):
 
 class BenchmarkConfig(BaseModel):
     benchmark_id: str
+    framework_version: Optional[str]
+    kernel_version: Optional[str]
     config: str
     category: Optional[str] = None
 
