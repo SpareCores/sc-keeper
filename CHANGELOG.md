@@ -16,7 +16,10 @@ New feature(s):
 Performance improvements:
 
 - Aggressive content caching with multi-layer CDN.
-- Fallback to stale content while revalidating in the background and serving error content for a short period of time.
+- Fallback to stale cached content
+
+    - while revalidating in the background,
+    - on temporarily origin errors.
 
 Fix(es):
 
