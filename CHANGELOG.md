@@ -16,8 +16,7 @@ New feature(s):
 Fix(es):
 
 - Background thread to clean-up expired in-memory rate-limit keys.
-- Update `/benchmark_configs` endpoint: add framework_version and kernel_version fields to the response, and add
-  membench to Memory bandwidth category.
+- Add sorting to `/server/{vendor}/{server}/benchmarks` endpoint.
 
 ## February 2026
 

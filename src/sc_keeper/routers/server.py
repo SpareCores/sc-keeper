@@ -25,6 +25,7 @@ from ..database import get_db
 from ..helpers import (
     get_server_dict,
     get_server_pks,
+    get_sort_key_for_benchmark_configs,
     update_server_price_currency,
     vendor_region_filter,
 )
@@ -423,9 +424,14 @@ def get_server_benchmarks(
 ) -> List[BenchmarkScore]:
     """Query the current benchmark scores of a single server."""
     vendor_id, server_id = server_args
-    return db.exec(
+
+    results = db.exec(
         select(BenchmarkScore)
         .where(BenchmarkScore.status == Status.ACTIVE)
         .where(BenchmarkScore.vendor_id == vendor_id)
         .where(BenchmarkScore.server_id == server_id)
     ).all()
+
+    benchmarks = [result.model_dump() for result in results]
+
+    return sorted(benchmarks, key=get_sort_key_for_benchmark_configs)

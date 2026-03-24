@@ -1,4 +1,5 @@
 from datetime import timedelta
+from json import loads as json_loads
 
 from cachier import cachier
 from fastapi import HTTPException
@@ -111,3 +112,91 @@ def update_server_price_currency(
         if hasattr(server_obj, "currency"):
             server_obj.currency = to_currency
     return server_obj
+
+
+def get_sort_key_for_benchmark_configs(item):
+    """Helper function to determine the sort order for benchmark configs"""
+
+    category_order = [
+        "stress-ng",
+        "Geekbench",
+        "Passmark",
+        "Memory bandwidth",
+        "OpenSSL",
+        "Compression algos",
+        "Static web server",
+        "Redis",
+        "LLM inference speed",
+        "Other",
+    ]
+    sub_category_order = [
+        "geekbench:score",
+        "passmark:cpu_mark",
+        "passmark:memory_mark",
+        "llm_speed:prompt_processing",
+        "llm_speed:text_generation",
+    ]
+    model_order = [
+        "SmolLM-135M.Q4_K_M.gguf",
+        "qwen1_5-0_5b-chat-q4_k_m.gguf",
+        "gemma-2b.Q4_K_M.gguf",
+        "llama-7b.Q4_K_M.gguf",
+        "phi-4-q4.gguf",
+        "Llama-3.3-70B-Instruct-Q4_K_M.gguf",
+    ]
+
+    config = item.get("config_parsed")
+
+    if not config:
+        config = item.get("config")
+        if not isinstance(config, dict):
+            config = json_loads(item.get("config", "{}"))
+
+    # primary sort by category
+    category_idx = category_order.index(item.get("category", "Other"))
+
+    # secondary sort by benchmark_id
+    if item["benchmark_id"] in sub_category_order:
+        subcategory_idx = sub_category_order.index(item["benchmark_id"])
+    else:
+        subcategory_idx = len(sub_category_order)
+
+    # then sort by cores (single-core first)
+    cores_idx = 0 if config.get("cores", "") == "Single-Core Performance" else 1
+
+    # then sort by LLM model (if present)
+    model_idx = len(model_order)
+    if "model" in config and config["model"] in model_order:
+        model_idx = model_order.index(config["model"])
+
+    # then sort by tokens (if present)
+    tokens = 0
+    if "tokens" in config:
+        try:
+            tokens = int(config["tokens"])
+        except (ValueError, TypeError):
+            pass
+
+    # then sort by algo (if present)
+    algo = config.get("algo", "")
+
+    # then sort by int type fields
+    int_type_field = 0
+    for key in ["size", "size_kb", "block_size", "threads"]:
+        if key in config:
+            try:
+                int_type_field = int(config[key])
+            except (ValueError, TypeError):
+                pass
+
+    # finally, sort by original order
+    return (
+        category_idx,
+        subcategory_idx,
+        cores_idx,
+        model_idx,
+        tokens,
+        algo,
+        int_type_field,
+        item.get("original_order", 0),
+    )
