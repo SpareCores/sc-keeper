@@ -1442,7 +1442,11 @@ def search_benchmark_configs(
             subcategory_idx = len(sub_category_order)
 
         # then sort by cores (single-core first)
-        cores_idx = 0 if config.get("cores", "") == "Single-Core Performance" else 1
+        cores_idx = (
+            0
+            if config.get("cores", "") in ["single", "Single-Core Performance", 1, 1.0]
+            else 1
+        )
 
         # then sort by LLM model (if present)
         model_idx = len(model_order)
