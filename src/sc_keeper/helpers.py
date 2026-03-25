@@ -154,7 +154,8 @@ def get_sort_key_for_benchmark_configs(item):
             config = raw_config
         elif isinstance(raw_config, str):
             try:
-                config = json_loads(raw_config)
+                parsed_config = json_loads(raw_config)
+                config = parsed_config if isinstance(parsed_config, dict) else {}
             except JSONDecodeError:
                 config = {}
         else:
