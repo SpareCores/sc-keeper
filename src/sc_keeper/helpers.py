@@ -1,4 +1,5 @@
 from datetime import timedelta
+from json import JSONDecodeError
 from json import loads as json_loads
 
 from cachier import cachier
@@ -147,13 +148,25 @@ def get_sort_key_for_benchmark_configs(item):
 
     config = item.get("config_parsed")
 
-    if not config:
-        config = item.get("config")
-        if not isinstance(config, dict):
-            config = json_loads(item.get("config", "{}"))
+    if not isinstance(config, dict):
+        raw_config = item.get("config", "{}")
+        if isinstance(raw_config, dict):
+            config = raw_config
+        elif isinstance(raw_config, str):
+            try:
+                config = json_loads(raw_config)
+            except JSONDecodeError:
+                config = {}
+        else:
+            config = {}
 
     # primary sort by category
-    category_idx = category_order.index(item.get("category", "Other"))
+    category = item.get("category") or "Other"
+    category_idx = (
+        category_order.index(category)
+        if category in category_order
+        else len(category_order)
+    )
 
     # secondary sort by benchmark_id
     if item["benchmark_id"] in sub_category_order:
@@ -162,7 +175,11 @@ def get_sort_key_for_benchmark_configs(item):
         subcategory_idx = len(sub_category_order)
 
     # then sort by cores (single-core first)
-    cores_idx = 0 if config.get("cores", "") == "Single-Core Performance" else 1
+    cores_idx = (
+        0
+        if config.get("cores", "") in ["single", "Single-Core Performance", 1, 1.0]
+        else 1
+    )
 
     # then sort by LLM model (if present)
     model_idx = len(model_order)

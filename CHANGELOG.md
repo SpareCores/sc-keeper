@@ -24,8 +24,8 @@ Performance improvements:
 Fix(es):
 
 - Background thread to clean-up expired in-memory rate-limit keys.
-- Add sorting to `/server/{vendor}/{server}/benchmarks` endpoint.
 - Disable content caching for error responses.
+- Add sorting to `/server/{vendor}/{server}/benchmarks` endpoint.
 
 ## February 2026
 
