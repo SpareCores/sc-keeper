@@ -432,6 +432,10 @@ def get_server_benchmarks(
         .where(BenchmarkScore.server_id == server_id)
     ).all()
 
-    benchmarks = [result.model_dump() for result in results]
+    benchmarks = []
+    for i, result in enumerate(results):
+        benchmark = result.model_dump()
+        benchmark["original_order"] = i
+        benchmarks.append(benchmark)
 
     return sorted(benchmarks, key=get_sort_key_for_benchmark_configs)
