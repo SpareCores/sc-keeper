@@ -29,7 +29,11 @@ from sc_crawler.tables import (
 from sqlalchemy.orm import aliased, contains_eager
 from sqlmodel import Session, String, case, func, or_, select
 
-from .helpers import update_server_price_currency, vendor_region_filter
+from .helpers import (
+    get_sort_key_for_benchmark_configs,
+    update_server_price_currency,
+    vendor_region_filter,
+)
 
 # early validation (before DB imports) of environment variables
 logger = getLogger(__name__)
@@ -1361,15 +1365,15 @@ def search_benchmark_configs(
     db: Session = Depends(get_db),
 ) -> List[BenchmarkConfig]:
     query = (
-        select(BenchmarkScore.benchmark_id, func.cast(BenchmarkScore.config, String))
+        select(
+            BenchmarkScore.benchmark_id,
+            func.cast(BenchmarkScore.config, String),
+        )
         .distinct()
         .where(BenchmarkScore.status == Status.ACTIVE)
-        .order_by(
-            BenchmarkScore.benchmark_id,
-            func.json_extract(BenchmarkScore.config, "$.key1"),
-        )
     )
     results = db.exec(query).all()
+
     for i, result in enumerate(results):
         result = result._asdict()
         # store parsed config
@@ -1395,80 +1399,11 @@ def search_benchmark_configs(
             result["category"] = "stress-ng"
         if result["benchmark_id"].startswith("llm_speed"):
             result["category"] = "LLM inference speed"
+        if result["benchmark_id"].startswith("membench"):
+            result["category"] = "Memory bandwidth"
         # keep original order
         result["original_order"] = i
         results[i] = result
     results = [result for result in results if result.get("category")]
 
-    category_order = [
-        "stress-ng",
-        "Geekbench",
-        "Passmark",
-        "Memory bandwidth",
-        "OpenSSL",
-        "Compression algos",
-        "Static web server",
-        "Redis",
-        "LLM inference speed",
-        "Other",
-    ]
-    sub_category_order = [
-        "geekbench:score",
-        "passmark:cpu_mark",
-        "passmark:memory_mark",
-        "llm_speed:prompt_processing",
-        "llm_speed:text_generation",
-    ]
-    model_order = [
-        "SmolLM-135M.Q4_K_M.gguf",
-        "qwen1_5-0_5b-chat-q4_k_m.gguf",
-        "gemma-2b.Q4_K_M.gguf",
-        "llama-7b.Q4_K_M.gguf",
-        "phi-4-q4.gguf",
-        "Llama-3.3-70B-Instruct-Q4_K_M.gguf",
-    ]
-
-    def get_sort_key(item):
-        """Helper function to determine the sort order for benchmark configs"""
-        config = item["config_parsed"]
-
-        # primary sort by category
-        category_idx = category_order.index(item["category"])
-
-        # secondary sort by benchmark_id
-        if item["benchmark_id"] in sub_category_order:
-            subcategory_idx = sub_category_order.index(item["benchmark_id"])
-        else:
-            subcategory_idx = len(sub_category_order)
-
-        # then sort by cores (single-core first)
-        cores_idx = (
-            0
-            if config.get("cores", "") in ["single", "Single-Core Performance", 1, 1.0]
-            else 1
-        )
-
-        # then sort by LLM model (if present)
-        model_idx = len(model_order)
-        if "model" in config and config["model"] in model_order:
-            model_idx = model_order.index(config["model"])
-
-        # then sort by tokens (if present)
-        tokens = 0
-        if "tokens" in config:
-            try:
-                tokens = int(config["tokens"])
-            except (ValueError, TypeError):
-                pass
-
-        # finally, sort by original order
-        return (
-            category_idx,
-            subcategory_idx,
-            cores_idx,
-            model_idx,
-            tokens,
-            item["original_order"],
-        )
-
-    return sorted(results, key=get_sort_key)
+    return sorted(results, key=get_sort_key_for_benchmark_configs)
