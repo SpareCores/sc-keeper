@@ -24,6 +24,9 @@ class CacheHeaderMiddleware(BaseHTTPMiddleware):
         if ttl > 0:
             # allow serving stale content while revalidating in the background
             stale_ttl = max(60 * 15, int(ttl * 0.25))
+            # extended stale TTL for expensive endpoints without pricing information
+            if request.url.path in ["/benchmark_score_stats", "/debug"]:
+                stale_ttl = 60 * 60
             # bridge short (max 30 mins) downtime by serving stale content while the cluster gets back online
             error_ttl = 60 * 30
             response.headers["Cache-Control"] = (
