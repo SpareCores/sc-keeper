@@ -68,7 +68,10 @@ class Database(Thread):
                 # minimal gain for read ops with the below PRAGMA configs
                 conn.execute(text("PRAGMA synchronous=OFF"))
                 conn.execute(text("PRAGMA journal_mode=OFF"))
-                conn.execute(text("PRAGMA mmap_size=67108864"))  # 64 MiB
+                conn.execute(text("PRAGMA temp_store=MEMORY"))
+                conn.execute(text("PRAGMA cache_size=-32768"))
+                conn.execute(text("PRAGMA mmap_size=268435456"))  # 256 MiB
+                # conn.execute(text("PRAGMA mmap_size=67108864"))  # 64 MiB
                 # add new columns to the database
                 logger.info("Extending tables")
                 for extender in extenders:
