@@ -65,13 +65,14 @@ class Database(Thread):
                 poolclass=NullPool,
             )
             with engine.connect() as conn:
-                # minimal gain for read ops with the below PRAGMA configs
+                # These PRAGMAs apply only to the build phase (write operations).
+                # synchronous=OFF and journal_mode=OFF speed up the one-time DB build;
+                # mmap_size gives a modest read boost once the engine is reused for queries.
+                # Additional PRAGMA tuning (cache_size, temp_store, etc.) showed no significant
+                # latency improvement for the read-heavy query workload.
                 conn.execute(text("PRAGMA synchronous=OFF"))
                 conn.execute(text("PRAGMA journal_mode=OFF"))
-                conn.execute(text("PRAGMA temp_store=MEMORY"))
-                conn.execute(text("PRAGMA cache_size=-32768"))
-                conn.execute(text("PRAGMA mmap_size=268435456"))  # 256 MiB
-                # conn.execute(text("PRAGMA mmap_size=67108864"))  # 64 MiB
+                conn.execute(text("PRAGMA mmap_size=67108864"))  # 64 MiB
                 # add new columns to the database
                 logger.info("Extending tables")
                 for extender in extenders:
