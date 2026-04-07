@@ -154,6 +154,12 @@ HealthcheckResponse.model_config["json_schema_extra"] = {
 }
 
 
+ServerColumns = StrEnum(
+    "ServerColumns",
+    {col: col for col in Server.get_columns().get("all", [])},
+)
+
+
 class NameAndDescription(BaseModel):
     name: str
     description: str

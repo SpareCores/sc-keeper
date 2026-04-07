@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Security
 from sc_crawler.table_fields import Status
@@ -63,9 +63,21 @@ def table_zone(db: Session = Depends(get_db)) -> List[Zone]:
 
 
 @router.get("/server")
-def table_server(db: Session = Depends(get_db)) -> List[Server]:
-    """Return the Server table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Server)).all()
+def table_server(
+    columns: options.server_columns = None, db: Session = Depends(get_db)
+) -> List[Dict]:
+    """Return the Server table with optional column selection."""
+    if not columns:
+        return [row.model_dump() for row in db.exec(select(Server)).all()]
+
+    col_attrs = [getattr(Server, col) for col in columns]
+    rows = db.exec(select(*col_attrs)).all()
+
+    if len(columns) == 1:
+        return [{columns[0]: val} for val in rows]
+
+    keys = [str(col) for col in columns]
+    return [dict(zip(keys, row)) for row in rows]
 
 
 @router.get("/server_prices")

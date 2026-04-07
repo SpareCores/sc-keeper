@@ -1,6 +1,7 @@
 from datetime import timedelta
 from json import JSONDecodeError
 from json import loads as json_loads
+from typing import List
 
 from cachier import cachier
 from fastapi import HTTPException
@@ -57,6 +58,10 @@ def get_server_pks(vendor: str, server: str, db: Session) -> ServerPKs:
         ).one()
     except NoResultFound as e:
         raise HTTPException(status_code=404, detail="Server not found") from e
+
+
+def get_server_columns() -> List[str]:
+    return Server.get_columns().get("all", [])
 
 
 def vendor_region_filter(vendor_regions, model):
