@@ -60,10 +60,6 @@ def get_server_pks(vendor: str, server: str, db: Session) -> ServerPKs:
         raise HTTPException(status_code=404, detail="Server not found") from e
 
 
-def get_server_columns() -> List[str]:
-    return Server.get_columns().get("all", [])
-
-
 def vendor_region_filter(vendor_regions, model):
     """Return an OR-filter matching any (vendor_id, region_id) pair in vendor_regions."""
     return or_(
