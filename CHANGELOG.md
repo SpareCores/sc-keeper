@@ -1,3 +1,9 @@
+## April 2026
+
+New feature(s):
+
+- Add new `/table/server/select` endpoint to allow selecting specific Server `columns` in the response.
+
 ## March 2026
 
 New feature(s):
@@ -12,7 +18,6 @@ New feature(s):
 - Added `network_speed_min`, `cpu_speed_min`, `cpu_l1d_cache_min`, `cpu_l1d_cache_total_min`, `cpu_l1i_cache_min`,
   `cpu_l1i_cache_total_min`, `cpu_l2_cache_min`, `cpu_l2_cache_total_min`, `cpu_l3_cache_min`, and
   `cpu_l3_cache_total_min` filters for the `/servers` with predefined ranges for filtering.
-- Add new `/table/server/select` endpoint to allow selecting specific Server `columns` in the response.
 
 Performance improvements:
 
