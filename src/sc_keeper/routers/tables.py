@@ -63,10 +63,16 @@ def table_zone(db: Session = Depends(get_db)) -> List[Zone]:
 
 
 @router.get("/server")
-def table_server(
+def table_server(db: Session = Depends(get_db)) -> List[Server]:
+    """Return the Server table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Server)).all()
+
+
+@router.get("/server/select")
+def table_server_select(
     columns: options.server_columns = None, db: Session = Depends(get_db)
 ) -> List[Dict]:
-    """Return the Server table with optional column selection."""
+    """Return the Server table with column selection."""
     if not columns:
         return [row.model_dump() for row in db.exec(select(Server)).all()]
 
