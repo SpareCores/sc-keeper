@@ -1,7 +1,6 @@
 from datetime import timedelta
 from json import JSONDecodeError
 from json import loads as json_loads
-from typing import List
 
 from cachier import cachier
 from fastapi import HTTPException
