@@ -30,6 +30,7 @@ from .references import (
     NetworkSpeedSnapPoints,
     OrderDir,
     Regions,
+    ServerColumns,
     VendorRegions,
     Vendors,
 )
@@ -630,3 +631,12 @@ def server_args_tuple(
 
 
 server_args = Annotated[tuple[str, str], Depends(server_args_tuple)]
+
+server_columns = Annotated[
+    Optional[List[ServerColumns]],
+    Query(
+        title="Server columns",
+        description="Selected server columns.",
+        json_schema_extra={"enum": [e.value for e in ServerColumns]},
+    ),
+]

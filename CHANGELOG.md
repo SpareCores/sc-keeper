@@ -1,3 +1,9 @@
+## April 2026
+
+New feature(s):
+
+- Add new `/table/server/select` endpoint to allow selecting specific Server `columns` in the response.
+
 ## March 2026
 
 New feature(s):
