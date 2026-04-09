@@ -693,10 +693,6 @@ def search_servers(
                     raise HTTPException(
                         status_code=400, detail="Unknown order_by field."
                     )
-                if len(order_obj) > 1:
-                    raise HTTPException(
-                        status_code=400, detail="Ambiguous order_by field."
-                    )
                 order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
