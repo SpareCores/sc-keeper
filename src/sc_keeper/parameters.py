@@ -400,6 +400,38 @@ storage_type = Annotated[
     ),
 ]
 
+extra_storage_size = Annotated[
+    Optional[float],
+    Query(
+        title="Extra Storage Size",
+        description=(
+            "Amount of external (block/network) storage in GBs to add to the price calculation. "
+            "The cheapest matching StoragePrice per region is used; its monthly cost is added to "
+            "the min_price fields. Does not filter servers by their built-in instance storage."
+        ),
+        json_schema_extra={
+            "category_id": FilterCategories.STORAGE,
+            "step": 1,
+            "unit": "GB",
+        },
+    ),
+]
+
+extra_storage_type = Annotated[
+    Optional[List[StorageType]],
+    Query(
+        title="Extra Storage Type",
+        description=(
+            "Storage type filter (e.g. hdd, ssd, network) for the extra_storage_size price lookup. "
+            "When omitted, the cheapest product of any type is used."
+        ),
+        json_schema_extra={
+            "category_id": FilterCategories.STORAGE,
+            "enum": [e.value for e in StorageType],
+        },
+    ),
+]
+
 direction = Annotated[
     Optional[List[TrafficDirection]],
     Query(
