@@ -428,8 +428,14 @@ def search_servers(
         )
 
     live_price_query = gen_live_price_query(countries, regions, vendor_regions)
-    traffic_query = gen_traffic_price_query(countries, vendor_regions) if monthly_traffic else None
-    storage_query = gen_storage_price_query(extra_storage_size, extra_storage_type) if extra_storage_size else None
+    traffic_query = (
+        gen_traffic_price_query(countries, vendor_regions) if monthly_traffic else None
+    )
+    storage_query = (
+        gen_storage_price_query(extra_storage_size, extra_storage_type)
+        if extra_storage_size
+        else None
+    )
 
     if live_price_query is None:
         best_price_ref = ServerExtra.min_price
