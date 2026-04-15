@@ -401,7 +401,7 @@ storage_type = Annotated[
 ]
 
 extra_storage_size = Annotated[
-    Optional[float],
+    Optional[int],
     Query(
         title="Extra Storage Size",
         description=(

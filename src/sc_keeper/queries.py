@@ -1,6 +1,16 @@
 from typing import Optional
 
-from sc_crawler.tables import Allocation, BenchmarkScore, Region, ServerPrice, Status
+from sc_crawler.tables import (
+    Allocation,
+    BenchmarkScore,
+    Region,
+    ServerPrice,
+    Status,
+    Storage,
+    StoragePrice,
+    TrafficDirection,
+    TrafficPrice,
+)
 from sqlalchemy import Subquery
 from sqlmodel import String, case, func, select
 
@@ -102,3 +112,82 @@ def gen_benchmark_query(
         query = query.where(BenchmarkScore.config.cast(String) == benchmark_config)
     query = query.group_by(BenchmarkScore.server_id, BenchmarkScore.vendor_id)
     return query.subquery()
+
+
+def gen_traffic_price_query(
+    countries: Optional[countries] = None,
+    vendor_regions: Optional[vendor_regions] = None,
+) -> Optional[Subquery]:
+    """Generate a subquery for the cheapest outbound traffic unit price per (vendor_id, region_id) in USD.
+
+    Returns columns: vendor_id, region_id, min_traffic_price (per GB in USD).
+    """
+    query = (
+        select(
+            TrafficPrice.vendor_id,
+            TrafficPrice.region_id,
+            func.round(func.min(TrafficPrice.price * Currency.rate), 4).label(
+                "min_traffic_price"
+            ),
+        )
+        .where(TrafficPrice.status == Status.ACTIVE)
+        .where(TrafficPrice.direction == TrafficDirection.OUT)
+        .join(
+            Currency,
+            (TrafficPrice.currency == Currency.base) & (Currency.quote == "USD"),
+        )
+    )
+    if countries:
+        query = query.join(
+            Region,
+            (TrafficPrice.vendor_id == Region.vendor_id)
+            & (TrafficPrice.region_id == Region.region_id),
+        )
+        query = query.where(Region.country_id.in_(countries))
+    if vendor_regions:
+        query = query.where(vendor_region_filter(vendor_regions, TrafficPrice))
+    return query.group_by(TrafficPrice.vendor_id, TrafficPrice.region_id).subquery()
+
+
+def gen_storage_price_query(
+    extra_storage_size: int,
+    extra_storage_type: list | None = None,
+    countries: Optional[countries] = None,
+    vendor_regions: Optional[vendor_regions] = None,
+) -> Optional[Subquery]:
+    """Generate a subquery for the cheapest storage unit price per (vendor_id, region_id) in USD.
+
+    Filters StoragePrice by Storage.min_size/max_size matching the requested size,
+    and optionally by storage type.
+
+    Returns columns: vendor_id, region_id, min_storage_price (per GB/month in USD).
+    """
+    query = (
+        select(
+            StoragePrice.vendor_id,
+            StoragePrice.region_id,
+            func.round(func.min(StoragePrice.price * Currency.rate), 4).label(
+                "min_storage_price"
+            ),
+        )
+        .join(StoragePrice.storage)
+        .where(StoragePrice.status == Status.ACTIVE)
+        .where(Storage.min_size <= extra_storage_size)
+        .where(Storage.max_size >= extra_storage_size)
+        .join(
+            Currency,
+            (StoragePrice.currency == Currency.base) & (Currency.quote == "USD"),
+        )
+    )
+    if extra_storage_type:
+        query = query.where(Storage.storage_type.in_(extra_storage_type))
+    if countries:
+        query = query.join(
+            Region,
+            (StoragePrice.vendor_id == Region.vendor_id)
+            & (StoragePrice.region_id == Region.region_id),
+        )
+        query = query.where(Region.country_id.in_(countries))
+    if vendor_regions:
+        query = query.where(vendor_region_filter(vendor_regions, StoragePrice))
+    return query.group_by(StoragePrice.vendor_id, StoragePrice.region_id).subquery()
