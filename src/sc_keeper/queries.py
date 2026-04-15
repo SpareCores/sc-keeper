@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 from sc_crawler.tables import (
     Allocation,
@@ -8,6 +8,7 @@ from sc_crawler.tables import (
     Status,
     Storage,
     StoragePrice,
+    StorageType,
     TrafficDirection,
     TrafficPrice,
 )
@@ -93,7 +94,7 @@ def gen_live_price_query(
 
 def gen_benchmark_query(
     benchmark_id: str, benchmark_config: Optional[str] = None
-) -> Optional[Subquery]:
+) -> Subquery:
     """Generate a subquery for the filtered view of max benchmark scores of servers.
 
     Use this subquery when you need to custom benchmark scores e.g. for ordering instead of the global ServerExtra.score.
@@ -117,7 +118,7 @@ def gen_benchmark_query(
 def gen_traffic_price_query(
     countries: Optional[countries] = None,
     vendor_regions: Optional[vendor_regions] = None,
-) -> Optional[Subquery]:
+) -> Subquery:
     """Generate a subquery for the cheapest outbound traffic unit price per (vendor_id, region_id) in USD.
 
     Returns columns: vendor_id, region_id, min_traffic_price (per GB in USD).
@@ -151,7 +152,7 @@ def gen_traffic_price_query(
 
 def gen_storage_price_query(
     extra_storage_size: int,
-    extra_storage_type: list | None = None,
+    extra_storage_type: Optional[List[StorageType]] = None,
     countries: Optional[countries] = None,
     vendor_regions: Optional[vendor_regions] = None,
 ) -> Optional[Subquery]:
