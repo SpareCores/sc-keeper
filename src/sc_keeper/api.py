@@ -631,29 +631,35 @@ def search_servers(
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     # actual query
-    if benchmark_id and live_price_query is not None:
-        query = select(
-            Server,
-            ServerExtra,
-            benchmark_query.c.benchmark_score,
-            live_price_query.c.min_price,
-            live_price_query.c.min_price_spot,
-            live_price_query.c.min_price_ondemand,
-            live_price_query.c.min_price_ondemand_monthly,
+    select_cols = [Server, ServerExtra]
+    if benchmark_id:
+        select_cols.append(benchmark_query.c.benchmark_score)
+    if live_price_query is not None:
+        select_cols.extend(
+            [
+                live_price_query.c.min_price,
+                live_price_query.c.min_price_spot,
+                live_price_query.c.min_price_ondemand,
+                live_price_query.c.min_price_ondemand_monthly,
+            ]
         )
-    elif benchmark_id:
-        query = select(Server, ServerExtra, benchmark_query.c.benchmark_score)
-    elif live_price_query is not None:
-        query = select(
-            Server,
-            ServerExtra,
-            live_price_query.c.min_price,
-            live_price_query.c.min_price_spot,
-            live_price_query.c.min_price_ondemand,
-            live_price_query.c.min_price_ondemand_monthly,
+    if traffic_query is not None:
+        select_cols.extend(
+            [
+                traffic_query.c.min_traffic_price,
+                traffic_query.c.price_upfront,
+                traffic_query.c.price_tiered,
+            ]
         )
-    else:
-        query = select(Server, ServerExtra)
+    if storage_query is not None:
+        select_cols.extend(
+            [
+                storage_query.c.min_storage_price,
+                storage_query.c.price_upfront,
+                storage_query.c.price_tiered,
+            ]
+        )
+    query = select(*select_cols)
     query = query.join(Server.vendor)
     query = query.join(
         ServerExtra,
@@ -673,6 +679,21 @@ def search_servers(
             live_price_query,
             (Server.vendor_id == live_price_query.c.vendor_id)
             & (Server.server_id == live_price_query.c.server_id),
+            isouter=True,
+        )
+    if traffic_query is not None:
+        query = query.join(
+            traffic_query,
+            (Server.vendor_id == traffic_query.c.vendor_id)
+            & (Server.region_id == traffic_query.c.region_id),
+            isouter=True,
+        )
+    if storage_query is not None:
+        query = query.join(
+            storage_query,
+            (Server.vendor_id == storage_query.c.vendor_id)
+            & (Server.region_id == storage_query.c.region_id)
+            & (Server.storage_size < extra_storage_size),
             isouter=True,
         )
     query = query.options(contains_eager(Server.vendor))
@@ -727,33 +748,35 @@ def search_servers(
     # unpack score
     serverlist = []
     for server_items in servers:
-        if benchmark_id and live_price_query is not None:
-            (
-                server_data,
-                server_extra,
-                benchmark_score,
-                lp_min,
-                lp_spot,
-                lp_ondemand,
-                lp_monthly,
-            ) = server_items
-        elif benchmark_id:
-            server_data, server_extra, benchmark_score = server_items
-            lp_min = lp_spot = lp_ondemand = lp_monthly = None
-        elif live_price_query is not None:
-            (
-                server_data,
-                server_extra,
-                lp_min,
-                lp_spot,
-                lp_ondemand,
-                lp_monthly,
-            ) = server_items
-            benchmark_score = None
+        items = iter(server_items)
+        server_data = next(items)
+        server_extra = next(items)
+        benchmark_score = next(items) if benchmark_id else None
+        if live_price_query is not None:
+            lp_min, lp_spot, lp_ondemand, lp_monthly = (
+                next(items),
+                next(items),
+                next(items),
+                next(items),
+            )
         else:
-            server_data, server_extra = server_items
-            benchmark_score = None
             lp_min = lp_spot = lp_ondemand = lp_monthly = None
+        if traffic_query is not None:
+            traffic_min_price, traffic_price_upfront, traffic_price_tiered = (
+                next(items),
+                next(items),
+                next(items),
+            )
+        else:
+            traffic_min_price = traffic_price_upfront = traffic_price_tiered = None
+        if storage_query is not None:
+            storage_min_price, storage_price_upfront, storage_price_tiered = (
+                next(items),
+                next(items),
+                next(items),
+            )
+        else:
+            storage_min_price = storage_price_upfront = storage_price_tiered = None
         server = ServerPKs.model_validate(server_data)
         with suppress(Exception):
             server.score = server_extra.score

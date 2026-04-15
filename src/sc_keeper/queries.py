@@ -130,6 +130,8 @@ def gen_traffic_price_query(
             func.round(func.min(TrafficPrice.price * Currency.rate), 4).label(
                 "min_traffic_price"
             ),
+            TrafficPrice.price_upfront,
+            TrafficPrice.price_tiered,
         )
         .where(TrafficPrice.status == Status.ACTIVE)
         .where(TrafficPrice.direction == TrafficDirection.OUT)
@@ -170,6 +172,8 @@ def gen_storage_price_query(
             func.round(func.min(StoragePrice.price * Currency.rate), 4).label(
                 "min_storage_price"
             ),
+            StoragePrice.price_upfront,
+            StoragePrice.price_tiered,
         )
         .join(StoragePrice.storage)
         .where(StoragePrice.status == Status.ACTIVE)
