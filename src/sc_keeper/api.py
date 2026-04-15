@@ -777,8 +777,40 @@ def search_servers(
             )
         else:
             storage_min_price = storage_price_upfront = storage_price_tiered = None
-        server = ServerPKs.model_validate(server_data)
+        if traffic_query or storage_query:
+            server = ServerWithPriceBreakdown.model_validate(server_data)
+        else:
+            server = ServerPKs.model_validate(server_data)
         with suppress(Exception):
+            if traffic_query or storage_query:
+                server.price_breakdown.traffic_monthly = (
+                    (
+                        calculate_tiered_price(
+                            traffic_price_tiered, monthly_traffic, traffic_min_price
+                        )
+                        + traffic_price_upfront
+                    )
+                    if traffic_min_price
+                    else 0
+                )
+                server.price_breakdown.storage_monthly = (
+                    calculate_tiered_price(
+                        storage_price_tiered,
+                        extra_storage_size - server.storage_size,
+                        storage_min_price,
+                    )
+                    + storage_price_upfront
+                    if storage_min_price
+                    else 0
+                )
+                server.price_breakdown.compute_monthly = (
+                    server.min_price_ondemand_monthly
+                )
+                server.price_breakdown.total_monthly = (
+                    server.price_breakdown.compute_monthly
+                    + server.price_breakdown.storage_monthly
+                    + server.price_breakdown.traffic_monthly
+                )
             server.score = server_extra.score
             server.min_price_spot = (
                 lp_spot if lp_spot is not None else server_extra.min_price_spot

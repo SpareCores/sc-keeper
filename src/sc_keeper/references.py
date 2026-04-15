@@ -196,26 +196,10 @@ class ServerWithScore(ServerBase):
 
 
 class PriceBreakdown(BaseModel):
-    """Breakdown of the total price into compute, traffic, and storage components."""
-
-    compute_hourly: Optional[float] = Field(
-        None, description="Hourly compute cost (USD/hr)"
-    )
-    compute_monthly: Optional[float] = Field(
-        None, description="Monthly compute cost (USD/mo)"
-    )
-    traffic_monthly: Optional[float] = Field(
-        None, description="Monthly outbound traffic cost (USD/mo)"
-    )
-    storage_monthly: Optional[float] = Field(
-        None, description="Monthly external storage cost (USD/mo)"
-    )
-    total_hourly: Optional[float] = Field(
-        None, description="Total hourly cost including all components (USD/hr)"
-    )
-    total_monthly: Optional[float] = Field(
-        None, description="Total monthly cost including all components (USD/mo)"
-    )
+    compute_monthly: Optional[float] = None
+    traffic_monthly: Optional[float] = None
+    storage_monthly: Optional[float] = None
+    total_monthly: Optional[float] = None
 
 
 class ServerPKs(ServerWithScore):
