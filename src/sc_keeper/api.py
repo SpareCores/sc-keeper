@@ -4,7 +4,7 @@ from json import loads as json_loads
 from logging import getLogger
 from os import environ
 from textwrap import dedent
-from typing import List
+from typing import List, Union
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -67,6 +67,7 @@ from .references import (
     RegionPKs,
     ServerPKs,
     ServerPriceWithPKs,
+    ServerWithPriceBreakdown,
     StoragePriceWithPKs,
     TrafficPriceWithPKsWithMonthlyTraffic,
 )
@@ -370,6 +371,9 @@ def search_servers(
     countries: options.countries = None,
     storage_size: options.storage_size = None,
     storage_type: options.storage_type = None,
+    extra_storage_size: options.extra_storage_size = None,
+    extra_storage_type: options.extra_storage_type = None,
+    monthly_traffic: options.monthly_traffic = None,
     gpu_min: options.gpu_min = None,
     gpu_memory_min: options.gpu_memory_min = None,
     gpu_memory_total: options.gpu_memory_total = None,
@@ -384,7 +388,7 @@ def search_servers(
     order_dir: options.order_dir = OrderDir.ASC,
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
-) -> List[ServerPKs]:
+) -> Union[List[ServerPKs], List[ServerWithPriceBreakdown]]:
     check_filter_limits(request, countries, regions, vendor_regions)
 
     check_currency(currency)
