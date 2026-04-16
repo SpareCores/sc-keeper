@@ -126,7 +126,6 @@ def gen_traffic_price_query(
     query = (
         select(
             TrafficPrice.vendor_id,
-            TrafficPrice.region_id,
             func.round(func.min(TrafficPrice.price * Currency.rate), 4).label(
                 "min_traffic_price"
             ),
@@ -168,7 +167,6 @@ def gen_storage_price_query(
     query = (
         select(
             StoragePrice.vendor_id,
-            StoragePrice.region_id,
             func.round(func.min(StoragePrice.price * Currency.rate), 4).label(
                 "min_storage_price"
             ),
