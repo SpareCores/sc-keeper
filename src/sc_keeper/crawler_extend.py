@@ -34,6 +34,9 @@ def calculate_tiered_price(
     Returns:
         Calculated total price or None if no pricing is available
     """
+    if usage < 0:
+        return 0.0
+
     if not price_tiers:
         if fallback_unit_price is not None:
             return round(fallback_unit_price * usage, round_digits)

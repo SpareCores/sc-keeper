@@ -104,6 +104,25 @@ def update_server_price_currency(
                         ndigits,
                     ),
                 )
+        if hasattr(server_obj, "price_breakdown"):
+            for attr, ndigits in [
+                ("compute_monthly", monthly_price_ndigits),
+                ("traffic_monthly", monthly_price_ndigits),
+                ("extra_storage_monthly", monthly_price_ndigits),
+                ("total_monthly", monthly_price_ndigits),
+            ]:
+                value = getattr(server_obj.price_breakdown, attr, None)
+                if value:
+                    setattr(
+                        server_obj.price_breakdown,
+                        attr,
+                        round(
+                            currency_converter.convert(
+                                value, from_currency, to_currency
+                            ),
+                            ndigits,
+                        ),
+                    )
         if hasattr(server_obj, "price_tiered") and server_obj.price_tiered:
             for tier in server_obj.price_tiered:
                 tier.price = round(

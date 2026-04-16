@@ -198,7 +198,7 @@ class ServerWithScore(ServerBase):
 class PriceBreakdown(BaseModel):
     compute_monthly: Optional[float] = None
     traffic_monthly: Optional[float] = None
-    storage_monthly: Optional[float] = None
+    extra_storage_monthly: Optional[float] = None
     total_monthly: Optional[float] = None
 
 

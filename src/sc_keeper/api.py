@@ -762,70 +762,61 @@ def search_servers(
         else:
             lp_min = lp_spot = lp_ondemand = lp_monthly = None
         if traffic_query is not None:
-            traffic_min_price, traffic_price_upfront, traffic_price_tiered = (
-                next(items),
-                next(items),
-                next(items),
-            )
+            traffic_min_price = next(items) or 0
+            traffic_price_upfront = next(items) or 0
+            traffic_price_tiered = next(items) or []
         else:
-            traffic_min_price = traffic_price_upfront = traffic_price_tiered = None
+            traffic_min_price = traffic_price_upfront = 0
+            traffic_price_tiered = []
         if storage_query is not None:
-            storage_min_price, storage_price_upfront, storage_price_tiered = (
-                next(items),
-                next(items),
-                next(items),
-            )
+            storage_min_price = next(items) or 0
+            storage_price_upfront = next(items) or 0
+            storage_price_tiered = next(items) or []
         else:
-            storage_min_price = storage_price_upfront = storage_price_tiered = None
-        if traffic_query or storage_query:
+            storage_min_price = storage_price_upfront = 0
+            storage_price_tiered = []
+        if extra_storage_size or monthly_traffic:
             server = ServerWithPriceBreakdown.model_validate(server_data)
         else:
             server = ServerPKs.model_validate(server_data)
         with suppress(Exception):
-            if traffic_query or storage_query:
-                server.price_breakdown.traffic_monthly = (
-                    (
-                        calculate_tiered_price(
-                            traffic_price_tiered, monthly_traffic, traffic_min_price
-                        )
-                        + traffic_price_upfront
-                    )
-                    if traffic_min_price
-                    else 0
+            traffic_monthly_price = (
+                calculate_tiered_price(
+                    traffic_price_tiered, monthly_traffic, traffic_min_price
                 )
-                server.price_breakdown.storage_monthly = (
-                    calculate_tiered_price(
-                        storage_price_tiered,
-                        extra_storage_size - server.storage_size,
-                        storage_min_price,
-                    )
-                    + storage_price_upfront
-                    if storage_min_price
-                    else 0
+                + traffic_price_upfront
+            )
+            extra_storage_monthly_price = (
+                calculate_tiered_price(
+                    storage_price_tiered,
+                    extra_storage_size - server.storage_size,
+                    storage_min_price,
                 )
-                server.price_breakdown.compute_monthly = (
-                    server.min_price_ondemand_monthly
-                )
-                server.price_breakdown.total_monthly = (
-                    server.price_breakdown.compute_monthly
-                    + server.price_breakdown.storage_monthly
-                    + server.price_breakdown.traffic_monthly
-                )
+                + storage_price_upfront
+            )
+            extra_monthly_price = traffic_monthly_price + extra_storage_monthly_price
+            extra_hourly_price = round(extra_monthly_price / 730, 4)
             server.score = server_extra.score
             server.min_price_spot = (
-                lp_spot if lp_spot is not None else server_extra.min_price_spot
+                lp_spot + extra_hourly_price
+                if lp_spot is not None
+                else server_extra.min_price_spot + extra_hourly_price
             )
             server.min_price_ondemand = (
-                lp_ondemand
+                lp_ondemand + extra_hourly_price
                 if lp_ondemand is not None
-                else server_extra.min_price_ondemand
+                else server_extra.min_price_ondemand + extra_hourly_price
             )
             server.min_price_ondemand_monthly = (
-                lp_monthly
+                lp_monthly + extra_monthly_price
                 if lp_monthly is not None
-                else server_extra.min_price_ondemand_monthly
+                else server_extra.min_price_ondemand_monthly + extra_monthly_price
             )
-            server.min_price = lp_min if lp_min is not None else server_extra.min_price
+            server.min_price = (
+                lp_min + extra_hourly_price
+                if lp_min is not None
+                else server_extra.min_price + extra_hourly_price
+            )
             if best_price_allocation == BestPriceAllocation.SPOT_ONLY:
                 server.min_price = server.min_price_spot
             if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
@@ -838,6 +829,24 @@ def search_servers(
             if benchmark_score and server.min_price:
                 server.selected_benchmark_score_per_price = (
                     benchmark_score / server.min_price
+                )
+            if extra_storage_size or monthly_traffic:
+                server.price_breakdown.compute_monthly = (
+                    server.min_price
+                    if best_price_allocation == BestPriceAllocation.MONTHLY
+                    else server.min_price * 730
+                )
+                server.price_breakdown.traffic_monthly = traffic_monthly_price
+                server.price_breakdown.extra_storage_monthly = (
+                    extra_storage_monthly_price
+                )
+                server.price_breakdown.total_monthly = round(
+                    sum(
+                        server.price_breakdown.compute_monthly,
+                        server.price_breakdown.traffic_monthly,
+                        server.price_breakdown.extra_storage_monthly,
+                    ),
+                    4,
                 )
         # don't convert before "per_price" calculations as those as standardized in USD
         server = update_server_price_currency(server, currency)
