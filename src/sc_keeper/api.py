@@ -801,8 +801,17 @@ def search_servers(
         extra_storage_hourly_price = extra_storage_monthly_price / 730
         extra_monthly_price = traffic_monthly_price + extra_storage_monthly_price
         extra_hourly_price = extra_monthly_price / 730
+
         PRICE_NDIGITS = 4
         MONTHLY_PRICE_NDIGITS = 2
+
+        def add_extra(base_price, extra_price, ndigits):
+            return (
+                round(base_price + extra_price, ndigits)
+                if base_price is not None
+                else None
+            )
+
         with suppress(Exception):
             server.score = server_extra.score
             compute_min_price = lp_min if lp_min is not None else server_extra.min_price
@@ -819,19 +828,22 @@ def search_servers(
                 if lp_monthly is not None
                 else server_extra.min_price_ondemand_monthly
             )
-            server.min_price_spot = round(
-                compute_min_price_spot + extra_hourly_price, PRICE_NDIGITS
+
+            server.min_price_spot = add_extra(
+                compute_min_price_spot, extra_hourly_price, PRICE_NDIGITS
             )
-            server.min_price_ondemand = round(
-                compute_min_price_ondemand + extra_hourly_price, PRICE_NDIGITS
+            server.min_price_ondemand = add_extra(
+                compute_min_price_ondemand, extra_hourly_price, PRICE_NDIGITS
             )
-            server.min_price_ondemand_monthly = round(
-                compute_min_price_ondemand_monthly + extra_monthly_price,
+            server.min_price_ondemand_monthly = add_extra(
+                compute_min_price_ondemand_monthly,
+                extra_monthly_price,
                 MONTHLY_PRICE_NDIGITS,
             )
-            server.min_price = round(
-                compute_min_price + extra_hourly_price, PRICE_NDIGITS
+            server.min_price = add_extra(
+                compute_min_price, extra_hourly_price, PRICE_NDIGITS
             )
+
             if best_price_allocation == BestPriceAllocation.SPOT_ONLY:
                 server.min_price = server.min_price_spot
             if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
