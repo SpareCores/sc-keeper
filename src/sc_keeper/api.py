@@ -758,6 +758,14 @@ def search_servers(
         query = query.offset((page - 1) * limit)
     servers = db.exec(query).all()
 
+    PRICE_NDIGITS = 4
+    MONTHLY_PRICE_NDIGITS = 2
+
+    def add_extra(base_price, extra_price, ndigits):
+        return (
+            round(base_price + extra_price, ndigits) if base_price is not None else None
+        )
+
     # unpack score
     serverlist = []
     for server_items in servers:
@@ -814,16 +822,6 @@ def search_servers(
         extra_storage_hourly_price = extra_storage_monthly_price / 730
         extra_monthly_price = traffic_monthly_price + extra_storage_monthly_price
         extra_hourly_price = extra_monthly_price / 730
-
-        PRICE_NDIGITS = 4
-        MONTHLY_PRICE_NDIGITS = 2
-
-        def add_extra(base_price, extra_price, ndigits):
-            return (
-                round(base_price + extra_price, ndigits)
-                if base_price is not None
-                else None
-            )
 
         with suppress(Exception):
             server.score = server_extra.score
