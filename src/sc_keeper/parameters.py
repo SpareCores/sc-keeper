@@ -411,6 +411,7 @@ extra_storage_size = Annotated[
             "already meets or exceeds this value incur no extra storage cost. Does not filter "
             "servers by their built-in instance storage."
         ),
+        ge=1,
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
             "step": 1,
