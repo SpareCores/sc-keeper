@@ -1,5 +1,5 @@
 import logging
-from typing import Any, List
+from typing import Any, List, Union
 
 from sc_crawler.table_bases import ScModel
 from sc_crawler.table_fields import Allocation, PriceTier, Status
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def calculate_tiered_price(
-    price_tiers: list[PriceTier],
+    price_tiers: Union[List[PriceTier], List[dict]],
     usage: float,
     fallback_unit_price: float | None = None,
     round_digits: int = 4,
@@ -25,7 +25,8 @@ def calculate_tiered_price(
 
     Args:
         price_tiers: List of [PriceTier][sc_crawler.table_fields.PriceTier]
-            objects with lower/upper bounds and unit prices. Can be empty list if no tiers are available.
+            objects or dicts with `lower`, `upper`, and `price` keys.
+            Can be empty list if no tiers are available.
         usage: Amount of usage (e.g., 730 hours/month, 1000 GB traffic).
         fallback_unit_price: Unit price to use if tiered pricing is empty or None.
             Will be multiplied by usage to get total price.
@@ -40,15 +41,20 @@ def calculate_tiered_price(
         else:
             return None
 
+    def _get(tier, key):
+        return tier[key] if isinstance(tier, dict) else getattr(tier, key)
+
     total_cost = 0.0
     usage_remaining = usage
 
-    sorted_tiers = sorted(price_tiers, key=lambda x: float(x.lower))
+    sorted_tiers = sorted(price_tiers, key=lambda x: float(_get(x, "lower")))
     for tier in sorted_tiers:
         if usage_remaining <= 0:
             break
-        tier_usage = min(usage_remaining, float(tier.upper) - float(tier.lower))
-        total_cost += tier_usage * float(tier.price)
+        tier_usage = min(
+            usage_remaining, float(_get(tier, "upper")) - float(_get(tier, "lower"))
+        )
+        total_cost += tier_usage * float(_get(tier, "price"))
         usage_remaining -= tier_usage
 
     return round(total_cost, round_digits)
