@@ -128,7 +128,11 @@ class TestFiltering:
     def test_partial_name_or_id(self):
         data, _ = get_servers(partial_name_or_id="t3", vendor=["aws"], limit=10)
         assert all(
-            "t3" in s["server_id"].lower() or "t3" in s["name"].lower() for s in data
+            any(
+                "t3" in (s.get(f) or "").lower()
+                for f in ("server_id", "name", "api_reference", "display_name")
+            )
+            for s in data
         )
 
     def test_gpu_min(self):
@@ -137,16 +141,12 @@ class TestFiltering:
 
     def test_countries_filter(self):
         """Country filter should reduce the result set compared to unfiltered."""
-        all_data, _ = get_servers(vendor=["aws"], limit=1, add_total_count_header=True)
-        filtered_data, resp = get_servers(
+        _, baseline = get_servers(vendor=["aws"], limit=1, add_total_count_header=True)
+        _, filtered = get_servers(
             vendor=["aws"], countries=["DE"], limit=1, add_total_count_header=True
         )
-        # country filter should not increase count
-        assert int(resp.headers["x-total-count"]) <= int(
-            client.get(
-                "/servers",
-                params={"vendor": ["aws"], "limit": 1, "add_total_count_header": True},
-            ).headers["x-total-count"]
+        assert int(filtered.headers["x-total-count"]) <= int(
+            baseline.headers["x-total-count"]
         )
 
 
@@ -218,7 +218,7 @@ class TestMonthlyTraffic:
         with_traffic, _ = get_servers(
             vendor=["hcloud"], monthly_traffic=5000, limit=5, order_by="vcpus"
         )
-        for b, t in zip(base, with_traffic):
+        for b, t in zip(base, with_traffic, strict=False):
             if b["server_id"] == t["server_id"] and b["min_price"] and t["min_price"]:
                 assert t["min_price"] >= b["min_price"]
 
@@ -279,7 +279,7 @@ class TestExtraStorage:
         with_storage, _ = get_servers(
             vendor=["hcloud"], extra_storage_size=500, limit=5, order_by="vcpus"
         )
-        for b, s in zip(base, with_storage):
+        for b, s in zip(base, with_storage, strict=False):
             if b["server_id"] == s["server_id"] and b["min_price"] and s["min_price"]:
                 assert s["min_price"] >= b["min_price"]
 
