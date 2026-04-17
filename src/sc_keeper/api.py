@@ -621,6 +621,19 @@ def search_servers(
                 & (Server.server_id == live_price_query.c.server_id),
                 isouter=True,
             )
+        if traffic_query is not None:
+            query = query.join(
+                traffic_query,
+                Server.vendor_id == traffic_query.c.vendor_id,
+                isouter=True,
+            )
+        if storage_query is not None:
+            query = query.join(
+                storage_query,
+                (Server.vendor_id == storage_query.c.vendor_id)
+                & (Server.storage_size < extra_storage_size),
+                isouter=True,
+            )
         for condition in conditions:
             query = query.where(condition)
         if live_price_query is not None:
