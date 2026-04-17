@@ -405,9 +405,11 @@ extra_storage_size = Annotated[
     Query(
         title="Extra Storage Size",
         description=(
-            "Amount of external (block/network) storage in GBs to add to the price calculation. "
-            "The cheapest matching StoragePrice per region is used; its monthly cost is added to "
-            "the min_price fields. Does not filter servers by their built-in instance storage."
+            "Amount of external (block/network) storage in GBs needed on top of the server's "
+            "built-in storage. The server's included storage is subtracted from this value to "
+            "determine how much external storage to price, servers whose built-in storage "
+            "already meets or exceeds this value incur no extra storage cost. Does not filter "
+            "servers by their built-in instance storage."
         ),
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
