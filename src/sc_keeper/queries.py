@@ -148,7 +148,7 @@ def gen_traffic_price_query(
         query = query.where(Region.country_id.in_(countries))
     if vendor_regions:
         query = query.where(vendor_region_filter(vendor_regions, TrafficPrice))
-    return query.group_by(TrafficPrice.vendor_id, TrafficPrice.region_id).subquery()
+    return query.group_by(TrafficPrice.vendor_id).subquery()
 
 
 def gen_storage_price_query(
@@ -193,4 +193,4 @@ def gen_storage_price_query(
         query = query.where(Region.country_id.in_(countries))
     if vendor_regions:
         query = query.where(vendor_region_filter(vendor_regions, StoragePrice))
-    return query.group_by(StoragePrice.vendor_id, StoragePrice.region_id).subquery()
+    return query.group_by(StoragePrice.vendor_id).subquery()
