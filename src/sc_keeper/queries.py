@@ -119,18 +119,25 @@ def gen_traffic_price_query(
     countries: Optional[countries] = None,
     vendor_regions: Optional[vendor_regions] = None,
 ) -> Subquery:
-    """Generate a subquery for the cheapest outbound traffic unit price per (vendor_id, region_id) in USD.
+    """Generate a subquery for the cheapest outbound traffic unit price per vendor_id in USD.
 
-    Returns columns: vendor_id, region_id, min_traffic_price (per GB in USD).
+    Returns columns: vendor_id, min_traffic_price (per GB in USD), price_upfront, price_tiered.
+    All three price columns come from the same cheapest row.
     """
-    query = (
+    inner = (
         select(
             TrafficPrice.vendor_id,
-            func.round(func.min(TrafficPrice.price * Currency.rate), 4).label(
+            func.round(TrafficPrice.price * Currency.rate, 4).label(
                 "min_traffic_price"
             ),
             TrafficPrice.price_upfront,
             TrafficPrice.price_tiered,
+            func.row_number()
+            .over(
+                partition_by=TrafficPrice.vendor_id,
+                order_by=TrafficPrice.price * Currency.rate,
+            )
+            .label("rn"),
         )
         .where(TrafficPrice.status == Status.ACTIVE)
         .where(TrafficPrice.direction == TrafficDirection.OUT)
@@ -140,15 +147,25 @@ def gen_traffic_price_query(
         )
     )
     if countries:
-        query = query.join(
+        inner = inner.join(
             Region,
             (TrafficPrice.vendor_id == Region.vendor_id)
             & (TrafficPrice.region_id == Region.region_id),
         )
-        query = query.where(Region.country_id.in_(countries))
+        inner = inner.where(Region.country_id.in_(countries))
     if vendor_regions:
-        query = query.where(vendor_region_filter(vendor_regions, TrafficPrice))
-    return query.group_by(TrafficPrice.vendor_id).subquery()
+        inner = inner.where(vendor_region_filter(vendor_regions, TrafficPrice))
+    inner = inner.subquery()
+    return (
+        select(
+            inner.c.vendor_id,
+            inner.c.min_traffic_price,
+            inner.c.price_upfront,
+            inner.c.price_tiered,
+        )
+        .where(inner.c.rn == 1)
+        .subquery()
+    )
 
 
 def gen_storage_price_query(
@@ -157,21 +174,28 @@ def gen_storage_price_query(
     countries: Optional[countries] = None,
     vendor_regions: Optional[vendor_regions] = None,
 ) -> Optional[Subquery]:
-    """Generate a subquery for the cheapest storage unit price per (vendor_id, region_id) in USD.
+    """Generate a subquery for the cheapest storage unit price per vendor_id in USD.
 
     Filters StoragePrice by Storage.min_size/max_size matching the requested size,
     and optionally by storage type.
 
-    Returns columns: vendor_id, region_id, min_storage_price (per GB/month in USD).
+    Returns columns: vendor_id, min_storage_price (per GB/month in USD), price_upfront, price_tiered.
+    All three price columns come from the same cheapest row.
     """
-    query = (
+    inner = (
         select(
             StoragePrice.vendor_id,
-            func.round(func.min(StoragePrice.price * Currency.rate), 4).label(
+            func.round(StoragePrice.price * Currency.rate, 4).label(
                 "min_storage_price"
             ),
             StoragePrice.price_upfront,
             StoragePrice.price_tiered,
+            func.row_number()
+            .over(
+                partition_by=StoragePrice.vendor_id,
+                order_by=StoragePrice.price * Currency.rate,
+            )
+            .label("rn"),
         )
         .join(StoragePrice.storage)
         .where(StoragePrice.status == Status.ACTIVE)
@@ -183,14 +207,24 @@ def gen_storage_price_query(
         )
     )
     if extra_storage_type:
-        query = query.where(Storage.storage_type.in_(extra_storage_type))
+        inner = inner.where(Storage.storage_type.in_(extra_storage_type))
     if countries:
-        query = query.join(
+        inner = inner.join(
             Region,
             (StoragePrice.vendor_id == Region.vendor_id)
             & (StoragePrice.region_id == Region.region_id),
         )
-        query = query.where(Region.country_id.in_(countries))
+        inner = inner.where(Region.country_id.in_(countries))
     if vendor_regions:
-        query = query.where(vendor_region_filter(vendor_regions, StoragePrice))
-    return query.group_by(StoragePrice.vendor_id).subquery()
+        inner = inner.where(vendor_region_filter(vendor_regions, StoragePrice))
+    inner = inner.subquery()
+    return (
+        select(
+            inner.c.vendor_id,
+            inner.c.min_storage_price,
+            inner.c.price_upfront,
+            inner.c.price_tiered,
+        )
+        .where(inner.c.rn == 1)
+        .subquery()
+    )
