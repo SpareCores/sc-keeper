@@ -675,6 +675,7 @@ def search_servers(
                 inbound_traffic_query.c.min_traffic_price,
                 inbound_traffic_query.c.price_upfront,
                 inbound_traffic_query.c.price_tiered,
+                inbound_traffic_query.c.currency_rate,
             ]
         )
     if outbound_traffic_query is not None:
@@ -683,6 +684,7 @@ def search_servers(
                 outbound_traffic_query.c.min_traffic_price,
                 outbound_traffic_query.c.price_upfront,
                 outbound_traffic_query.c.price_tiered,
+                outbound_traffic_query.c.currency_rate,
             ]
         )
     if storage_query is not None:
@@ -691,6 +693,7 @@ def search_servers(
                 storage_query.c.min_storage_price,
                 storage_query.c.price_upfront,
                 storage_query.c.price_tiered,
+                storage_query.c.currency_rate,
             ]
         )
     query = select(*select_cols)
@@ -787,6 +790,17 @@ def search_servers(
             round(base_price + extra_price, ndigits) if base_price is not None else None
         )
 
+    def scale_tiers(tiers, rate):
+        """Multiply every tier's price by rate to convert to USD (JSON fields are not converted in SQL)."""
+        if not tiers or rate == 1:
+            return tiers
+        scaled = []
+        for tier in tiers:
+            t = tier.model_copy()
+            t.price = round(float(tier.price) * rate, PRICE_NDIGITS)
+            scaled.append(t)
+        return scaled
+
     # unpack score
     serverlist = []
     for server_items in servers:
@@ -806,18 +820,22 @@ def search_servers(
         if inbound_traffic_query is not None:
             traffic_inbound_min_price = next(items) or 0
             traffic_inbound_price_upfront = next(items) or 0
-            traffic_inbound_price_tiered = next(items) or []
+            traffic_inbound_price_tiered = scale_tiers(
+                next(items) or [], next(items) or 1
+            )
         if outbound_traffic_query is not None:
             traffic_outbound_min_price = next(items) or 0
             traffic_outbound_price_upfront = next(items) or 0
-            traffic_outbound_price_tiered = next(items) or []
+            traffic_outbound_price_tiered = scale_tiers(
+                next(items) or [], next(items) or 1
+            )
         else:
             traffic_outbound_min_price = traffic_outbound_price_upfront = 0
             traffic_outbound_price_tiered = []
         if storage_query is not None:
             storage_min_price = next(items) or 0
             storage_price_upfront = next(items) or 0
-            storage_price_tiered = next(items) or []
+            storage_price_tiered = scale_tiers(next(items) or [], next(items) or 1)
         else:
             storage_min_price = storage_price_upfront = 0
             storage_price_tiered = []

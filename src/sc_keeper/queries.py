@@ -123,8 +123,9 @@ def gen_traffic_price_query(
 ) -> Subquery:
     """Generate a subquery for the cheapest outbound traffic unit price per vendor_id in USD.
 
-    Returns columns: vendor_id, min_traffic_price (per GB in USD), price_upfront, price_tiered.
-    All three price columns come from the same cheapest row.
+    Returns columns: vendor_id, min_traffic_price (per GB in USD), price_upfront, price_tiered, currency_rate.
+    All price columns come from the same cheapest row. currency_rate must be applied to price_tiered tier
+    prices in Python, as JSON fields cannot be multiplied in SQL portably.
     """
     inner = (
         select(
@@ -132,8 +133,11 @@ def gen_traffic_price_query(
             func.round(TrafficPrice.price * Currency.rate, 4).label(
                 "min_traffic_price"
             ),
-            TrafficPrice.price_upfront,
+            func.round(TrafficPrice.price_upfront * Currency.rate, 4).label(
+                "price_upfront"
+            ),
             TrafficPrice.price_tiered,
+            Currency.rate.label("currency_rate"),
             func.row_number()
             .over(
                 partition_by=TrafficPrice.vendor_id,
@@ -166,6 +170,7 @@ def gen_traffic_price_query(
             inner.c.min_traffic_price,
             inner.c.price_upfront,
             inner.c.price_tiered,
+            inner.c.currency_rate,
         )
         .where(inner.c.rn == 1)
         .subquery()
@@ -184,8 +189,9 @@ def gen_storage_price_query(
     Filters StoragePrice by Storage.min_size/max_size matching the requested size,
     and optionally by storage type.
 
-    Returns columns: vendor_id, min_storage_price (per GB/month in USD), price_upfront, price_tiered.
-    All three price columns come from the same cheapest row.
+    Returns columns: vendor_id, min_storage_price (per GB/month in USD), price_upfront, price_tiered, currency_rate.
+    All price columns come from the same cheapest row. currency_rate must be applied to price_tiered tier
+    prices in Python, as JSON fields cannot be multiplied in SQL portably.
     """
     inner = (
         select(
@@ -193,8 +199,11 @@ def gen_storage_price_query(
             func.round(StoragePrice.price * Currency.rate, 4).label(
                 "min_storage_price"
             ),
-            StoragePrice.price_upfront,
+            func.round(StoragePrice.price_upfront * Currency.rate, 4).label(
+                "price_upfront"
+            ),
             StoragePrice.price_tiered,
+            Currency.rate.label("currency_rate"),
             func.row_number()
             .over(
                 partition_by=StoragePrice.vendor_id,
@@ -231,6 +240,7 @@ def gen_storage_price_query(
             inner.c.min_storage_price,
             inner.c.price_upfront,
             inner.c.price_tiered,
+            inner.c.currency_rate,
         )
         .where(inner.c.rn == 1)
         .subquery()
