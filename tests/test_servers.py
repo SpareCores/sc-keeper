@@ -58,9 +58,21 @@ class TestResponseStructure:
         assert "name" in vendor
 
     def test_no_price_breakdown_without_extras(self):
-        """Without traffic/storage params, response should be plain ServerPKs."""
+        """price_breakdown is always present on every response (part of ServerPKs)."""
         data, _ = get_servers(limit=1)
-        assert "price_breakdown" not in data[0]
+        assert "price_breakdown" in data[0]
+
+    def test_price_breakdown_empty_without_extras(self):
+        """Without traffic/storage params all traffic/storage breakdown fields should be zero."""
+        data, _ = get_servers(limit=1)
+        pb = data[0]["price_breakdown"]
+        for field in [
+            "traffic_hourly",
+            "traffic_monthly",
+            "extra_storage_hourly",
+            "extra_storage_monthly",
+        ]:
+            assert (pb.get(field) or 0) == 0, f"Expected {field} to be 0 without extras"
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +157,7 @@ class TestFiltering:
         _, filtered = get_servers(
             vendor=["aws"], countries=["DE"], limit=1, add_total_count_header=True
         )
-        assert int(filtered.headers["x-total-count"]) <= int(
+        assert int(filtered.headers["x-total-count"]) < int(
             baseline.headers["x-total-count"]
         )
 
@@ -199,13 +211,13 @@ class TestBestPriceAllocation:
 
 
 # ---------------------------------------------------------------------------
-# Monthly traffic – price_breakdown
+# Monthly outbound traffic - price_breakdown
 # ---------------------------------------------------------------------------
 
 
-class TestMonthlyTraffic:
+class TestMonthlyOutboundTraffic:
     def test_price_breakdown_present(self):
-        data, _ = get_servers(monthly_traffic=1000, limit=5)
+        data, _ = get_servers(monthly_outbound_traffic=1000, limit=5)
         for s in data:
             assert "price_breakdown" in s
             pb = s["price_breakdown"]
@@ -216,44 +228,52 @@ class TestMonthlyTraffic:
         """min_price with traffic should be >= min_price without traffic."""
         base, _ = get_servers(vendor=["hcloud"], limit=5, order_by="vcpus")
         with_traffic, _ = get_servers(
-            vendor=["hcloud"], monthly_traffic=5000, limit=5, order_by="vcpus"
+            vendor=["hcloud"], monthly_outbound_traffic=5000, limit=5, order_by="vcpus"
         )
-        for b, t in zip(base, with_traffic, strict=False):
-            if b["server_id"] == t["server_id"] and b["min_price"] and t["min_price"]:
+        base_by_id = {s["server_id"]: s for s in base}
+        traffic_by_id = {s["server_id"]: s for s in with_traffic}
+        common_ids = base_by_id.keys() & traffic_by_id.keys()
+        assert common_ids
+        for server_id in common_ids:
+            b = base_by_id[server_id]
+            t = traffic_by_id[server_id]
+            if b["min_price"] is not None and t["min_price"] is not None:
                 assert t["min_price"] >= b["min_price"]
 
-    def test_breakdown_components_sum_to_total(self):
-        data, _ = get_servers(monthly_traffic=1000, limit=10)
+    def test_breakdown_components_sum_to_min_price(self):
+        """min_price should equal compute price + traffic hourly + extra storage hourly."""
+        data, _ = get_servers(monthly_outbound_traffic=1000, limit=10)
         for s in data:
             pb = s["price_breakdown"]
-            if pb["total_hourly"] is not None:
+            if s["min_price"] is not None and pb["compute_min_price"] is not None:
                 expected = (
                     (pb["compute_min_price"] or 0)
                     + (pb["traffic_hourly"] or 0)
                     + (pb["extra_storage_hourly"] or 0)
                 )
-                assert abs(pb["total_hourly"] - expected) < 0.01
+                assert abs(s["min_price"] - expected) < 0.001
 
     def test_zero_traffic_cost_without_param(self):
-        """Without monthly_traffic, no price_breakdown should appear."""
+        """Without monthly_outbound_traffic, traffic_hourly and traffic_monthly should be 0."""
         data, _ = get_servers(limit=5)
         for s in data:
-            assert "price_breakdown" not in s
+            pb = s["price_breakdown"]
+            assert (pb.get("traffic_hourly") or 0) == 0
+            assert (pb.get("traffic_monthly") or 0) == 0
 
-    def test_total_monthly_consistency(self):
-        """total_monthly should be close to total_hourly * 730 for hourly allocations."""
+    def test_traffic_monthly_is_hourly_times_730(self):
+        """traffic_hourly should equal traffic_monthly / 730 (within rounding)."""
         data, _ = get_servers(
-            monthly_traffic=1000, limit=10, best_price_allocation="ANY"
+            monthly_outbound_traffic=1000, limit=10, best_price_allocation="ANY"
         )
         for s in data:
             pb = s["price_breakdown"]
-            if pb["total_hourly"] and pb["total_monthly"]:
-                ratio = pb["total_monthly"] / pb["total_hourly"]
-                assert 729 < ratio < 731
+            if pb.get("traffic_hourly") and pb.get("traffic_monthly"):
+                assert abs(pb["traffic_hourly"] - pb["traffic_monthly"] / 730) < 0.0001
 
 
 # ---------------------------------------------------------------------------
-# Extra storage – price_breakdown
+# Extra storage - price_breakdown
 # ---------------------------------------------------------------------------
 
 
@@ -279,8 +299,14 @@ class TestExtraStorage:
         with_storage, _ = get_servers(
             vendor=["hcloud"], extra_storage_size=500, limit=5, order_by="vcpus"
         )
-        for b, s in zip(base, with_storage, strict=False):
-            if b["server_id"] == s["server_id"] and b["min_price"] and s["min_price"]:
+        base_by_id = {s["server_id"]: s for s in base}
+        storage_by_id = {s["server_id"]: s for s in with_storage}
+        common_ids = base_by_id.keys() & storage_by_id.keys()
+        assert common_ids
+        for server_id in common_ids:
+            b = base_by_id[server_id]
+            s = storage_by_id[server_id]
+            if b["min_price"] is not None and s["min_price"] is not None:
                 assert s["min_price"] >= b["min_price"]
 
     def test_storage_type_filter(self):
@@ -299,41 +325,47 @@ class TestExtraStorage:
 
 class TestCombinedExtras:
     def test_both_extras_present(self):
-        data, _ = get_servers(monthly_traffic=1000, extra_storage_size=200, limit=5)
+        data, _ = get_servers(monthly_outbound_traffic=1000, extra_storage_size=200, limit=5)
         for s in data:
             pb = s["price_breakdown"]
             assert pb["traffic_monthly"] is not None
             assert pb["extra_storage_monthly"] is not None
 
     def test_total_equals_sum_of_parts_monthly(self):
+        """min_price_ondemand_monthly should equal compute monthly + traffic monthly + extra storage monthly."""
         data, _ = get_servers(
-            monthly_traffic=1000,
+            monthly_outbound_traffic=1000,
             extra_storage_size=200,
             best_price_allocation="MONTHLY",
             limit=10,
         )
         for s in data:
             pb = s["price_breakdown"]
-            if pb["total_monthly"] is not None:
+            if s["min_price"] is not None and pb["compute_min_price_ondemand_monthly"] is not None:
                 expected = (
                     (pb["compute_min_price_ondemand_monthly"] or 0)
                     + (pb["traffic_monthly"] or 0)
                     + (pb["extra_storage_monthly"] or 0)
                 )
-                assert abs(pb["total_monthly"] - expected) < 0.02
+                assert abs(s["min_price"] - expected) < 0.02
 
-    def test_min_price_equals_total_hourly(self):
-        """For hourly allocations, min_price should equal total_hourly."""
+    def test_min_price_equals_compute_plus_extras_hourly(self):
+        """For hourly allocations, min_price should equal compute + traffic + extra storage hourly."""
         data, _ = get_servers(
-            monthly_traffic=500,
+            monthly_outbound_traffic=500,
             extra_storage_size=100,
             best_price_allocation="ANY",
             limit=10,
         )
         for s in data:
             pb = s["price_breakdown"]
-            if pb["total_hourly"] is not None and s["min_price"] is not None:
-                assert abs(s["min_price"] - pb["total_hourly"]) < 0.001
+            if s["min_price"] is not None and pb["compute_min_price"] is not None:
+                expected = (
+                    (pb["compute_min_price"] or 0)
+                    + (pb["traffic_hourly"] or 0)
+                    + (pb["extra_storage_hourly"] or 0)
+                )
+                assert abs(s["min_price"] - expected) < 0.001
 
 
 # ---------------------------------------------------------------------------
@@ -345,8 +377,8 @@ class TestPagination:
     def test_page_1_and_2_differ(self):
         page1, _ = get_servers(limit=5, page=1, order_by="server_id")
         page2, _ = get_servers(limit=5, page=2, order_by="server_id")
-        ids1 = {s["server_id"] for s in page1}
-        ids2 = {s["server_id"] for s in page2}
+        ids1 = {(s["vendor_id"], s["server_id"]) for s in page1}
+        ids2 = {(s["vendor_id"], s["server_id"]) for s in page2}
         assert ids1.isdisjoint(ids2)
 
     def test_total_count_header(self):
