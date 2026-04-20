@@ -183,7 +183,7 @@ def gen_storage_price_query(
     countries: Optional[countries] = None,
     regions: Optional[regions] = None,
     vendor_regions: Optional[vendor_regions] = None,
-) -> Optional[Subquery]:
+) -> Subquery:
     """Generate a subquery for the cheapest storage unit price per vendor_id in USD.
 
     Filters StoragePrice by Storage.min_size/max_size matching the requested size,
