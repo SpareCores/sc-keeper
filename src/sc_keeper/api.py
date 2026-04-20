@@ -643,8 +643,7 @@ def search_servers(
         if storage_query is not None:
             query = query.join(
                 storage_query,
-                (Server.vendor_id == storage_query.c.vendor_id)
-                & (Server.storage_size < extra_storage_size),
+                Server.vendor_id == storage_query.c.vendor_id,
             )
         for condition in conditions:
             query = query.where(condition)
@@ -729,8 +728,7 @@ def search_servers(
     if storage_query is not None:
         query = query.join(
             storage_query,
-            (Server.vendor_id == storage_query.c.vendor_id)
-            & (Server.storage_size < extra_storage_size),
+            Server.vendor_id == storage_query.c.vendor_id,
         )
     query = query.options(contains_eager(Server.vendor))
     for condition in conditions:
