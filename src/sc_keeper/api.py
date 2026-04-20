@@ -429,18 +429,20 @@ def search_servers(
 
     live_price_query = gen_live_price_query(countries, regions, vendor_regions)
     inbound_traffic_query = (
-        gen_traffic_price_query(TrafficDirection.IN, countries, vendor_regions)
+        gen_traffic_price_query(TrafficDirection.IN, countries, regions, vendor_regions)
         if monthly_inbound_traffic
         else None
     )
     outbound_traffic_query = (
-        gen_traffic_price_query(TrafficDirection.OUT, countries, vendor_regions)
+        gen_traffic_price_query(
+            TrafficDirection.OUT, countries, regions, vendor_regions
+        )
         if monthly_outbound_traffic
         else None
     )
     storage_query = (
         gen_storage_price_query(
-            extra_storage_size, extra_storage_type, countries, vendor_regions
+            extra_storage_size, extra_storage_type, countries, regions, vendor_regions
         )
         if extra_storage_size
         else None

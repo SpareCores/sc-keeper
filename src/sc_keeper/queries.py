@@ -118,6 +118,7 @@ def gen_benchmark_query(
 def gen_traffic_price_query(
     traffic_direction: TrafficDirection,
     countries: Optional[countries] = None,
+    regions: Optional[regions] = None,
     vendor_regions: Optional[vendor_regions] = None,
 ) -> Subquery:
     """Generate a subquery for the cheapest outbound traffic unit price per vendor_id in USD.
@@ -154,6 +155,8 @@ def gen_traffic_price_query(
             & (TrafficPrice.region_id == Region.region_id),
         )
         inner = inner.where(Region.country_id.in_(countries))
+    if regions:
+        inner = inner.where(ServerPrice.region_id.in_(regions))
     if vendor_regions:
         inner = inner.where(vendor_region_filter(vendor_regions, TrafficPrice))
     inner = inner.subquery()
@@ -173,6 +176,7 @@ def gen_storage_price_query(
     extra_storage_size: int,
     extra_storage_type: Optional[List[StorageType]] = None,
     countries: Optional[countries] = None,
+    regions: Optional[regions] = None,
     vendor_regions: Optional[vendor_regions] = None,
 ) -> Optional[Subquery]:
     """Generate a subquery for the cheapest storage unit price per vendor_id in USD.
@@ -216,6 +220,8 @@ def gen_storage_price_query(
             & (StoragePrice.region_id == Region.region_id),
         )
         inner = inner.where(Region.country_id.in_(countries))
+    if regions:
+        inner = inner.where(ServerPrice.region_id.in_(regions))
     if vendor_regions:
         inner = inner.where(vendor_region_filter(vendor_regions, StoragePrice))
     inner = inner.subquery()
