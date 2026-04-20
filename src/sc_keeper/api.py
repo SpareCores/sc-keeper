@@ -4,7 +4,7 @@ from json import loads as json_loads
 from logging import getLogger
 from os import environ
 from textwrap import dedent
-from typing import List, Union
+from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
