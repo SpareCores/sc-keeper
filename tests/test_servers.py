@@ -130,8 +130,9 @@ class TestFiltering:
         assert all(4 <= s["vcpus"] <= 8 for s in data)
 
     def test_memory_min(self):
-        data, _ = get_servers(memory_min=16000, limit=10)
-        assert all(s["memory_amount"] >= 16000 for s in data)
+        data, _ = get_servers(memory_min=16, limit=10)
+        assert data
+        assert all(s["memory_amount"] >= 16 * 1024 for s in data)
 
     def test_architecture(self):
         data, _ = get_servers(architecture="arm64", limit=10)

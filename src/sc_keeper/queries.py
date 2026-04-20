@@ -160,7 +160,7 @@ def gen_traffic_price_query(
         )
         inner = inner.where(Region.country_id.in_(countries))
     if regions:
-        inner = inner.where(ServerPrice.region_id.in_(regions))
+        inner = inner.where(TrafficPrice.region_id.in_(regions))
     if vendor_regions:
         inner = inner.where(vendor_region_filter(vendor_regions, TrafficPrice))
     inner = inner.subquery()
@@ -230,7 +230,7 @@ def gen_storage_price_query(
         )
         inner = inner.where(Region.country_id.in_(countries))
     if regions:
-        inner = inner.where(ServerPrice.region_id.in_(regions))
+        inner = inner.where(StoragePrice.region_id.in_(regions))
     if vendor_regions:
         inner = inner.where(vendor_region_filter(vendor_regions, StoragePrice))
     inner = inner.subquery()
