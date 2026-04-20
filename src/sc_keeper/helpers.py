@@ -110,12 +110,14 @@ def update_server_price_currency(
                 ("compute_min_price_spot", price_ndigits),
                 ("compute_min_price_ondemand", price_ndigits),
                 ("compute_min_price_ondemand_monthly", monthly_price_ndigits),
+                ("traffic_inbound_hourly", price_ndigits),
+                ("traffic_inbound_monthly", monthly_price_ndigits),
+                ("traffic_outbound_hourly", price_ndigits),
+                ("traffic_outbound_monthly", monthly_price_ndigits),
                 ("traffic_hourly", price_ndigits),
                 ("traffic_monthly", monthly_price_ndigits),
                 ("extra_storage_hourly", price_ndigits),
                 ("extra_storage_monthly", monthly_price_ndigits),
-                ("total_hourly", price_ndigits),
-                ("total_monthly", monthly_price_ndigits),
             ]:
                 value = getattr(server_obj.price_breakdown, attr, None)
                 if value:

@@ -200,19 +200,17 @@ class PriceBreakdown(BaseModel):
     compute_min_price_spot: Optional[float] = None
     compute_min_price_ondemand: Optional[float] = None
     compute_min_price_ondemand_monthly: Optional[float] = None
+    traffic_inbound_hourly: Optional[float] = None
+    traffic_inbound_monthly: Optional[float] = None
+    traffic_outbound_hourly: Optional[float] = None
+    traffic_outbound_monthly: Optional[float] = None
     traffic_hourly: Optional[float] = None
     traffic_monthly: Optional[float] = None
     extra_storage_hourly: Optional[float] = None
     extra_storage_monthly: Optional[float] = None
-    total_hourly: Optional[float] = None
-    total_monthly: Optional[float] = None
 
 
 class ServerPKs(ServerWithScore):
-    vendor: VendorBase
-
-
-class ServerWithPriceBreakdown(ServerWithScore):
     vendor: VendorBase
     price_breakdown: PriceBreakdown = PriceBreakdown()
 

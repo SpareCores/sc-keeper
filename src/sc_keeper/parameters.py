@@ -400,6 +400,38 @@ storage_type = Annotated[
     ),
 ]
 
+monthly_inbound_traffic = Annotated[
+    Optional[float],
+    Query(
+        title="Monthly Inbound Traffic",
+        description=(
+            "Amount of monthly inbound traffic in GBs. The cheapest "
+            "available traffic pricing for the server's region is used."
+        ),
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "unit": "GB",
+            "step": 1,
+        },
+    ),
+]
+
+monthly_outbound_traffic = Annotated[
+    Optional[float],
+    Query(
+        title="Monthly Outbound Traffic",
+        description=(
+            "Amount of monthly outbound traffic in GBs. The cheapest "
+            "available traffic pricing for the server's region is used."
+        ),
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "unit": "GB",
+            "step": 1,
+        },
+    ),
+]
+
 extra_storage_size = Annotated[
     Optional[int],
     Query(
@@ -411,7 +443,6 @@ extra_storage_size = Annotated[
             "already meets or exceeds this value incur no extra storage cost. Does not filter "
             "servers by their built-in instance storage."
         ),
-        ge=1,
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
             "step": 1,

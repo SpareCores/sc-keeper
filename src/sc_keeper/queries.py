@@ -116,6 +116,7 @@ def gen_benchmark_query(
 
 
 def gen_traffic_price_query(
+    traffic_direction: TrafficDirection,
     countries: Optional[countries] = None,
     vendor_regions: Optional[vendor_regions] = None,
 ) -> Subquery:
@@ -140,7 +141,7 @@ def gen_traffic_price_query(
             .label("rn"),
         )
         .where(TrafficPrice.status == Status.ACTIVE)
-        .where(TrafficPrice.direction == TrafficDirection.OUT)
+        .where(TrafficPrice.direction == traffic_direction)
         .join(
             Currency,
             (TrafficPrice.currency == Currency.base) & (Currency.quote == "USD"),

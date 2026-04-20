@@ -72,7 +72,6 @@ from .references import (
     RegionPKs,
     ServerPKs,
     ServerPriceWithPKs,
-    ServerWithPriceBreakdown,
     StoragePriceWithPKs,
     TrafficPriceWithPKsWithMonthlyTraffic,
 )
@@ -376,9 +375,10 @@ def search_servers(
     countries: options.countries = None,
     storage_size: options.storage_size = None,
     storage_type: options.storage_type = None,
+    monthly_inbound_traffic: options.monthly_inbound_traffic = 0,
+    monthly_outbound_traffic: options.monthly_outbound_traffic = 0,
     extra_storage_size: options.extra_storage_size = 0,
     extra_storage_type: options.extra_storage_type = None,
-    monthly_traffic: options.monthly_traffic = 0,
     gpu_min: options.gpu_min = None,
     gpu_memory_min: options.gpu_memory_min = None,
     gpu_memory_total: options.gpu_memory_total = None,
@@ -393,7 +393,7 @@ def search_servers(
     order_dir: options.order_dir = OrderDir.ASC,
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
-) -> Union[List[ServerPKs], List[ServerWithPriceBreakdown]]:
+) -> List[ServerPKs]:
     check_filter_limits(request, countries, regions, vendor_regions)
 
     check_currency(currency)
@@ -428,8 +428,15 @@ def search_servers(
         )
 
     live_price_query = gen_live_price_query(countries, regions, vendor_regions)
-    traffic_query = (
-        gen_traffic_price_query(countries, vendor_regions) if monthly_traffic else None
+    inbound_traffic_query = (
+        gen_traffic_price_query(TrafficDirection.IN, countries, vendor_regions)
+        if monthly_inbound_traffic
+        else None
+    )
+    outbound_traffic_query = (
+        gen_traffic_price_query(TrafficDirection.OUT, countries, vendor_regions)
+        if monthly_outbound_traffic
+        else None
     )
     storage_query = (
         gen_storage_price_query(
@@ -621,18 +628,21 @@ def search_servers(
                 & (Server.server_id == live_price_query.c.server_id),
                 isouter=True,
             )
-        if traffic_query is not None:
+        if inbound_traffic_query is not None:
             query = query.join(
-                traffic_query,
-                Server.vendor_id == traffic_query.c.vendor_id,
-                isouter=True,
+                inbound_traffic_query,
+                Server.vendor_id == inbound_traffic_query.c.vendor_id,
+            )
+        if outbound_traffic_query is not None:
+            query = query.join(
+                outbound_traffic_query,
+                Server.vendor_id == outbound_traffic_query.c.vendor_id,
             )
         if storage_query is not None:
             query = query.join(
                 storage_query,
                 (Server.vendor_id == storage_query.c.vendor_id)
                 & (Server.storage_size < extra_storage_size),
-                isouter=True,
             )
         for condition in conditions:
             query = query.where(condition)
@@ -658,12 +668,20 @@ def search_servers(
                 live_price_query.c.min_price_ondemand_monthly,
             ]
         )
-    if traffic_query is not None:
+    if inbound_traffic_query is not None:
         select_cols.extend(
             [
-                traffic_query.c.min_traffic_price,
-                traffic_query.c.price_upfront,
-                traffic_query.c.price_tiered,
+                inbound_traffic_query.c.min_traffic_price,
+                inbound_traffic_query.c.price_upfront,
+                inbound_traffic_query.c.price_tiered,
+            ]
+        )
+    if outbound_traffic_query is not None:
+        select_cols.extend(
+            [
+                outbound_traffic_query.c.min_traffic_price,
+                outbound_traffic_query.c.price_upfront,
+                outbound_traffic_query.c.price_tiered,
             ]
         )
     if storage_query is not None:
@@ -696,18 +714,21 @@ def search_servers(
             & (Server.server_id == live_price_query.c.server_id),
             isouter=True,
         )
-    if traffic_query is not None:
+    if inbound_traffic_query is not None:
         query = query.join(
-            traffic_query,
-            Server.vendor_id == traffic_query.c.vendor_id,
-            isouter=True,
+            inbound_traffic_query,
+            Server.vendor_id == inbound_traffic_query.c.vendor_id,
+        )
+    if outbound_traffic_query is not None:
+        query = query.join(
+            outbound_traffic_query,
+            Server.vendor_id == outbound_traffic_query.c.vendor_id,
         )
     if storage_query is not None:
         query = query.join(
             storage_query,
             (Server.vendor_id == storage_query.c.vendor_id)
             & (Server.storage_size < extra_storage_size),
-            isouter=True,
         )
     query = query.options(contains_eager(Server.vendor))
     for condition in conditions:
@@ -782,13 +803,17 @@ def search_servers(
             )
         else:
             lp_min = lp_spot = lp_ondemand = lp_monthly = None
-        if traffic_query is not None:
-            traffic_min_price = next(items) or 0
-            traffic_price_upfront = next(items) or 0
-            traffic_price_tiered = next(items) or []
+        if inbound_traffic_query is not None:
+            traffic_inbound_min_price = next(items) or 0
+            traffic_inbound_price_upfront = next(items) or 0
+            traffic_inbound_price_tiered = next(items) or []
+        if outbound_traffic_query is not None:
+            traffic_outbound_min_price = next(items) or 0
+            traffic_outbound_price_upfront = next(items) or 0
+            traffic_outbound_price_tiered = next(items) or []
         else:
-            traffic_min_price = traffic_price_upfront = 0
-            traffic_price_tiered = []
+            traffic_outbound_min_price = traffic_outbound_price_upfront = 0
+            traffic_outbound_price_tiered = []
         if storage_query is not None:
             storage_min_price = next(items) or 0
             storage_price_upfront = next(items) or 0
@@ -796,16 +821,25 @@ def search_servers(
         else:
             storage_min_price = storage_price_upfront = 0
             storage_price_tiered = []
-        if traffic_query is not None or storage_query is not None:
-            server = ServerWithPriceBreakdown.model_validate(server_data)
-        else:
-            server = ServerPKs.model_validate(server_data)
-        traffic_monthly_price = (
+        server = ServerPKs.model_validate(server_data)
+        traffic_inbound_monthly_price = (
             calculate_tiered_price(
-                traffic_price_tiered, monthly_traffic, traffic_min_price
+                traffic_inbound_price_tiered,
+                monthly_inbound_traffic,
+                traffic_inbound_min_price,
             )
-            + traffic_price_upfront
-            if traffic_query is not None
+            + traffic_inbound_price_upfront
+            if inbound_traffic_query is not None
+            else 0
+        )
+        traffic_outbound_monthly_price = (
+            calculate_tiered_price(
+                traffic_outbound_price_tiered,
+                monthly_outbound_traffic,
+                traffic_outbound_min_price,
+            )
+            + traffic_outbound_price_upfront
+            if outbound_traffic_query is not None
             else 0
         )
         extra_storage_monthly_price = (
@@ -818,6 +852,11 @@ def search_servers(
             if storage_query is not None and extra_storage_size > server.storage_size
             else 0
         )
+        traffic_monthly_price = (
+            traffic_inbound_monthly_price + traffic_outbound_monthly_price
+        )
+        traffic_inbound_hourly_price = traffic_inbound_monthly_price / 730
+        traffic_outbound_hourly_price = traffic_outbound_monthly_price / 730
         traffic_hourly_price = traffic_monthly_price / 730
         extra_storage_hourly_price = extra_storage_monthly_price / 730
         extra_monthly_price = traffic_monthly_price + extra_storage_monthly_price
@@ -870,37 +909,39 @@ def search_servers(
                 server.selected_benchmark_score_per_price = (
                     benchmark_score / server.min_price
                 )
-            if traffic_query is not None or storage_query is not None:
-                server.price_breakdown.compute_min_price = compute_min_price
-                server.price_breakdown.compute_min_price_spot = compute_min_price_spot
-                server.price_breakdown.compute_min_price_ondemand = (
-                    compute_min_price_ondemand
-                )
-                server.price_breakdown.compute_min_price_ondemand_monthly = (
-                    compute_min_price_ondemand_monthly
-                )
-                server.price_breakdown.traffic_hourly = round(
-                    traffic_hourly_price, PRICE_NDIGITS
-                )
-                server.price_breakdown.traffic_monthly = round(
-                    traffic_monthly_price, MONTHLY_PRICE_NDIGITS
-                )
-                server.price_breakdown.extra_storage_hourly = round(
-                    extra_storage_hourly_price, PRICE_NDIGITS
-                )
-                server.price_breakdown.extra_storage_monthly = round(
-                    extra_storage_monthly_price, MONTHLY_PRICE_NDIGITS
-                )
-                server.price_breakdown.total_hourly = (
-                    server.min_price
-                    if best_price_allocation != BestPriceAllocation.MONTHLY
-                    else round(server.min_price / 730, PRICE_NDIGITS)
-                )
-                server.price_breakdown.total_monthly = (
-                    server.min_price
-                    if best_price_allocation == BestPriceAllocation.MONTHLY
-                    else round(server.min_price * 730, MONTHLY_PRICE_NDIGITS)
-                )
+            # price breakdown
+            server.price_breakdown.compute_min_price = compute_min_price
+            server.price_breakdown.compute_min_price_spot = compute_min_price_spot
+            server.price_breakdown.compute_min_price_ondemand = (
+                compute_min_price_ondemand
+            )
+            server.price_breakdown.compute_min_price_ondemand_monthly = (
+                compute_min_price_ondemand_monthly
+            )
+            server.price_breakdown.traffic_inbound_hourly = round(
+                traffic_inbound_hourly_price, PRICE_NDIGITS
+            )
+            server.price_breakdown.traffic_inbound_monthly = round(
+                traffic_inbound_monthly_price, MONTHLY_PRICE_NDIGITS
+            )
+            server.price_breakdown.traffic_outbound_hourly = round(
+                traffic_outbound_hourly_price, PRICE_NDIGITS
+            )
+            server.price_breakdown.traffic_outbound_monthly = round(
+                traffic_outbound_monthly_price, MONTHLY_PRICE_NDIGITS
+            )
+            server.price_breakdown.traffic_hourly = round(
+                traffic_hourly_price, PRICE_NDIGITS
+            )
+            server.price_breakdown.traffic_monthly = round(
+                traffic_monthly_price, MONTHLY_PRICE_NDIGITS
+            )
+            server.price_breakdown.extra_storage_hourly = round(
+                extra_storage_hourly_price, PRICE_NDIGITS
+            )
+            server.price_breakdown.extra_storage_monthly = round(
+                extra_storage_monthly_price, MONTHLY_PRICE_NDIGITS
+            )
         # don't convert before "per_price" calculations as those as standardized in USD
         server = update_server_price_currency(server, currency)
         server.price = server.min_price  # legacy
