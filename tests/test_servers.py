@@ -325,7 +325,9 @@ class TestExtraStorage:
 
 class TestCombinedExtras:
     def test_both_extras_present(self):
-        data, _ = get_servers(monthly_outbound_traffic=1000, extra_storage_size=200, limit=5)
+        data, _ = get_servers(
+            monthly_outbound_traffic=1000, extra_storage_size=200, limit=5
+        )
         for s in data:
             pb = s["price_breakdown"]
             assert pb["traffic_monthly"] is not None
@@ -341,7 +343,10 @@ class TestCombinedExtras:
         )
         for s in data:
             pb = s["price_breakdown"]
-            if s["min_price"] is not None and pb["compute_min_price_ondemand_monthly"] is not None:
+            if (
+                s["min_price"] is not None
+                and pb["compute_min_price_ondemand_monthly"] is not None
+            ):
                 expected = (
                     (pb["compute_min_price_ondemand_monthly"] or 0)
                     + (pb["traffic_monthly"] or 0)
