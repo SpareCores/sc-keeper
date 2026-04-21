@@ -429,13 +429,23 @@ def search_servers(
 
     live_price_query = gen_live_price_query(countries, regions, vendor_regions)
     inbound_traffic_query = (
-        gen_traffic_price_query(TrafficDirection.IN, countries, regions, vendor_regions)
+        gen_traffic_price_query(
+            TrafficDirection.IN,
+            monthly_inbound_traffic,
+            countries,
+            regions,
+            vendor_regions,
+        )
         if monthly_inbound_traffic
         else None
     )
     outbound_traffic_query = (
         gen_traffic_price_query(
-            TrafficDirection.OUT, countries, regions, vendor_regions
+            TrafficDirection.OUT,
+            monthly_outbound_traffic,
+            countries,
+            regions,
+            vendor_regions,
         )
         if monthly_outbound_traffic
         else None
@@ -464,6 +474,27 @@ def search_servers(
             best_price_ref = live_price_query.c.min_price_ondemand
         if best_price_allocation == BestPriceAllocation.MONTHLY:
             best_price_ref = live_price_query.c.min_price_ondemand_monthly
+
+    extra_monthly_sql = None
+    if inbound_traffic_query is not None:
+        extra_monthly_sql = func.coalesce(
+            inbound_traffic_query.c.total_traffic_price, 0.0
+        )
+    if outbound_traffic_query is not None:
+        t = func.coalesce(outbound_traffic_query.c.total_traffic_price, 0.0)
+        extra_monthly_sql = (
+            extra_monthly_sql + t if extra_monthly_sql is not None else t
+        )
+    if storage_query is not None:
+        s = func.coalesce(storage_query.c.total_storage_price, 0.0)
+        extra_monthly_sql = (
+            extra_monthly_sql + s if extra_monthly_sql is not None else s
+        )
+    if extra_monthly_sql is not None:
+        if best_price_allocation == BestPriceAllocation.MONTHLY:
+            best_price_ref = best_price_ref + extra_monthly_sql
+        else:
+            best_price_ref = best_price_ref + extra_monthly_sql / 730
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
@@ -643,7 +674,8 @@ def search_servers(
         if storage_query is not None:
             query = query.join(
                 storage_query,
-                Server.vendor_id == storage_query.c.vendor_id,
+                (Server.vendor_id == storage_query.c.vendor_id)
+                & (Server.server_id == storage_query.c.server_id),
             )
         for condition in conditions:
             query = query.where(condition)
@@ -672,28 +704,19 @@ def search_servers(
     if inbound_traffic_query is not None:
         select_cols.extend(
             [
-                inbound_traffic_query.c.min_traffic_price,
-                inbound_traffic_query.c.price_upfront,
-                inbound_traffic_query.c.price_tiered,
-                inbound_traffic_query.c.currency_rate,
+                inbound_traffic_query.c.total_traffic_price,
             ]
         )
     if outbound_traffic_query is not None:
         select_cols.extend(
             [
-                outbound_traffic_query.c.min_traffic_price,
-                outbound_traffic_query.c.price_upfront,
-                outbound_traffic_query.c.price_tiered,
-                outbound_traffic_query.c.currency_rate,
+                outbound_traffic_query.c.total_traffic_price,
             ]
         )
     if storage_query is not None:
         select_cols.extend(
             [
-                storage_query.c.min_storage_price,
-                storage_query.c.price_upfront,
-                storage_query.c.price_tiered,
-                storage_query.c.currency_rate,
+                storage_query.c.total_storage_price,
             ]
         )
     query = select(*select_cols)
@@ -731,7 +754,8 @@ def search_servers(
     if storage_query is not None:
         query = query.join(
             storage_query,
-            Server.vendor_id == storage_query.c.vendor_id,
+            (Server.vendor_id == storage_query.c.vendor_id)
+            & (Server.server_id == storage_query.c.server_id),
         )
     query = query.options(contains_eager(Server.vendor))
     for condition in conditions:
@@ -790,17 +814,6 @@ def search_servers(
             round(base_price + extra_price, ndigits) if base_price is not None else None
         )
 
-    def scale_tiers(tiers, rate):
-        """Multiply every tier's price by rate to convert to USD (JSON fields are not converted in SQL)."""
-        if not tiers or rate == 1:
-            return tiers
-        scaled = []
-        for tier in tiers:
-            t = tier.model_copy()
-            t.price = round(float(tier.price) * rate, PRICE_NDIGITS)
-            scaled.append(t)
-        return scaled
-
     # unpack score
     serverlist = []
     for server_items in servers:
@@ -817,58 +830,14 @@ def search_servers(
             )
         else:
             lp_min = lp_spot = lp_ondemand = lp_monthly = None
-        if inbound_traffic_query is not None:
-            traffic_inbound_min_price = next(items) or 0
-            traffic_inbound_price_upfront = next(items) or 0
-            traffic_inbound_price_tiered = scale_tiers(
-                next(items) or [], next(items) or 1
-            )
-        if outbound_traffic_query is not None:
-            traffic_outbound_min_price = next(items) or 0
-            traffic_outbound_price_upfront = next(items) or 0
-            traffic_outbound_price_tiered = scale_tiers(
-                next(items) or [], next(items) or 1
-            )
-        else:
-            traffic_outbound_min_price = traffic_outbound_price_upfront = 0
-            traffic_outbound_price_tiered = []
-        if storage_query is not None:
-            storage_min_price = next(items) or 0
-            storage_price_upfront = next(items) or 0
-            storage_price_tiered = scale_tiers(next(items) or [], next(items) or 1)
-        else:
-            storage_min_price = storage_price_upfront = 0
-            storage_price_tiered = []
-        server = ServerPKs.model_validate(server_data)
         traffic_inbound_monthly_price = (
-            calculate_tiered_price(
-                traffic_inbound_price_tiered,
-                monthly_inbound_traffic,
-                traffic_inbound_min_price,
-            )
-            + traffic_inbound_price_upfront
-            if inbound_traffic_query is not None
-            else 0
+            next(items) or 0 if inbound_traffic_query is not None else 0
         )
         traffic_outbound_monthly_price = (
-            calculate_tiered_price(
-                traffic_outbound_price_tiered,
-                monthly_outbound_traffic,
-                traffic_outbound_min_price,
-            )
-            + traffic_outbound_price_upfront
-            if outbound_traffic_query is not None
-            else 0
+            next(items) or 0 if outbound_traffic_query is not None else 0
         )
         extra_storage_monthly_price = (
-            calculate_tiered_price(
-                storage_price_tiered,
-                extra_storage_size - server.storage_size,
-                storage_min_price,
-            )
-            + storage_price_upfront
-            if storage_query is not None and extra_storage_size > server.storage_size
-            else 0
+            next(items) or 0 if storage_query is not None else 0
         )
         traffic_monthly_price = (
             traffic_inbound_monthly_price + traffic_outbound_monthly_price
@@ -879,6 +848,8 @@ def search_servers(
         extra_storage_hourly_price = extra_storage_monthly_price / 730
         extra_monthly_price = traffic_monthly_price + extra_storage_monthly_price
         extra_hourly_price = extra_monthly_price / 730
+
+        server = ServerPKs.model_validate(server_data)
 
         with suppress(Exception):
             server.score = server_extra.score

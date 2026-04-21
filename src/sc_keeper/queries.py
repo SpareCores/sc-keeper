@@ -4,6 +4,7 @@ from sc_crawler.tables import (
     Allocation,
     BenchmarkScore,
     Region,
+    Server,
     ServerPrice,
     Status,
     Storage,
@@ -12,12 +13,43 @@ from sc_crawler.tables import (
     TrafficDirection,
     TrafficPrice,
 )
-from sqlalchemy import Subquery
-from sqlmodel import String, case, func, select
+from sqlalchemy import Float, Subquery, cast, func, literal
+from sqlmodel import String, case, select
 
 from .helpers import vendor_region_filter
 from .parameters import countries, regions, vendor_regions
 from .views import Currency
+
+# Treat null upper bounds as effectively unlimited in tiered pricing
+_TIER_UPPER_FALLBACK = 1e18
+
+
+def _tiered_total_subq(price_tiered_col, usage):
+    """Correlated scalar subquery: sum of tiered costs for *usage* units in the original currency.
+
+    Uses SQLite's json_each to iterate over the JSON price_tiered array.
+    Returns NULL when price_tiered is NULL or empty (caller should COALESCE with a fallback).
+
+    Args:
+        price_tiered_col: SQLAlchemy column expression pointing at the JSON price_tiered field.
+        usage: Numeric usage amount — either a Python float/int or a SQLAlchemy column
+            expression (e.g. when the effective usage varies per row).
+    """
+    je = func.json_each(price_tiered_col).table_valued("value")
+    upper = func.coalesce(
+        cast(func.json_extract(je.c.value, "$.upper"), Float),
+        literal(_TIER_UPPER_FALLBACK),
+    )
+    lower = cast(func.json_extract(je.c.value, "$.lower"), Float)
+    tier_price = cast(func.json_extract(je.c.value, "$.price"), Float)
+    usage_expr = literal(float(usage)) if isinstance(usage, (int, float)) else usage
+    tier_cost = func.max(literal(0.0), func.min(usage_expr, upper) - lower) * tier_price
+    return (
+        select(func.sum(tier_cost))
+        .select_from(je)
+        .correlate_except(je)
+        .scalar_subquery()
+    )
 
 
 def gen_live_price_query(
@@ -117,33 +149,35 @@ def gen_benchmark_query(
 
 def gen_traffic_price_query(
     traffic_direction: TrafficDirection,
+    usage: int,
     countries: Optional[countries] = None,
     regions: Optional[regions] = None,
     vendor_regions: Optional[vendor_regions] = None,
 ) -> Subquery:
-    """Generate a subquery for the cheapest outbound traffic unit price per vendor_id in USD.
+    """Generate a subquery for the cheapest total traffic price per vendor_id in USD.
 
-    Returns columns: vendor_id, min_traffic_price (per GB in USD), price_upfront, price_tiered, currency_rate.
-    All price columns come from the same cheapest row. currency_rate must be applied to price_tiered tier
-    prices in Python, as JSON fields cannot be multiplied in SQL portably.
+    Computes the full tiered price for *usage* GB using SQLite's json_each so that
+    the returned price already accounts for tier boundaries.  When price_tiered is
+    absent the flat unit price is used as a fallback (price * usage).
+    price_upfront is added to the total.
+
+    Returns columns: vendor_id, total_traffic_price (total monthly price in USD).
+    All price columns come from the same cheapest row.
     """
-    inner = (
+    tiered_raw = _tiered_total_subq(TrafficPrice.price_tiered, usage)
+    total_price_expr = func.round(
+        (
+            func.coalesce(tiered_raw, TrafficPrice.price * usage)
+            + func.coalesce(TrafficPrice.price_upfront, 0.0)
+        )
+        * Currency.rate,
+        4,
+    )
+
+    level1 = (
         select(
             TrafficPrice.vendor_id,
-            func.round(TrafficPrice.price * Currency.rate, 4).label(
-                "min_traffic_price"
-            ),
-            func.round(TrafficPrice.price_upfront * Currency.rate, 4).label(
-                "price_upfront"
-            ),
-            TrafficPrice.price_tiered,
-            Currency.rate.label("currency_rate"),
-            func.row_number()
-            .over(
-                partition_by=TrafficPrice.vendor_id,
-                order_by=TrafficPrice.price * Currency.rate,
-            )
-            .label("rn"),
+            total_price_expr.label("total_traffic_price"),
         )
         .where(TrafficPrice.status == Status.ACTIVE)
         .where(TrafficPrice.direction == traffic_direction)
@@ -153,26 +187,34 @@ def gen_traffic_price_query(
         )
     )
     if countries:
-        inner = inner.join(
+        level1 = level1.join(
             Region,
             (TrafficPrice.vendor_id == Region.vendor_id)
             & (TrafficPrice.region_id == Region.region_id),
         )
-        inner = inner.where(Region.country_id.in_(countries))
+        level1 = level1.where(Region.country_id.in_(countries))
     if regions:
-        inner = inner.where(TrafficPrice.region_id.in_(regions))
+        level1 = level1.where(TrafficPrice.region_id.in_(regions))
     if vendor_regions:
-        inner = inner.where(vendor_region_filter(vendor_regions, TrafficPrice))
-    inner = inner.subquery()
-    return (
+        level1 = level1.where(vendor_region_filter(vendor_regions, TrafficPrice))
+    level1 = level1.subquery()
+
+    level2 = (
         select(
-            inner.c.vendor_id,
-            inner.c.min_traffic_price,
-            inner.c.price_upfront,
-            inner.c.price_tiered,
-            inner.c.currency_rate,
+            level1.c.vendor_id,
+            level1.c.total_traffic_price,
+            func.row_number()
+            .over(
+                partition_by=level1.c.vendor_id,
+                order_by=level1.c.total_traffic_price,
+            )
+            .label("rn"),
         )
-        .where(inner.c.rn == 1)
+    ).subquery()
+
+    return (
+        select(level2.c.vendor_id, level2.c.total_traffic_price)
+        .where(level2.c.rn == 1)
         .subquery()
     )
 
@@ -184,25 +226,34 @@ def gen_storage_price_query(
     regions: Optional[regions] = None,
     vendor_regions: Optional[vendor_regions] = None,
 ) -> Subquery:
-    """Generate a subquery for the cheapest storage unit price per vendor_id in USD.
+    """Generate a per-server subquery for the cheapest total storage price in USD.
 
-    Filters StoragePrice by Storage.min_size/max_size matching the requested size,
-    and optionally by storage type.
+    Returns columns: vendor_id, server_id, total_storage_price (monthly USD).
 
-    Returns columns: vendor_id, min_storage_price (per GB/month in USD), price_upfront, price_tiered, currency_rate.
-    All price columns come from the same cheapest row. currency_rate must be applied to price_tiered tier
-    prices in Python, as JSON fields cannot be multiplied in SQL portably.
+    Optimised two-step approach:
+    1. Find the single cheapest StoragePrice row per vendor (by unit price), applying
+       type and region filters.  This avoids a full StoragePrice × Server cross-join.
+    2. Join that cheapest row with every Server of the same vendor and compute the
+       per-server tiered price, accounting for the server's built-in storage.
+
+    Per-server logic:
+    - actual_extra = extra_storage_size - Server.storage_size
+    - If server already has enough storage (actual_extra <= 0): total_storage_price = 0
+    - effective_usage = MAX(actual_extra, Storage.min_size): bill for at least the
+      product's minimum size when actual_extra is smaller than min_size
+    - Tiered price calculated for effective_usage; flat price * effective_usage used
+      as fallback when price_tiered is absent
+    - price_upfront added to the total
     """
+    # ── Step 1: cheapest StoragePrice per vendor ──────────────────────────────
     inner = (
         select(
             StoragePrice.vendor_id,
-            func.round(StoragePrice.price * Currency.rate, 4).label(
-                "min_storage_price"
-            ),
-            func.round(StoragePrice.price_upfront * Currency.rate, 4).label(
-                "price_upfront"
-            ),
+            StoragePrice.price,
+            StoragePrice.price_upfront,
             StoragePrice.price_tiered,
+            Storage.min_size,
+            Storage.max_size,
             Currency.rate.label("currency_rate"),
             func.row_number()
             .over(
@@ -213,8 +264,6 @@ def gen_storage_price_query(
         )
         .join(StoragePrice.storage)
         .where(StoragePrice.status == Status.ACTIVE)
-        .where(Storage.min_size <= extra_storage_size)
-        .where(Storage.max_size >= extra_storage_size)
         .join(
             Currency,
             (StoragePrice.currency == Currency.base) & (Currency.quote == "USD"),
@@ -234,14 +283,45 @@ def gen_storage_price_query(
     if vendor_regions:
         inner = inner.where(vendor_region_filter(vendor_regions, StoragePrice))
     inner = inner.subquery()
-    return (
+
+    cheapest = (
         select(
             inner.c.vendor_id,
-            inner.c.min_storage_price,
+            inner.c.price,
             inner.c.price_upfront,
             inner.c.price_tiered,
+            inner.c.min_size,
+            inner.c.max_size,
             inner.c.currency_rate,
         )
         .where(inner.c.rn == 1)
+        .subquery()
+    )
+
+    # ── Step 2: per-server tiered price using that cheapest product ───────────
+    actual_extra = literal(extra_storage_size) - Server.storage_size
+    effective_usage = func.max(actual_extra, cheapest.c.min_size)
+
+    tiered_raw = _tiered_total_subq(cheapest.c.price_tiered, effective_usage)
+    total_price_raw = (
+        func.coalesce(tiered_raw, cheapest.c.price * effective_usage)
+        + func.coalesce(cheapest.c.price_upfront, 0.0)
+    ) * cheapest.c.currency_rate
+
+    total_price_expr = func.round(
+        case(
+            (Server.storage_size >= extra_storage_size, literal(0.0)),
+            else_=total_price_raw,
+        ),
+        4,
+    )
+
+    return (
+        select(
+            Server.vendor_id,
+            Server.server_id,
+            total_price_expr.label("total_storage_price"),
+        )
+        .join(cheapest, Server.vendor_id == cheapest.c.vendor_id)
         .subquery()
     )

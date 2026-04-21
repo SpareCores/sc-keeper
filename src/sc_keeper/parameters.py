@@ -401,7 +401,7 @@ storage_type = Annotated[
 ]
 
 monthly_inbound_traffic = Annotated[
-    Optional[float],
+    Optional[int],
     Query(
         title="Monthly Inbound Traffic",
         description=(
@@ -417,7 +417,7 @@ monthly_inbound_traffic = Annotated[
 ]
 
 monthly_outbound_traffic = Annotated[
-    Optional[float],
+    Optional[int],
     Query(
         title="Monthly Outbound Traffic",
         description=(
