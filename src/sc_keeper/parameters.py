@@ -378,7 +378,7 @@ storage_size = Annotated[
     Optional[float],
     Query(
         title="Storage Size",
-        description="Minimum amount of storage (GBs).",
+        description="Minimum amount of built-in local instance storage in GBs.",
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
             "step": 0.1,
@@ -392,7 +392,7 @@ storage_type = Annotated[
     Optional[List[StorageType]],
     Query(
         title="Storage Type",
-        description="Type of the storage attached to the server.",
+        description="Storage type of the server's built-in local storage (e.g. hdd, ssd).",
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
             "enum": [e.value for e in StorageType],
@@ -405,8 +405,8 @@ monthly_inbound_traffic = Annotated[
     Query(
         title="Monthly Inbound Traffic",
         description=(
-            "Amount of monthly inbound traffic in GBs. The cheapest "
-            "available traffic pricing for the server's region is used."
+            "Monthly inbound traffic in GBs to add to the total price. "
+            "The cheapest available inbound traffic price for the vendor is used."
         ),
         json_schema_extra={
             "category_id": FilterCategories.TRAFFIC,
@@ -421,8 +421,8 @@ monthly_outbound_traffic = Annotated[
     Query(
         title="Monthly Outbound Traffic",
         description=(
-            "Amount of monthly outbound traffic in GBs. The cheapest "
-            "available traffic pricing for the server's region is used."
+            "Monthly outbound traffic in GBs to add to the total price. "
+            "The cheapest available outbound traffic price for the vendor is used."
         ),
         json_schema_extra={
             "category_id": FilterCategories.TRAFFIC,
@@ -437,11 +437,9 @@ extra_storage_size = Annotated[
     Query(
         title="Extra Storage Size",
         description=(
-            "Amount of external (block/network) storage in GBs needed on top of the server's "
-            "built-in storage. The server's included storage is subtracted from this value to "
-            "determine how much external storage to price, servers whose built-in storage "
-            "already meets or exceeds this value incur no extra storage cost. Does not filter "
-            "servers by their built-in instance storage."
+            "Total storage needed in GBs. The server's built-in storage is subtracted, "
+            "and only the difference is priced as additional external storage. "
+            "Servers whose built-in storage already meets or exceeds this value incur no extra storage cost."
         ),
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
@@ -456,8 +454,8 @@ extra_storage_type = Annotated[
     Query(
         title="Extra Storage Type",
         description=(
-            "Storage type filter (e.g. hdd, ssd, network) for the extra_storage_size price lookup. "
-            "When omitted, the cheapest product of any type is used."
+            "Storage product type (e.g. hdd, ssd, network) for the extra storage price lookup. "
+            "When omitted, the cheapest available type is used."
         ),
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
