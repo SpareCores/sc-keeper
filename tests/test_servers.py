@@ -375,6 +375,169 @@ class TestCombinedExtras:
 
 
 # ---------------------------------------------------------------------------
+# Monthly inbound traffic - price_breakdown
+# ---------------------------------------------------------------------------
+
+
+class TestMonthlyInboundTraffic:
+    def test_price_breakdown_present(self):
+        data, _ = get_servers(monthly_inbound_traffic=1000, limit=5)
+        for s in data:
+            pb = s["price_breakdown"]
+            assert pb["traffic_inbound_monthly"] is not None
+            assert pb["traffic_inbound_monthly"] >= 0
+
+    def test_inbound_traffic_adds_to_price(self):
+        """min_price with inbound traffic should be >= min_price without."""
+        base, _ = get_servers(vendor=["hcloud"], limit=5, order_by="vcpus")
+        with_traffic, _ = get_servers(
+            vendor=["hcloud"], monthly_inbound_traffic=5000, limit=5, order_by="vcpus"
+        )
+        base_by_id = {s["server_id"]: s for s in base}
+        traffic_by_id = {s["server_id"]: s for s in with_traffic}
+        common_ids = base_by_id.keys() & traffic_by_id.keys()
+        assert common_ids
+        for server_id in common_ids:
+            b = base_by_id[server_id]
+            t = traffic_by_id[server_id]
+            if b["min_price"] is not None and t["min_price"] is not None:
+                assert t["min_price"] >= b["min_price"]
+
+    def test_zero_inbound_cost_without_param(self):
+        data, _ = get_servers(limit=5)
+        for s in data:
+            pb = s["price_breakdown"]
+            assert (pb.get("traffic_inbound_hourly") or 0) == 0
+            assert (pb.get("traffic_inbound_monthly") or 0) == 0
+
+    def test_inbound_monthly_is_hourly_times_730(self):
+        data, _ = get_servers(monthly_inbound_traffic=1000, limit=10)
+        for s in data:
+            pb = s["price_breakdown"]
+            if pb.get("traffic_inbound_hourly") and pb.get("traffic_inbound_monthly"):
+                assert (
+                    abs(
+                        pb["traffic_inbound_hourly"]
+                        - pb["traffic_inbound_monthly"] / 730
+                    )
+                    < 0.0001
+                )
+
+
+# ---------------------------------------------------------------------------
+# price_breakdown field relationships
+# ---------------------------------------------------------------------------
+
+
+class TestPriceBreakdownFieldRelationships:
+    def test_traffic_hourly_equals_inbound_plus_outbound(self):
+        """traffic_hourly should equal traffic_inbound_hourly + traffic_outbound_hourly."""
+        data, _ = get_servers(
+            monthly_inbound_traffic=500, monthly_outbound_traffic=1000, limit=10
+        )
+        for s in data:
+            pb = s["price_breakdown"]
+            inbound = pb.get("traffic_inbound_hourly") or 0
+            outbound = pb.get("traffic_outbound_hourly") or 0
+            total = pb.get("traffic_hourly") or 0
+            assert abs(total - (inbound + outbound)) < 1e-6
+
+    def test_traffic_monthly_equals_inbound_plus_outbound(self):
+        """traffic_monthly should equal traffic_inbound_monthly + traffic_outbound_monthly."""
+        data, _ = get_servers(
+            monthly_inbound_traffic=500, monthly_outbound_traffic=1000, limit=10
+        )
+        for s in data:
+            pb = s["price_breakdown"]
+            inbound = pb.get("traffic_inbound_monthly") or 0
+            outbound = pb.get("traffic_outbound_monthly") or 0
+            total = pb.get("traffic_monthly") or 0
+            assert abs(total - (inbound + outbound)) < 1e-6
+
+    def test_compute_min_price_non_negative(self):
+        data, _ = get_servers(limit=10)
+        for s in data:
+            pb = s["price_breakdown"]
+            for field in [
+                "compute_min_price",
+                "compute_min_price_spot",
+                "compute_min_price_ondemand",
+                "compute_min_price_ondemand_monthly",
+            ]:
+                val = pb.get(field)
+                if val is not None:
+                    assert val >= 0, f"{field} should be non-negative"
+
+    def test_extra_storage_monthly_is_hourly_times_730(self):
+        data, _ = get_servers(extra_storage_size=200, limit=10)
+        for s in data:
+            pb = s["price_breakdown"]
+            if pb.get("extra_storage_hourly") and pb.get("extra_storage_monthly"):
+                assert (
+                    abs(pb["extra_storage_hourly"] - pb["extra_storage_monthly"] / 730)
+                    < 0.0001
+                )
+
+
+# ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestEdgeCases:
+    def test_zero_outbound_traffic_no_cost(self):
+        """Passing monthly_outbound_traffic=0 should produce 0 traffic cost."""
+        data, _ = get_servers(monthly_outbound_traffic=0, limit=5)
+        for s in data:
+            pb = s["price_breakdown"]
+            assert (pb.get("traffic_outbound_hourly") or 0) == 0
+            assert (pb.get("traffic_outbound_monthly") or 0) == 0
+
+    def test_zero_extra_storage_no_cost(self):
+        """Passing extra_storage_size=0 should produce 0 extra storage cost."""
+        data, _ = get_servers(extra_storage_size=0, limit=5)
+        for s in data:
+            pb = s["price_breakdown"]
+            assert (pb.get("extra_storage_hourly") or 0) == 0
+            assert (pb.get("extra_storage_monthly") or 0) == 0
+
+    def test_restrictive_filters_return_empty_list(self):
+        """Impossible filter combination should return an empty list, not an error."""
+        resp = client.get(
+            "/servers",
+            params={"vcpus_min": 256, "vcpus_max": 1, "limit": 10},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_invalid_param_returns_422(self):
+        resp = client.get("/servers", params={"vcpus_min": -1})
+        assert resp.status_code == 422
+
+    def test_only_active_true_returns_fewer(self):
+        """only_active=True should return <= results of unfiltered query."""
+        _, all_resp = get_servers(limit=1, add_total_count_header=True)
+        _, active_resp = get_servers(
+            only_active=True, limit=1, add_total_count_header=True
+        )
+        all_count = int(all_resp.headers.get("x-total-count", 0))
+        active_count = int(active_resp.headers.get("x-total-count", 0))
+        assert active_count <= all_count
+
+    def test_extras_filter_out_vendors_without_pricing(self):
+        """Vendors with no matching traffic/storage pricing should be excluded from results
+        when the corresponding extra param is requested — INNER JOIN is intentional."""
+        _, base_resp = get_servers(limit=1, add_total_count_header=True)
+        _, traffic_resp = get_servers(
+            monthly_outbound_traffic=100, limit=1, add_total_count_header=True
+        )
+        base_count = int(base_resp.headers.get("x-total-count", 0))
+        traffic_count = int(traffic_resp.headers.get("x-total-count", 0))
+        # Server count must be <= base: vendors unable to price the traffic are excluded
+        assert traffic_count <= base_count
+
+
+# ---------------------------------------------------------------------------
 # Pagination
 # ---------------------------------------------------------------------------
 
