@@ -154,15 +154,13 @@ def gen_traffic_price_query(
     regions: Optional[regions] = None,
     vendor_regions: Optional[vendor_regions] = None,
 ) -> Subquery:
-    """Generate a subquery for the cheapest total traffic price per vendor_id in USD.
+    """Generate a subquery for the cheapest total traffic price per vendor in USD.
 
-    Computes the full tiered price for *usage* GB using SQLite's json_each so that
-    the returned price already accounts for tier boundaries.  When price_tiered is
-    absent the flat unit price is used as a fallback (price * usage).
-    price_upfront is added to the total.
+    Computes the full tiered cost for *usage* GB via SQLite's json_each (falling back to
+    flat price × usage when price_tiered is absent), adds price_upfront, and returns the
+    single cheapest row per vendor.
 
-    Returns columns: vendor_id, total_traffic_price (total monthly price in USD).
-    All price columns come from the same cheapest row.
+    Returns columns: vendor_id, total_traffic_price (monthly USD).
     """
     tiered_raw = _tiered_total_subq(TrafficPrice.price_tiered, usage)
     total_price_expr = func.round(
@@ -226,26 +224,26 @@ def gen_storage_price_query(
     regions: Optional[regions] = None,
     vendor_regions: Optional[vendor_regions] = None,
 ) -> Subquery:
-    """Generate a per-server subquery for the cheapest total storage price in USD.
+    """Generate a per-server subquery for the cheapest total external storage price in USD.
 
     Returns columns: vendor_id, server_id, total_storage_price (monthly USD).
 
-    Optimised two-step approach:
-    1. Find the single cheapest StoragePrice row per vendor (by unit price), applying
-       type and region filters.  This avoids a full StoragePrice × Server cross-join.
-    2. Join that cheapest row with every Server of the same vendor and compute the
-       per-server tiered price, accounting for the server's built-in storage.
-
-    Per-server logic:
-    - actual_extra = extra_storage_size - Server.storage_size
-    - If server already has enough storage (actual_extra <= 0): total_storage_price = 0
-    - effective_usage = MAX(actual_extra, Storage.min_size): bill for at least the
-      product's minimum size when actual_extra is smaller than min_size
-    - Tiered price calculated for effective_usage; flat price * effective_usage used
-      as fallback when price_tiered is absent
-    - price_upfront added to the total
+    Step 1 finds the cheapest StoragePrice per vendor (by unit price, with type/region
+    filters and max_size >= extra_storage_size). Step 2 joins that single product against
+    every Server of the vendor and computes the per-server cost:
+    - servers whose built-in storage already covers extra_storage_size → price = 0
+    - otherwise: effective_usage = MAX(extra_storage_size - server.storage_size, product.min_size)
+      and the tiered total (or flat price × effective_usage as fallback) is returned.
     """
-    # ── Step 1: cheapest StoragePrice per vendor ──────────────────────────────
+    # Step 1: find the cheapest StoragePrice row per vendor by unit price.
+    # Trade-off: selecting by flat unit price rather than by the full tiered total means that in rare
+    # edge cases a slightly more expensive product could yield a lower total once tier boundaries and
+    # the actual usage are taken into account. This compromise is intentional — evaluating every
+    # product for every server would produce an O(products × servers) cross-join that is too slow.
+    # The max_size filter uses the full extra_storage_size (not actual_extra = extra_storage_size -
+    # Server.storage_size) because Server.storage_size is not available at this stage. This means
+    # products that could cover a smaller actual_extra for servers with large built-in storage may
+    # be incorrectly excluded — an acceptable residual inaccuracy given the performance constraint.
     inner = (
         select(
             StoragePrice.vendor_id,
@@ -264,6 +262,7 @@ def gen_storage_price_query(
         )
         .join(StoragePrice.storage)
         .where(StoragePrice.status == Status.ACTIVE)
+        .where(Storage.max_size >= extra_storage_size)
         .join(
             Currency,
             (StoragePrice.currency == Currency.base) & (Currency.quote == "USD"),
@@ -298,7 +297,8 @@ def gen_storage_price_query(
         .subquery()
     )
 
-    # ── Step 2: per-server tiered price using that cheapest product ───────────
+    # Step 2: join the cheapest product (one row per vendor) against all servers of that
+    # vendor and compute the per-server total, applying the built-in storage deduction.
     actual_extra = literal(extra_storage_size) - Server.storage_size
     effective_usage = func.max(actual_extra, cheapest.c.min_size)
 
