@@ -41,7 +41,7 @@ from .references import (
 vendor = Annotated[
     Optional[List[Vendors]],
     Query(
-        title="Vendor id",
+        title="Vendor",
         description="Identifier of the cloud provider vendor.",
         json_schema_extra={
             "category_id": FilterCategories.VENDOR,
@@ -199,7 +199,7 @@ allocation = Annotated[
 regions = Annotated[
     Optional[List[Regions]],
     Query(
-        title="Region id",
+        title="Region",
         description="Identifier of the region. Note that region ids are not vendor-specific, so when you select a region, you might get results from multiple vendors. For more precise filtering, use vendor_regions instead.",
         json_schema_extra={
             "category_id": FilterCategories.REGION,
@@ -211,7 +211,7 @@ regions = Annotated[
 vendor_regions = Annotated[
     Optional[List[VendorRegions]],
     Query(
-        title="Vendor and region id",
+        title="Vendor and region",
         description="Identifier of the vendor and region, separated by a tilde.",
         json_schema_extra={
             "category_id": FilterCategories.REGION,
@@ -235,7 +235,7 @@ server_region = Annotated[
 compliance_framework = Annotated[
     Optional[List[ComplianceFrameworks]],
     Query(
-        title="Compliance Framework id",
+        title="Compliance framework",
         description="Compliance framework implemented at the vendor.",
         json_schema_extra={
             "category_id": FilterCategories.VENDOR,
