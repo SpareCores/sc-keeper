@@ -36,9 +36,10 @@ def _tiered_total_subq(price_tiered_col, usage):
             expression (e.g. when the effective usage varies per row).
     """
     je = func.json_each(price_tiered_col).table_valued("value")
-    upper = func.coalesce(
-        cast(func.json_extract(je.c.value, "$.upper"), Float),
-        literal(_TIER_UPPER_FALLBACK),
+    upper_raw = func.json_extract(je.c.value, "$.upper")
+    upper = case(
+        (upper_raw == literal("Infinity"), literal(_TIER_UPPER_FALLBACK)),
+        else_=cast(upper_raw, Float),
     )
     lower = cast(func.json_extract(je.c.value, "$.lower"), Float)
     tier_price = cast(func.json_extract(je.c.value, "$.price"), Float)
