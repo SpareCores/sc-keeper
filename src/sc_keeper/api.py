@@ -1520,6 +1520,11 @@ def search_benchmark_configs(
         .distinct()
         .join(Benchmark)
         .where(BenchmarkScore.status == Status.ACTIVE)
+        # need only stress_ng:best* from stress-ng category
+        .where(
+            (Benchmark.category != "stress-ng")
+            | BenchmarkScore.benchmark_id.startswith("stress_ng:best")
+        )
     )
     results = db.exec(query).all()
 
