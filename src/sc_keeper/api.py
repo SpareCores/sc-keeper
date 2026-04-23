@@ -30,6 +30,9 @@ from sqlalchemy.orm import aliased, contains_eager
 from sqlmodel import Session, String, case, func, or_, select
 
 from .helpers import (
+    _MONTHLY_PRICE_NDIGITS,
+    _PRICE_NDIGITS,
+    add_extra_to_price,
     get_sort_key_for_benchmark_configs,
     update_server_price_currency,
     vendor_region_filter,
@@ -69,6 +72,7 @@ from .references import (
     BenchmarkConfig,
     BestPriceAllocation,
     OrderDir,
+    PriceBreakdown,
     RegionPKs,
     ServerPKs,
     ServerPriceWithPKs,
@@ -806,14 +810,6 @@ def search_servers(
         query = query.offset((page - 1) * limit)
     servers = db.exec(query).all()
 
-    PRICE_NDIGITS = 4
-    MONTHLY_PRICE_NDIGITS = 2
-
-    def add_extra(base_price, extra_price, ndigits):
-        return (
-            round(base_price + extra_price, ndigits) if base_price is not None else None
-        )
-
     # unpack score
     serverlist = []
     for server_items in servers:
@@ -868,19 +864,19 @@ def search_servers(
                 else server_extra.min_price_ondemand_monthly
             )
 
-            server.min_price_spot = add_extra(
-                compute_min_price_spot, extra_hourly_price, PRICE_NDIGITS
+            server.min_price_spot = add_extra_to_price(
+                compute_min_price_spot, extra_hourly_price, _PRICE_NDIGITS
             )
-            server.min_price_ondemand = add_extra(
-                compute_min_price_ondemand, extra_hourly_price, PRICE_NDIGITS
+            server.min_price_ondemand = add_extra_to_price(
+                compute_min_price_ondemand, extra_hourly_price, _PRICE_NDIGITS
             )
-            server.min_price_ondemand_monthly = add_extra(
+            server.min_price_ondemand_monthly = add_extra_to_price(
                 compute_min_price_ondemand_monthly,
                 extra_monthly_price,
-                MONTHLY_PRICE_NDIGITS,
+                _MONTHLY_PRICE_NDIGITS,
             )
-            server.min_price = add_extra(
-                compute_min_price, extra_hourly_price, PRICE_NDIGITS
+            server.min_price = add_extra_to_price(
+                compute_min_price, extra_hourly_price, _PRICE_NDIGITS
             )
 
             if best_price_allocation == BestPriceAllocation.SPOT_ONLY:
@@ -891,45 +887,36 @@ def search_servers(
                 server.min_price = server.min_price_ondemand_monthly
             if server_extra.score and server.min_price:
                 server.score_per_price = round(
-                    server_extra.score / server.min_price, PRICE_NDIGITS
+                    server_extra.score / server.min_price, _PRICE_NDIGITS
                 )
             server.selected_benchmark_score = benchmark_score
             if benchmark_score and server.min_price:
                 server.selected_benchmark_score_per_price = (
                     benchmark_score / server.min_price
                 )
-            # price breakdown
-            server.price_breakdown.compute_min_price = compute_min_price
-            server.price_breakdown.compute_min_price_spot = compute_min_price_spot
-            server.price_breakdown.compute_min_price_ondemand = (
-                compute_min_price_ondemand
-            )
-            server.price_breakdown.compute_min_price_ondemand_monthly = (
-                compute_min_price_ondemand_monthly
-            )
-            server.price_breakdown.traffic_inbound_hourly = round(
-                traffic_inbound_hourly_price, PRICE_NDIGITS
-            )
-            server.price_breakdown.traffic_inbound_monthly = round(
-                traffic_inbound_monthly_price, MONTHLY_PRICE_NDIGITS
-            )
-            server.price_breakdown.traffic_outbound_hourly = round(
-                traffic_outbound_hourly_price, PRICE_NDIGITS
-            )
-            server.price_breakdown.traffic_outbound_monthly = round(
-                traffic_outbound_monthly_price, MONTHLY_PRICE_NDIGITS
-            )
-            server.price_breakdown.traffic_hourly = round(
-                traffic_hourly_price, PRICE_NDIGITS
-            )
-            server.price_breakdown.traffic_monthly = round(
-                traffic_monthly_price, MONTHLY_PRICE_NDIGITS
-            )
-            server.price_breakdown.extra_storage_hourly = round(
-                extra_storage_hourly_price, PRICE_NDIGITS
-            )
-            server.price_breakdown.extra_storage_monthly = round(
-                extra_storage_monthly_price, MONTHLY_PRICE_NDIGITS
+            server.price_breakdown = PriceBreakdown(
+                compute_min_price=compute_min_price,
+                compute_min_price_spot=compute_min_price_spot,
+                compute_min_price_ondemand=compute_min_price_ondemand,
+                compute_min_price_ondemand_monthly=compute_min_price_ondemand_monthly,
+                traffic_inbound_hourly=round(
+                    traffic_inbound_hourly_price, _PRICE_NDIGITS
+                ),
+                traffic_inbound_monthly=round(
+                    traffic_inbound_monthly_price, _MONTHLY_PRICE_NDIGITS
+                ),
+                traffic_outbound_hourly=round(
+                    traffic_outbound_hourly_price, _PRICE_NDIGITS
+                ),
+                traffic_outbound_monthly=round(
+                    traffic_outbound_monthly_price, _MONTHLY_PRICE_NDIGITS
+                ),
+                traffic_hourly=round(traffic_hourly_price, _PRICE_NDIGITS),
+                traffic_monthly=round(traffic_monthly_price, _MONTHLY_PRICE_NDIGITS),
+                extra_storage_hourly=round(extra_storage_hourly_price, _PRICE_NDIGITS),
+                extra_storage_monthly=round(
+                    extra_storage_monthly_price, _MONTHLY_PRICE_NDIGITS
+                ),
             )
         # don't convert before "per_price" calculations as those as standardized in USD
         server = update_server_price_currency(server, currency)
