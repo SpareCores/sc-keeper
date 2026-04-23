@@ -3,6 +3,10 @@
 New feature(s):
 
 - Add new `/table/server/select` endpoint to allow selecting specific Server `columns` in the response.
+- Add `extra_storage_size`, `extra_storage_type`, `monthly_inbound_traffic`, and `monthly_outbound_traffic` query
+  parameters to the `/servers` endpoint. All `min_price` fields and the always-present `price_breakdown` response
+  object now include traffic and storage cost components, with tiered pricing and built-in server storage deducted from
+  `extra_storage_size`.
 
 ## March 2026
 
