@@ -1363,9 +1363,11 @@ def search_benchmark_configs(
     query = (
         select(
             BenchmarkScore.benchmark_id,
+            Benchmark.category,
             func.cast(BenchmarkScore.config, String),
         )
         .distinct()
+        .join(Benchmark)
         .where(BenchmarkScore.status == Status.ACTIVE)
     )
     results = db.exec(query).all()
@@ -1375,31 +1377,8 @@ def search_benchmark_configs(
         # store parsed config
         result["config_parsed"] = json_loads(result["config"])
 
-        if result["benchmark_id"] == "bogomips":
-            result["category"] = "Other"
-        if result["benchmark_id"] == "bw_mem":
-            result["category"] = "Memory bandwidth"
-        if result["benchmark_id"] == "openssl":
-            result["category"] = "OpenSSL"
-        if result["benchmark_id"].startswith("compression_text"):
-            result["category"] = "Compression algos"
-        if result["benchmark_id"].startswith("geekbench"):
-            result["category"] = "Geekbench"
-        if result["benchmark_id"].startswith("passmark"):
-            result["category"] = "Passmark"
-        if result["benchmark_id"].startswith("static_web"):
-            result["category"] = "Static web server"
-        if result["benchmark_id"].startswith("redis"):
-            result["category"] = "Redis"
-        if result["benchmark_id"].startswith("stress_ng:best"):
-            result["category"] = "stress-ng"
-        if result["benchmark_id"].startswith("llm_speed"):
-            result["category"] = "LLM inference speed"
-        if result["benchmark_id"].startswith("membench"):
-            result["category"] = "Memory bandwidth"
         # keep original order
         result["original_order"] = i
         results[i] = result
-    results = [result for result in results if result.get("category")]
 
     return sorted(results, key=get_sort_key_for_benchmark_configs)
