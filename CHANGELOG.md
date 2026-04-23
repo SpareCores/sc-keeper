@@ -8,6 +8,10 @@ New feature(s):
   object now include traffic and storage cost components, with tiered pricing and built-in server storage deducted from
   `extra_storage_size`.
 
+Fix(es):
+
+- `Benchmark` `category` is now sourced from the database instead of being hardcoded.
+
 ## March 2026
 
 New feature(s):
