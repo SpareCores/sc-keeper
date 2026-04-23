@@ -15,6 +15,9 @@ from .currency import currency_converter
 from .database import get_db
 from .references import ServerPKs
 
+_PRICE_NDIGITS = 4
+_MONTHLY_PRICE_NDIGITS = 2
+
 
 @cachier(stale_after=timedelta(minutes=10), backend="memory")
 def get_server_dicts():
@@ -70,11 +73,15 @@ def vendor_region_filter(vendor_regions, model):
     )
 
 
+def add_extra_to_price(base_price, extra_price, ndigits):
+    return round(base_price + extra_price, ndigits) if base_price is not None else None
+
+
 def update_server_price_currency(
     server_obj,
     to_currency: str = "USD",
-    price_ndigits: int = 4,
-    monthly_price_ndigits: int = 2,
+    price_ndigits: int = _PRICE_NDIGITS,
+    monthly_price_ndigits: int = _MONTHLY_PRICE_NDIGITS,
 ):
     """In-place conversion of server price attributes to the target currency.
 
