@@ -41,7 +41,7 @@ from .references import (
 vendor = Annotated[
     Optional[List[Vendors]],
     Query(
-        title="Vendor id",
+        title="Vendor",
         description="Identifier of the cloud provider vendor.",
         json_schema_extra={
             "category_id": FilterCategories.VENDOR,
@@ -199,7 +199,7 @@ allocation = Annotated[
 regions = Annotated[
     Optional[List[Regions]],
     Query(
-        title="Region id",
+        title="Region",
         description="Identifier of the region. Note that region ids are not vendor-specific, so when you select a region, you might get results from multiple vendors. For more precise filtering, use vendor_regions instead.",
         json_schema_extra={
             "category_id": FilterCategories.REGION,
@@ -211,7 +211,7 @@ regions = Annotated[
 vendor_regions = Annotated[
     Optional[List[VendorRegions]],
     Query(
-        title="Vendor and region id",
+        title="Vendor and region",
         description="Identifier of the vendor and region, separated by a tilde.",
         json_schema_extra={
             "category_id": FilterCategories.REGION,
@@ -235,7 +235,7 @@ server_region = Annotated[
 compliance_framework = Annotated[
     Optional[List[ComplianceFrameworks]],
     Query(
-        title="Compliance Framework id",
+        title="Compliance framework",
         description="Compliance framework implemented at the vendor.",
         json_schema_extra={
             "category_id": FilterCategories.VENDOR,
@@ -377,8 +377,8 @@ cpu_l3_cache_total_min = Annotated[
 storage_size = Annotated[
     Optional[float],
     Query(
-        title="Storage Size",
-        description="Minimum amount of built-in local instance storage in GBs.",
+        title="Minimum local storage size",
+        description="Minimum amount of built-in local (SSD, HDD, NVMe) server storage in GBs.",
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
             "step": 0.1,
@@ -391,8 +391,8 @@ storage_size = Annotated[
 storage_type = Annotated[
     Optional[List[StorageType]],
     Query(
-        title="Storage Type",
-        description="Storage type of the server's built-in local storage (e.g. hdd, ssd).",
+        title="Local storage type",
+        description="Storage type of the server's built-in local storage (e.g. HDD, SSD, NVMe).",
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
             "enum": [e.value for e in StorageType],
@@ -403,7 +403,7 @@ storage_type = Annotated[
 monthly_inbound_traffic = Annotated[
     Optional[int],
     Query(
-        title="Monthly Inbound Traffic",
+        title="Monthly inbound traffic",
         description=(
             "Monthly inbound traffic in GBs to add to the total price. "
             "The cheapest available inbound traffic price for the vendor is used."
@@ -419,7 +419,7 @@ monthly_inbound_traffic = Annotated[
 monthly_outbound_traffic = Annotated[
     Optional[int],
     Query(
-        title="Monthly Outbound Traffic",
+        title="Monthly outbound traffic",
         description=(
             "Monthly outbound traffic in GBs to add to the total price. "
             "The cheapest available outbound traffic price for the vendor is used."
@@ -435,9 +435,10 @@ monthly_outbound_traffic = Annotated[
 extra_storage_size = Annotated[
     Optional[int],
     Query(
-        title="Extra Storage Size",
+        title="Required storage size",
         description=(
-            "Total storage needed in GBs. The server's built-in storage is subtracted, "
+            "Total storage needed in GBs, combining local (where applicable) and ondemand network storage. "
+            "The server's built-in storage is subtracted from this amount, "
             "and only the difference is priced as additional external storage. "
             "Servers whose built-in storage already meets or exceeds this value incur no extra storage cost."
         ),
@@ -452,10 +453,10 @@ extra_storage_size = Annotated[
 extra_storage_type = Annotated[
     Optional[List[StorageType]],
     Query(
-        title="Extra Storage Type",
+        title="Required storage type",
         description=(
-            "Storage product type (e.g. hdd, ssd, network) for the extra storage price lookup. "
-            "When omitted, the cheapest available type is used."
+            "Storage product type (e.g. HDD, SSD, NVMe) for the required storage price lookup. "
+            "When omitted, the cheapest available type (usually HDD over network) is used."
         ),
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
@@ -479,7 +480,7 @@ direction = Annotated[
 monthly_traffic = Annotated[
     Optional[float],
     Query(
-        title="Monthly Overall Traffic",
+        title="Monthly overall traffic",
         description="Overall amount of monthly traffic (GBs).",
         json_schema_extra={
             "category_id": FilterCategories.TRAFFIC,
