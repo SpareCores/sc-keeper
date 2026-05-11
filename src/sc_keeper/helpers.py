@@ -8,6 +8,7 @@ from sc_crawler.table_bases import ServerBase
 from sc_crawler.tables import Server
 from sc_crawler.utils import nesteddefaultdict
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.inspection import inspect as sa_inspect
 from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, and_, or_, select
 
@@ -60,6 +61,23 @@ def get_server_pks(vendor: str, server: str, db: Session) -> ServerPKs:
         ).one()
     except NoResultFound as e:
         raise HTTPException(status_code=404, detail="Server not found") from e
+
+
+def order_by_field_for_mapped_attribute(mapped_entity, field_name: str):
+    """Return one ORM column/expression suitable for ORDER BY.
+
+    Ordering by a relationship name (e.g. ``vendor``) is not supported by SQLAlchemy
+    (``.desc()`` raises ``NotImplementedError``); use that relationship's local FK
+    column instead.
+    """
+    insp = sa_inspect(mapped_entity, raiseerr=False)
+    if insp is not None and getattr(insp, "mapper", None) is not None:
+        rels = insp.mapper.relationships
+        if field_name in rels:
+            cols = sorted(rels[field_name].local_columns, key=lambda c: c.key)
+            if cols:
+                return cols[0]
+    return getattr(mapped_entity, field_name)
 
 
 def vendor_region_filter(vendor_regions, model):
