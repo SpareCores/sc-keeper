@@ -34,7 +34,6 @@ from .helpers import (
     _PRICE_NDIGITS,
     add_extra_to_price,
     get_sort_key_for_benchmark_configs,
-    order_by_field_for_mapped_attribute,
     update_server_price_currency,
     vendor_region_filter,
 )
@@ -797,9 +796,7 @@ def search_servers(
                     raise HTTPException(
                         status_code=400, detail="Unknown order_by field."
                     )
-                order_field = order_by_field_for_mapped_attribute(
-                    order_obj[0], order_by
-                )
+                order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
         else:
@@ -1148,7 +1145,7 @@ def search_server_prices(
                 raise HTTPException(status_code=400, detail="Unknown order_by field.")
             if len(order_obj) > 1:
                 raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
-            order_field = order_by_field_for_mapped_attribute(order_obj[0], order_by)
+            order_field = getattr(order_obj[0], order_by)
             if OrderDir(order_dir) == OrderDir.ASC:
                 query = query.order_by(order_field)
             else:
@@ -1211,7 +1208,7 @@ def search_server_prices(
                 for o in [subquery_aliased, Server, Region, ServerExtra]
                 if hasattr(o, order_by)
             ]
-            order_field = order_by_field_for_mapped_attribute(order_obj[0], order_by)
+            order_field = getattr(order_obj[0], order_by)
             if OrderDir(order_dir) == OrderDir.ASC:
                 query = query.order_by(order_field)
             else:
@@ -1332,7 +1329,7 @@ def search_storage_prices(
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
             raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
-        order_field = order_by_field_for_mapped_attribute(order_obj[0], order_by)
+        order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
         else:
@@ -1456,7 +1453,7 @@ def search_traffic_prices(
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
             raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
-        order_field = order_by_field_for_mapped_attribute(order_obj[0], order_by)
+        order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
         else:
