@@ -34,6 +34,7 @@ from .helpers import (
     _PRICE_NDIGITS,
     add_extra_to_price,
     get_sort_key_for_benchmark_configs,
+    mapped_class_has_column,
     update_server_price_currency,
     vendor_region_filter,
 )
@@ -791,7 +792,11 @@ def search_servers(
             ):
                 order_field = getattr(live_price_query.c, order_by)
             else:
-                order_obj = [o for o in [Server, ServerExtra] if hasattr(o, order_by)]
+                order_obj = [
+                    o
+                    for o in [Server, ServerExtra]
+                    if mapped_class_has_column(o, order_by)
+                ]
                 if len(order_obj) == 0:
                     raise HTTPException(
                         status_code=400, detail="Unknown order_by field."
@@ -1139,7 +1144,7 @@ def search_server_prices(
             order_obj = [
                 o
                 for o in [ServerPrice, Server, Region, ServerExtra]
-                if hasattr(o, order_by)
+                if mapped_class_has_column(o, order_by)
             ]
             if len(order_obj) == 0:
                 raise HTTPException(status_code=400, detail="Unknown order_by field.")
@@ -1206,8 +1211,12 @@ def search_server_prices(
             order_obj = [
                 o
                 for o in [subquery_aliased, Server, Region, ServerExtra]
-                if hasattr(o, order_by)
+                if mapped_class_has_column(o, order_by)
             ]
+            if len(order_obj) == 0:
+                raise HTTPException(status_code=400, detail="Unknown order_by field.")
+            if len(order_obj) > 1:
+                raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
             order_field = getattr(order_obj[0], order_by)
             if OrderDir(order_dir) == OrderDir.ASC:
                 query = query.order_by(order_field)
@@ -1324,7 +1333,11 @@ def search_storage_prices(
 
     # ordering
     if order_by:
-        order_obj = [o for o in [StoragePrice, Region, Storage] if hasattr(o, order_by)]
+        order_obj = [
+            o
+            for o in [StoragePrice, Region, Storage]
+            if mapped_class_has_column(o, order_by)
+        ]
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
@@ -1448,7 +1461,9 @@ def search_traffic_prices(
 
     # ordering
     if order_by:
-        order_obj = [o for o in [TrafficPrice, Region] if hasattr(o, order_by)]
+        order_obj = [
+            o for o in [TrafficPrice, Region] if mapped_class_has_column(o, order_by)
+        ]
         if len(order_obj) == 0:
             raise HTTPException(status_code=400, detail="Unknown order_by field.")
         if len(order_obj) > 1:
