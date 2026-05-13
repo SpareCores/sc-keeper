@@ -8,6 +8,7 @@ from sc_crawler.table_bases import ServerBase
 from sc_crawler.tables import Server
 from sc_crawler.utils import nesteddefaultdict
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.inspection import inspect as sa_inspect
 from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, and_, or_, select
 
@@ -60,6 +61,17 @@ def get_server_pks(vendor: str, server: str, db: Session) -> ServerPKs:
         ).one()
     except NoResultFound as e:
         raise HTTPException(status_code=404, detail="Server not found") from e
+
+
+def mapped_class_has_column(mapped_entity, column_key: str) -> bool:
+    """True if ``column_key`` is a persisted mapper column, not a relationship or plain descriptor."""
+    insp = sa_inspect(mapped_entity, raiseerr=False)
+    if insp is None:
+        return False
+    mapper = getattr(insp, "mapper", None)
+    if mapper is None:
+        return False
+    return column_key in mapper.columns
 
 
 def vendor_region_filter(vendor_regions, model):
