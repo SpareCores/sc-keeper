@@ -82,8 +82,8 @@ def _get_unit(server_column_name: str) -> str:
         "storage_size": "GB",
         "network_speed_baseline": "Gbps",
         "network_speed_max": "Gbps",
-        "network_storage_speed_baseline": "MBps",
-        "network_storage_speed_max": "MBps",
+        "network_storage_speed_baseline": "Gbps",
+        "network_storage_speed_max": "Gbps",
         "inbound_traffic": "GB/month",
         "outbound_traffic": "GB/month",
     }
