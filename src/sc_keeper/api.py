@@ -560,7 +560,7 @@ def search_servers(
     if memory_min:
         conditions.add(Server.memory_amount >= memory_min * 1024)
     if network_speed_min:
-        conditions.add(Server.network_speed >= network_speed_min)
+        conditions.add(Server.network_speed_baseline >= network_speed_min)
     if storage_size:
         conditions.add(Server.storage_size >= storage_size)
     if gpu_min:
