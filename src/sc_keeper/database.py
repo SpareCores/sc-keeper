@@ -1,7 +1,7 @@
 import logging
 from collections import deque
-from os import environ, unlink
-from os.path import abspath
+from os import environ, stat, unlink
+from os.path import abspath, exists
 from shutil import copyfile
 from tempfile import NamedTemporaryFile
 from threading import Event, Lock, Thread
@@ -19,12 +19,23 @@ from .views import views
 logger = logging.getLogger(__name__)
 
 
+def source_db_hash() -> str | None:
+    """CDN hash from sc_data, or a stable local fingerprint when SC_DATA_DB_PATH is set."""
+    if db.hash:
+        return db.hash
+    path = db.path
+    if path and exists(path):
+        st = stat(path)
+        return f"local:{st.st_size}:{st.st_mtime_ns}"
+    return None
+
+
 class Database(Thread):
     daemon = True
 
     def __init__(self, *args, **kwargs):
         self.tmpfiles = deque()
-        self.db_hash = db.hash
+        self.db_hash = source_db_hash()
         self.lock = Lock()
         self.updated = Event()
         self.last_updated = None
@@ -47,9 +58,10 @@ class Database(Thread):
 
     def update(self, force=False):
         """Copies sc-data's most recent SQLite file, adds index and new tables."""
-        if not self.ready or self.db_hash != db.hash or force:
+        current_hash = source_db_hash()
+        if not self.ready or self.db_hash != current_hash or force:
             logger.info(
-                f"Found a new version of the SQLite database at {db.path} [{db.hash}]"
+                f"Found a new version of the SQLite database at {db.path} [{current_hash}]"
             )
             # delete=False due to Windows support
             tmpfile = NamedTemporaryFile(delete=False).name
@@ -97,12 +109,14 @@ class Database(Thread):
                         )
                         conn.execute(q)
                         conn.commit()
-                conn.execute(text("VACUUM"))
+                # VACUUM rewrites the whole DB (2x disk); skip for local SC_DATA_DB_PATH files.
+                if db.hash:
+                    conn.execute(text("VACUUM"))
                 conn.execute(text("ANALYZE"))
             logger.info(f"SQLite database updated {tmpfile}")
             with self.lock:
                 self.engine = engine
-                self.db_hash = db.hash
+                self.db_hash = current_hash
                 self.last_updated = time()
                 self.updated.set()
             # keep up to 2 files so that queries can run
