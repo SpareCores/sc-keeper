@@ -1,3 +1,19 @@
+## June 2026
+
+New feature(s):
+
+- Update database to `sparecores-crawler` v0.6.0 to expose new `vendor` (`stopped_server_charged`, `billing_increment_seconds`,  `minimum_billing_seconds` and `billing_comment`) and `server` (`ecpus`, `scalability`, `hw_virt`, `memory_amount_actual`, `network_speed_max`, `network_storage_speed_baseline`, `network_storage_speed_max`, and `average_time_to_start`) fields.
+
+Breaking changes:
+
+- Renamed `network_speed` to `network_speed_baseline` in the `Server` table.
+
+## May 2026
+
+Fix(es):
+
+- Explicit request error when trying to order a table by a relation instead of an actual column.
+
 ## April 2026
 
 New feature(s):
