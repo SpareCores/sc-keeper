@@ -69,9 +69,10 @@ def test_table_server_select(params, expected_keys, exact):
         assert expected_keys <= keys
 
 
-def test_table_server_prices_requires_auth():
+def test_table_server_prices_requires_auth(client_with_auth):
     """Server prices dump requires a bearer token when auth is enabled."""
-    response = client.get("/table/server_prices", params={"vendor": ["hcloud"]})
+    client_auth, _ = client_with_auth
+    response = client_auth.get("/table/server_prices", params={"vendor": ["hcloud"]})
     assert response.status_code == 401
 
 
