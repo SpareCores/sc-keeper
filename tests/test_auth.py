@@ -1,9 +1,8 @@
 import importlib
 from unittest.mock import Mock
 
-from fastapi.testclient import TestClient
-
 from conftest import create_app_with_auth, mock_token_introspection
+from fastapi.testclient import TestClient
 
 
 def test_endpoints_no_token(client_with_auth):
