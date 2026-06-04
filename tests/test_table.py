@@ -1,25 +1,18 @@
 """Tests for /table/* dump endpoints and /table/server/meta."""
 
+pytest_plugins = ("test_auth",)
+
 import pytest
 from fastapi.testclient import TestClient
 from sc_crawler.tables import Server
 
 from sc_keeper.api import app
 from sc_keeper.routers.table_metadata import _get_category
-from test_auth import _create_app_with_auth, mock_token_introspection
+from test_auth import mock_token_introspection
 
 client = TestClient(app)
 
 VALID_CATEGORIES = {"meta", "cpu", "memory", "gpu", "storage", "network"}
-
-
-@pytest.fixture
-def auth_client(monkeypatch):
-    """Test client with OAuth introspection enabled (for /table/server_prices)."""
-    app_with_auth = _create_app_with_auth(
-        monkeypatch, "http://test-auth-server.com/introspect"
-    )
-    return TestClient(app_with_auth)
 
 # (path suffix under /table, required field on first row)
 TABLE_DUMPS = [
@@ -84,9 +77,9 @@ def test_table_server_prices_requires_auth():
     assert response.status_code == 401
 
 
-def test_table_server_prices(auth_client):
+def test_table_server_prices(client_with_auth):
     """Authenticated server prices dump supports filters and currency."""
-    client_auth = auth_client
+    client_auth, _ = client_with_auth
 
     params = {"vendor": ["hcloud"], "allocation": "ondemand"}
     headers = {"Authorization": "Bearer valid_token"}
