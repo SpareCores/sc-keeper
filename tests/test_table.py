@@ -1,14 +1,12 @@
 """Tests for /table/* dump endpoints and /table/server/meta."""
 
-pytest_plugins = ("test_auth",)
-
 import pytest
 from fastapi.testclient import TestClient
 from sc_crawler.tables import Server
 
 from sc_keeper.api import app
 from sc_keeper.routers.table_metadata import _get_category
-from test_auth import mock_token_introspection
+from conftest import mock_token_introspection
 
 client = TestClient(app)
 
