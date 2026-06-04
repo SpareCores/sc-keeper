@@ -47,6 +47,7 @@ def _get_category(server_column_name: str) -> str:
         or server_column_name == "ipv4"
     ):
         return "network"
+    raise ValueError(f"No category mapping for Server column: {server_column_name}")
 
 
 def _get_name(server_column_name: str) -> str:
