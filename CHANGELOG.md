@@ -3,10 +3,14 @@
 New feature(s):
 
 - Update database to `sparecores-crawler` v0.6.0 to expose new `vendor` (`stopped_server_charged`, `billing_increment_seconds`,  `minimum_billing_seconds` and `billing_comment`) and `server` (`ecpus`, `scalability`, `hw_virt`, `memory_amount_actual`, `network_speed_max`, `network_storage_speed_baseline`, `network_storage_speed_max`, and `average_time_to_start`) fields.
+- Add `hw_virt` filter to `/servers` and `/server_prices`.
+- Add `network_speed_baseline_min` and `network_speed_peak_min` filters to `/servers`, replacing the single baseline-only `network_speed_min` parameter.
+- Add `network_storage_speed_baseline_min` and `network_storage_speed_peak_min` filters to `/servers`.
 
 Breaking changes:
 
 - Renamed `network_speed` to `network_speed_baseline` in the `Server` table.
+- Renamed `network_speed_min` to `network_speed_baseline_min` on `/servers`; use `network_speed_peak_min` to filter on `network_speed_max`.
 
 ## May 2026
 

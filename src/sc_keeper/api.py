@@ -364,6 +364,7 @@ def search_servers(
     cpu_l2_cache_total_min: options.cpu_l2_cache_total_min = None,
     cpu_l3_cache_min: options.cpu_l3_cache_min = None,
     cpu_l3_cache_total_min: options.cpu_l3_cache_total_min = None,
+    hw_virt: options.hw_virt = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
     benchmark_id: options.benchmark_id = None,
@@ -371,7 +372,8 @@ def search_servers(
     benchmark_score_min: options.benchmark_score_min = None,
     benchmark_score_per_price_min: options.benchmark_score_per_price_min = None,
     memory_min: options.memory_min = None,
-    network_speed_min: options.network_speed_min = None,
+    network_speed_baseline_min: options.network_speed_baseline_min = None,
+    network_speed_peak_min: options.network_speed_peak_min = None,
     only_active: options.only_active = True,
     vendor: options.vendor = None,
     compliance_framework: options.compliance_framework = None,
@@ -380,6 +382,8 @@ def search_servers(
     countries: options.countries = None,
     storage_size: options.storage_size = None,
     storage_type: options.storage_type = None,
+    network_storage_speed_baseline_min: options.network_storage_speed_baseline_min = None,
+    network_storage_speed_peak_min: options.network_storage_speed_peak_min = None,
     monthly_inbound_traffic: options.monthly_inbound_traffic = 0,
     monthly_outbound_traffic: options.monthly_outbound_traffic = 0,
     extra_storage_size: options.extra_storage_size = 0,
@@ -543,6 +547,8 @@ def search_servers(
         conditions.add(Server.cpu_l3_cache >= cpu_l3_cache_min * 1024)
     if cpu_l3_cache_total_min:
         conditions.add(Server.cpu_l3_cache_total >= cpu_l3_cache_total_min * 1024)
+    if hw_virt is not None:
+        conditions.add(Server.hw_virt.is_(hw_virt))
     if benchmark_score_stressng_cpu_min:
         conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
     if benchmark_score_per_price_stressng_cpu_min:
@@ -559,10 +565,20 @@ def search_servers(
         )
     if memory_min:
         conditions.add(Server.memory_amount >= memory_min * 1024)
-    if network_speed_min:
-        conditions.add(Server.network_speed_baseline >= network_speed_min)
+    if network_speed_baseline_min:
+        conditions.add(Server.network_speed_baseline >= network_speed_baseline_min)
+    if network_speed_peak_min:
+        conditions.add(Server.network_speed_max >= network_speed_peak_min)
     if storage_size:
         conditions.add(Server.storage_size >= storage_size)
+    if network_storage_speed_baseline_min:
+        conditions.add(
+            Server.network_storage_speed_baseline >= network_storage_speed_baseline_min
+        )
+    if network_storage_speed_peak_min:
+        conditions.add(
+            Server.network_storage_speed_max >= network_storage_speed_peak_min
+        )
     if gpu_min:
         conditions.add(Server.gpu_count >= gpu_min)
     if gpu_memory_min:
@@ -947,6 +963,7 @@ def search_server_prices(
     cpu_manufacturer: options.cpu_manufacturer = None,
     cpu_family: options.cpu_family = None,
     cpu_allocation: options.cpu_allocation = None,
+    hw_virt: options.hw_virt = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
     memory_min: options.memory_min = None,
@@ -1022,6 +1039,8 @@ def search_server_prices(
     if cpu_allocation:
         joins.add(ServerPrice.server)
         conditions.add(Server.cpu_allocation.in_(cpu_allocation))
+    if hw_virt is not None:
+        conditions.add(Server.hw_virt.is_(hw_virt))
     if benchmark_score_stressng_cpu_min:
         conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
     if benchmark_score_per_price_stressng_cpu_min:

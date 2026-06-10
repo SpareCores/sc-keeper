@@ -28,6 +28,7 @@ from .references import (
     GpuManufacturers,
     GpuModels,
     NetworkSpeedSnapPoints,
+    NetworkStorageSpeedSnapPoints,
     OrderDir,
     Regions,
     ServerColumns,
@@ -244,11 +245,24 @@ compliance_framework = Annotated[
     ),
 ]
 
-network_speed_min = Annotated[
+network_speed_baseline_min = Annotated[
     Optional[float],
     Query(
-        title="Minimum network speed",
-        description="Minimum network speed in Gbps.",
+        title="Minimum baseline network speed",
+        description="Minimum baseline network speed in Gbps.",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "enum": [e.value for e in NetworkSpeedSnapPoints],
+            "unit": "Gbps",
+        },
+    ),
+]
+
+network_speed_peak_min = Annotated[
+    Optional[float],
+    Query(
+        title="Minimum peak network speed",
+        description="Minimum peak network speed in Gbps.",
         json_schema_extra={
             "category_id": FilterCategories.TRAFFIC,
             "enum": [e.value for e in NetworkSpeedSnapPoints],
@@ -374,6 +388,15 @@ cpu_l3_cache_total_min = Annotated[
     ),
 ]
 
+hw_virt = Annotated[
+    Optional[bool],
+    Query(
+        title="Hardware virtualization",
+        description="Filter for servers with hardware virtualization.",
+        json_schema_extra={"category_id": FilterCategories.PROCESSOR},
+    ),
+]
+
 storage_size = Annotated[
     Optional[float],
     Query(
@@ -396,6 +419,32 @@ storage_type = Annotated[
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
             "enum": [e.value for e in StorageType],
+        },
+    ),
+]
+
+network_storage_speed_baseline_min = Annotated[
+    Optional[float],
+    Query(
+        title="Minimum baseline network storage speed",
+        description="Minimum baseline network storage speed in Gbps.",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "enum": [e.value for e in NetworkStorageSpeedSnapPoints],
+            "unit": "Gbps",
+        },
+    ),
+]
+
+network_storage_speed_peak_min = Annotated[
+    Optional[float],
+    Query(
+        title="Minimum peak network storage speed",
+        description="Minimum peak network storage speed in Gbps.",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "enum": [e.value for e in NetworkStorageSpeedSnapPoints],
+            "unit": "Gbps",
         },
     ),
 ]

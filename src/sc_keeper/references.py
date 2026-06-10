@@ -475,6 +475,29 @@ class NetworkSpeedSnapPoints(Enum):
     GBPS_25000 = 25000
 
 
+class NetworkStorageSpeedSnapPoints(Enum):
+    """Predefined snap points for network storage speed filtering, based on common values in the dataset (in Gbps)."""
+
+    MBPS_10 = 0.01
+    MBPS_50 = 0.05
+    MBPS_100 = 0.1
+    MBPS_200 = 0.2
+    MBPS_500 = 0.5
+    MBPS_750 = 0.75
+    GBPS_1 = 1.0
+    GBPS_2 = 2.0
+    GBPS_5 = 5.0
+    GBPS_10 = 10.0
+    GBPS_15 = 15.0
+    GBPS_20 = 20.0
+    GBPS_25 = 25.0
+    GBPS_50 = 50.0
+    GBPS_75 = 75.0
+    GBPS_100 = 100.0
+    GBPS_150 = 150.0
+    GBPS_300 = 300.0
+
+
 class CpuSpeedSnapPoints(Enum):
     """Predefined snap points for CPU speed filtering, based on common values in the dataset (in GHz)."""
 
