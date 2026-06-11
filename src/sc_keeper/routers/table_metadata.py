@@ -24,6 +24,7 @@ def _get_category(server_column_name: str) -> str:
         "family",
         "status",
         "observed_at",
+        "hw_virt",
         "average_time_to_start",
     ]:
         return "meta"
@@ -32,7 +33,6 @@ def _get_category(server_column_name: str) -> str:
         "hypervisor",
         "ecpus",
         "scalability",
-        "hw_virt",
     ] or server_column_name.startswith("cpu"):
         return "cpu"
     if server_column_name.startswith("memory"):
