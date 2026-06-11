@@ -373,7 +373,7 @@ def search_servers(
     benchmark_score_per_price_min: options.benchmark_score_per_price_min = None,
     memory_min: options.memory_min = None,
     network_speed_baseline_min: options.network_speed_baseline_min = None,
-    network_speed_peak_min: options.network_speed_peak_min = None,
+    network_speed_max_min: options.network_speed_max_min = None,
     only_active: options.only_active = True,
     vendor: options.vendor = None,
     compliance_framework: options.compliance_framework = None,
@@ -383,7 +383,7 @@ def search_servers(
     storage_size: options.storage_size = None,
     storage_type: options.storage_type = None,
     network_storage_speed_baseline_min: options.network_storage_speed_baseline_min = None,
-    network_storage_speed_peak_min: options.network_storage_speed_peak_min = None,
+    network_storage_speed_max_min: options.network_storage_speed_max_min = None,
     monthly_inbound_traffic: options.monthly_inbound_traffic = 0,
     monthly_outbound_traffic: options.monthly_outbound_traffic = 0,
     extra_storage_size: options.extra_storage_size = 0,
@@ -567,17 +567,17 @@ def search_servers(
         conditions.add(Server.memory_amount >= memory_min * 1024)
     if network_speed_baseline_min:
         conditions.add(Server.network_speed_baseline >= network_speed_baseline_min)
-    if network_speed_peak_min:
-        conditions.add(Server.network_speed_max >= network_speed_peak_min)
+    if network_speed_max_min:
+        conditions.add(Server.network_speed_max >= network_speed_max_min)
     if storage_size:
         conditions.add(Server.storage_size >= storage_size)
     if network_storage_speed_baseline_min:
         conditions.add(
             Server.network_storage_speed_baseline >= network_storage_speed_baseline_min
         )
-    if network_storage_speed_peak_min:
+    if network_storage_speed_max_min:
         conditions.add(
-            Server.network_storage_speed_max >= network_storage_speed_peak_min
+            Server.network_storage_speed_max >= network_storage_speed_max_min
         )
     if gpu_min:
         conditions.add(Server.gpu_count >= gpu_min)
