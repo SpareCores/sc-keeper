@@ -6,6 +6,7 @@ New feature(s):
 - Add `hw_virt` filter to `/servers` and `/server_prices`.
 - Add `network_speed_baseline_min` and `network_speed_max_min` filters to `/servers`, replacing the single baseline-only `network_speed_min` parameter.
 - Add `network_storage_speed_baseline_min` and `network_storage_speed_max_min` filters to `/servers`.
+- Update parameter titles and descriptions.
 
 Breaking changes:
 
