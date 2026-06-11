@@ -1040,6 +1040,7 @@ def search_server_prices(
         joins.add(ServerPrice.server)
         conditions.add(Server.cpu_allocation.in_(cpu_allocation))
     if hw_virt is not None:
+        joins.add(ServerPrice.server)
         conditions.add(Server.hw_virt.is_(hw_virt))
     if benchmark_score_stressng_cpu_min:
         conditions.add(ServerExtra.score > benchmark_score_stressng_cpu_min)
