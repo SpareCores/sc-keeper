@@ -28,6 +28,7 @@ from .references import (
     GpuManufacturers,
     GpuModels,
     NetworkSpeedSnapPoints,
+    NetworkStorageSpeedSnapPoints,
     OrderDir,
     Regions,
     ServerColumns,
@@ -143,8 +144,8 @@ cpu_allocation = Annotated[
 memory_min = Annotated[
     Optional[float],
     Query(
-        title="Minimum memory",
-        description="Minimum amount of memory in GBs.",
+        title="Required memory",
+        description="Required amount of memory in GBs.",
         json_schema_extra={
             "category_id": FilterCategories.MEMORY,
             "unit": "GB",
@@ -244,11 +245,24 @@ compliance_framework = Annotated[
     ),
 ]
 
-network_speed_min = Annotated[
+network_speed_baseline_min = Annotated[
     Optional[float],
     Query(
-        title="Minimum network speed",
-        description="Minimum network speed in Gbps.",
+        title="Required baseline network speed",
+        description="Required baseline network speed in Gbps.",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "enum": [e.value for e in NetworkSpeedSnapPoints],
+            "unit": "Gbps",
+        },
+    ),
+]
+
+network_speed_max_min = Annotated[
+    Optional[float],
+    Query(
+        title="Required maximum network speed",
+        description="Required maximum network speed in Gbps.",
         json_schema_extra={
             "category_id": FilterCategories.TRAFFIC,
             "enum": [e.value for e in NetworkSpeedSnapPoints],
@@ -260,8 +274,8 @@ network_speed_min = Annotated[
 cpu_speed_min = Annotated[
     Optional[float],
     Query(
-        title="Minimum CPU speed",
-        description="Minimum CPU speed in GHz.",
+        title="Required CPU speed",
+        description="Required CPU speed in GHz.",
         json_schema_extra={
             "category_id": FilterCategories.PROCESSOR,
             "enum": [e.value for e in CpuSpeedSnapPoints],
@@ -273,8 +287,8 @@ cpu_speed_min = Annotated[
 cpu_l1d_cache_min = Annotated[
     Optional[int],
     Query(
-        title="Minimum L1 data cache size",
-        description="Minimum L1 data cache size in KiBs.",
+        title="Required L1 data cache size",
+        description="Required L1 data cache size in KiBs.",
         json_schema_extra={
             "category_id": FilterCategories.CPU_CACHE,
             "enum": [e.value for e in CpuL1CacheSnapPoints],
@@ -286,8 +300,8 @@ cpu_l1d_cache_min = Annotated[
 cpu_l1d_cache_total_min = Annotated[
     Optional[int],
     Query(
-        title="Minimum L1 data cache size across all cores",
-        description="Minimum L1 data cache size across all cores in KiBs.",
+        title="Required L1 data cache size across all cores",
+        description="Required L1 data cache size across all cores in KiBs.",
         json_schema_extra={
             "category_id": FilterCategories.CPU_CACHE,
             "enum": [e.value for e in CpuL1CacheTotalSnapPoints],
@@ -299,8 +313,8 @@ cpu_l1d_cache_total_min = Annotated[
 cpu_l1i_cache_min = Annotated[
     Optional[int],
     Query(
-        title="Minimum L1 instruction cache size",
-        description="Minimum L1 instruction cache size in KiBs.",
+        title="Required L1 instruction cache size",
+        description="Required L1 instruction cache size in KiBs.",
         json_schema_extra={
             "category_id": FilterCategories.CPU_CACHE,
             "enum": [e.value for e in CpuL1CacheSnapPoints],
@@ -312,8 +326,8 @@ cpu_l1i_cache_min = Annotated[
 cpu_l1i_cache_total_min = Annotated[
     Optional[int],
     Query(
-        title="Minimum L1 instruction cache size across all cores",
-        description="Minimum L1 instruction cache size across all cores in KiBs.",
+        title="Required L1 instruction cache size across all cores",
+        description="Required L1 instruction cache size across all cores in KiBs.",
         json_schema_extra={
             "category_id": FilterCategories.CPU_CACHE,
             "enum": [e.value for e in CpuL1CacheTotalSnapPoints],
@@ -325,8 +339,8 @@ cpu_l1i_cache_total_min = Annotated[
 cpu_l2_cache_min = Annotated[
     Optional[int],
     Query(
-        title="Minimum L2 cache size",
-        description="Minimum L2 cache size in KiBs.",
+        title="Required L2 cache size",
+        description="Required L2 cache size in KiBs.",
         json_schema_extra={
             "category_id": FilterCategories.CPU_CACHE,
             "enum": [e.value for e in CpuL2CacheSnapPoints],
@@ -338,8 +352,8 @@ cpu_l2_cache_min = Annotated[
 cpu_l2_cache_total_min = Annotated[
     Optional[int],
     Query(
-        title="Minimum L2 cache size across all cores",
-        description="Minimum L2 cache size across all cores in KiBs.",
+        title="Required L2 cache size across all cores",
+        description="Required L2 cache size across all cores in KiBs.",
         json_schema_extra={
             "category_id": FilterCategories.CPU_CACHE,
             "enum": [e.value for e in CpuL2CacheTotalSnapPoints],
@@ -351,8 +365,8 @@ cpu_l2_cache_total_min = Annotated[
 cpu_l3_cache_min = Annotated[
     Optional[int],
     Query(
-        title="Minimum L3 cache size",
-        description="Minimum L3 cache size in MiBs.",
+        title="Required L3 cache size",
+        description="Required L3 cache size in MiBs.",
         json_schema_extra={
             "category_id": FilterCategories.CPU_CACHE,
             "enum": [e.value for e in CpuL3CacheSnapPoints],
@@ -364,8 +378,8 @@ cpu_l3_cache_min = Annotated[
 cpu_l3_cache_total_min = Annotated[
     Optional[int],
     Query(
-        title="Minimum L3 cache size across all cores",
-        description="Minimum L3 cache size across all cores in MiBs.",
+        title="Required L3 cache size across all cores",
+        description="Required L3 cache size across all cores in MiBs.",
         json_schema_extra={
             "category_id": FilterCategories.CPU_CACHE,
             "enum": [e.value for e in CpuL3CacheTotalSnapPoints],
@@ -374,11 +388,20 @@ cpu_l3_cache_total_min = Annotated[
     ),
 ]
 
+hw_virt = Annotated[
+    Optional[bool],
+    Query(
+        title="Hardware virtualization",
+        description="Filter for servers with hardware virtualization.",
+        json_schema_extra={"category_id": FilterCategories.PROCESSOR},
+    ),
+]
+
 storage_size = Annotated[
     Optional[float],
     Query(
-        title="Minimum local storage size",
-        description="Minimum amount of built-in local (SSD, HDD, NVMe) server storage in GBs.",
+        title="Required local storage size",
+        description="Required amount of built-in local (SSD, HDD, NVMe) server storage in GBs.",
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
             "step": 0.1,
@@ -396,6 +419,32 @@ storage_type = Annotated[
         json_schema_extra={
             "category_id": FilterCategories.STORAGE,
             "enum": [e.value for e in StorageType],
+        },
+    ),
+]
+
+network_storage_speed_baseline_min = Annotated[
+    Optional[float],
+    Query(
+        title="Required baseline network storage speed",
+        description="Required baseline network storage speed in Gbps.",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "enum": [e.value for e in NetworkStorageSpeedSnapPoints],
+            "unit": "Gbps",
+        },
+    ),
+]
+
+network_storage_speed_max_min = Annotated[
+    Optional[float],
+    Query(
+        title="Required maximum network storage speed",
+        description="Required maximum network storage speed in Gbps.",
+        json_schema_extra={
+            "category_id": FilterCategories.TRAFFIC,
+            "enum": [e.value for e in NetworkStorageSpeedSnapPoints],
+            "unit": "Gbps",
         },
     ),
 ]
@@ -507,7 +556,7 @@ gpu_min = Annotated[
     Optional[float],
     Query(
         title="GPU count",
-        description="Minimum number of GPUs.",
+        description="Required number of GPUs.",
         json_schema_extra={
             "category_id": FilterCategories.GPU,
             "unit": "GPUs",
@@ -518,8 +567,8 @@ gpu_min = Annotated[
 gpu_memory_min = Annotated[
     Optional[float],
     Query(
-        title="Minimum GPU memory",
-        description="Minimum amount of GPU memory (GB) in each GPU.",
+        title="Required GPU memory",
+        description="Required amount of GPU memory (GB) in each GPU.",
         json_schema_extra={
             "category_id": FilterCategories.GPU,
             "unit": "GB",
@@ -533,7 +582,7 @@ gpu_memory_total = Annotated[
     Optional[float],
     Query(
         title="Total GPU memory",
-        description="Minimum amount of total GPU memory (GBs) in all GPUs.",
+        description="Required amount of total GPU memory (GBs) in all GPUs.",
         json_schema_extra={
             "category_id": FilterCategories.GPU,
             "unit": "GB",
@@ -582,8 +631,8 @@ gpu_model = Annotated[
 benchmark_score_stressng_cpu_min = Annotated[
     Optional[float],
     Query(
-        title="Minimum SCore",
-        description="Minimum stress-ng div16 CPU workload score.",
+        title="Required SCore",
+        description="Required stress-ng div16 CPU workload score.",
         json_schema_extra={
             "category_id": FilterCategories.PERFORMANCE,
         },
@@ -594,8 +643,8 @@ benchmark_score_stressng_cpu_min = Annotated[
 benchmark_score_per_price_stressng_cpu_min = Annotated[
     Optional[float],
     Query(
-        title="Minimum $Core",
-        description="Minimum stress-ng div16 CPU workload score per USD/hr (using the best ondemand or spot price of all zones).",
+        title="Required $Core",
+        description="Required stress-ng div16 CPU workload score per USD/hr (using the best ondemand or spot price of all zones).",
         json_schema_extra={
             "category_id": FilterCategories.PERFORMANCE,
             "unit": "/USD",
@@ -624,8 +673,8 @@ benchmark_config = Annotated[
 benchmark_score_min = Annotated[
     Optional[float],
     Query(
-        title="Minimum benchmark score",
-        description="Minimum value of the selected benchmark score.",
+        title="Required benchmark score",
+        description="Required value of the selected benchmark score.",
         json_schema_extra={
             "category_id": FilterCategories.PERFORMANCE,
         },
@@ -636,8 +685,8 @@ benchmark_score_min = Annotated[
 benchmark_score_per_price_min = Annotated[
     Optional[float],
     Query(
-        title="Minimum benchmark score/price",
-        description="Minimum value of the selected benchmark score per USD/hr (using the best ondemand or spot price of all zones).",
+        title="Required benchmark score/price",
+        description="Required value of the selected benchmark score per USD/hr (using the best ondemand or spot price of all zones).",
         json_schema_extra={
             "category_id": FilterCategories.PERFORMANCE,
             "unit": "/USD",
