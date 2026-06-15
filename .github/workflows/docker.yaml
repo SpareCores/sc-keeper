@@ -64,3 +64,9 @@ jobs:
           REGION: eu-central-1
         run: |
           aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment --region $REGION
+          aws ecs wait services-stable --cluster $CLUSTER --services $SERVICE --region $REGION
+      - name: Invalidate CloudFront cache
+        env:
+          DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
