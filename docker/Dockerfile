@@ -2,7 +2,7 @@ FROM python:3.13
 
 WORKDIR /pkg
 COPY . /pkg
-RUN pip install --no-cache-dir .[apm,security]
+RUN pip install --no-cache-dir .[apm,security,mcp]
 
 ARG SENTRY_RELEASE
 ENV SENTRY_RELEASE=$SENTRY_RELEASE

@@ -23,6 +23,7 @@ DEFAULT_CREDIT_COST = int(environ.get("RATE_LIMIT_DEFAULT_CREDIT_COST", 1))
 CUSTOM_RATE_LIMIT_COSTS: dict[str, int] = {
     "/servers": 3,
     "/server_prices": 5,
+    "/mcp": 5,
     "/table/server_prices": 10,
     "/benchmark_score_stats": 10,
 }
