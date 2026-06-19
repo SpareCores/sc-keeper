@@ -13,9 +13,7 @@ _register_tools()
 
 
 def test_search_servers():
-    result = asyncio.run(
-        search_servers(filters_json='{"vcpus_min": 2}', limit=1)
-    )
+    result = asyncio.run(search_servers(filters_json='{"vcpus_min": 2}', limit=1))
     data = json.loads(result)
     assert "results" in data
     assert len(data["results"]) == 1
