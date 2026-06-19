@@ -25,12 +25,16 @@ def _make_request(path: str) -> Request:
     )
 
 
-def _invoke_route(path: str, handler_name: str, params: dict[str, Any]) -> tuple[int, Any, dict[str, str]]:
+def _invoke_route(
+    path: str, handler_name: str, params: dict[str, Any]
+) -> tuple[int, Any, dict[str, str]]:
+    # isort: off
     from sc_keeper.database import session as db_session
 
     # Import after api module finished loading (called from MCP tools at runtime).
     from sc_keeper import api
 
+    # isort: on
     handler = getattr(api, handler_name)
     sig = inspect.signature(handler)
     kwargs = {k: v for k, v in params.items() if k in sig.parameters}

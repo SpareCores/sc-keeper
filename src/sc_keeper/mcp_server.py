@@ -109,8 +109,7 @@ def _register_tools() -> None:
         "benchmark scores.\n\n"
         "Pass filters as a JSON string in filters_json, e.g. "
         '{"vcpus_min": 4, "memory_min": 16, "vendor": ["hcloud"]}. '
-        "Supported filter keys:\n\n"
-        + _filter_schema("/servers")
+        "Supported filter keys:\n\n" + _filter_schema("/servers")
     )
     mcp.tool()(search_servers)
 
