@@ -6,6 +6,7 @@ New feature(s):
 - Add `hw_virt` filter to `/servers` and `/server_prices`.
 - Add `network_speed_max_min`, `network_storage_speed_baseline_min` and `network_storage_speed_max_min` filters to `/servers`.
 - Update parameter titles and descriptions.
+- Add `/server_descriptions` endpoint for querying `ServerDescription` records by vendor and server ID.
 
 ‼ Breaking changes:
 

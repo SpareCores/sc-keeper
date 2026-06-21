@@ -18,6 +18,7 @@ from sc_crawler.tables import (
     Country,
     Region,
     Server,
+    ServerDescription,
     ServerPrice,
     Storage,
     StoragePrice,
@@ -1573,3 +1574,19 @@ def search_benchmark_configs(
         results[i] = result
 
     return sorted(results, key=get_sort_key_for_benchmark_configs)
+
+
+@app.get("/server_descriptions", tags=["Query Resources"])
+def search_server_descriptions(
+    partial_name_or_id: options.partial_name_or_id = None,
+    vendor: options.vendor = None,
+    db: Session = Depends(get_db),
+) -> List[ServerDescription]:
+    query = select(ServerDescription)
+    if partial_name_or_id:
+        ilike = "%" + partial_name_or_id + "%"
+        query = query.where(ServerDescription.server_id.ilike(ilike))
+    if vendor:
+        query = query.where(ServerDescription.vendor_id.in_(vendor))
+    results = db.exec(query).all()
+    return results
