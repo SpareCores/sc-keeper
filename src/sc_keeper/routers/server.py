@@ -450,8 +450,13 @@ def get_server_descriptions(
     """Query the descriptions of a single server."""
     vendor_id, server_id = server_args
 
-    return db.exec(
+    description = db.exec(
         select(ServerDescription)
         .where(ServerDescription.vendor_id == vendor_id)
         .where(ServerDescription.server_id == server_id)
-    ).all()
+    ).one_or_none()
+
+    if description is None:
+        raise HTTPException(status_code=404, detail="Server description not found")
+
+    return description
