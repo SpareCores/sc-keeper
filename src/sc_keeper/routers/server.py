@@ -446,7 +446,7 @@ def get_server_benchmarks(
 def get_server_descriptions(
     server_args: options.server_args,
     db: Session = Depends(get_db),
-) -> List[ServerDescription]:
+) -> ServerDescription:
     """Query the descriptions of a single server."""
     vendor_id, server_id = server_args
 
