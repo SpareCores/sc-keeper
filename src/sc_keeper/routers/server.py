@@ -14,6 +14,7 @@ from sc_crawler.tables import (
     BenchmarkScore,
     Region,
     Server,
+    ServerDescription,
     ServerPrice,
 )
 from sqlmodel import Session, and_, func, not_, select
@@ -439,3 +440,23 @@ def get_server_benchmarks(
         benchmarks.append(benchmark)
 
     return sorted(benchmarks, key=get_sort_key_for_benchmark_configs)
+
+
+@router.get("/server/{vendor}/{server}/descriptions")
+def get_server_descriptions(
+    server_args: options.server_args,
+    db: Session = Depends(get_db),
+) -> ServerDescription:
+    """Query the descriptions of a single server."""
+    vendor_id, server_id = server_args
+
+    description = db.exec(
+        select(ServerDescription)
+        .where(ServerDescription.vendor_id == vendor_id)
+        .where(ServerDescription.server_id == server_id)
+    ).one_or_none()
+
+    if description is None:
+        raise HTTPException(status_code=404, detail="Server description not found")
+
+    return description

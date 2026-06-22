@@ -18,6 +18,7 @@ from sc_crawler.tables import (
     Country,
     Region,
     Server,
+    ServerDescription,
     ServerPrice,
     Storage,
     StoragePrice,
@@ -120,6 +121,9 @@ example_data = {
     "region": db.exec(select(Region).where(Region.vendor_id == "aws").limit(1)).one(),
     "zone": db.exec(select(Zone).where(Zone.vendor_id == "aws").limit(1)).one(),
     "server": db.exec(select(Server).where(Server.vendor_id == "aws").limit(1)).one(),
+    "server_description": db.exec(
+        select(ServerDescription).where(ServerDescription.vendor_id == "aws").limit(1)
+    ).one(),
     "storage": db.exec(
         select(Storage).where(Storage.vendor_id == "aws").limit(1)
     ).one(),
@@ -155,6 +159,9 @@ Zone.model_config["json_schema_extra"] = {
 }
 Server.model_config["json_schema_extra"] = {
     "examples": [example_data["server"].model_dump()]
+}
+ServerDescription.model_config["json_schema_extra"] = {
+    "examples": [example_data["server_description"].model_dump()]
 }
 ServerPKs.model_config["json_schema_extra"] = Server.model_config["json_schema_extra"]
 ServerPKs.model_config["json_schema_extra"]["examples"][0]["score"] = 42
