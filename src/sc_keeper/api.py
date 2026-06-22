@@ -97,10 +97,14 @@ if environ.get("SENTRY_DSN"):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup
+    try:
+        from .mcp_server import mcp_lifespan
+    except ImportError:
+        yield
+        return
 
-    # shutdown
-    yield
+    async with mcp_lifespan():
+        yield
 
 
 # ##############################################################################
@@ -1580,3 +1584,11 @@ def search_benchmark_configs(
         results[i] = result
 
     return sorted(results, key=get_sort_key_for_benchmark_configs)
+
+
+try:
+    from .mcp_server import mount_mcp
+
+    mount_mcp(app)
+except ImportError:
+    logger.debug("MCP optional dependency not installed; /mcp endpoint disabled")
