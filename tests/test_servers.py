@@ -179,8 +179,12 @@ class TestCurrency:
         assert data[0].get("currency", "EUR") == "EUR"
 
     def test_different_prices_for_different_currencies(self):
-        usd_data, _ = get_servers(vendor=["aws"], limit=1, currency="USD")
-        eur_data, _ = get_servers(vendor=["aws"], limit=1, currency="EUR")
+        usd_data, _ = get_servers(
+            vendor=["aws"], limit=1, order_dir="desc", currency="USD"
+        )
+        eur_data, _ = get_servers(
+            vendor=["aws"], limit=1, order_dir="desc", currency="EUR"
+        )
         # prices should differ after conversion (unless rate is exactly 1)
         if usd_data[0]["min_price"] and eur_data[0]["min_price"]:
             assert usd_data[0]["min_price"] != eur_data[0]["min_price"]
