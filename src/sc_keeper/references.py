@@ -277,13 +277,20 @@ class BenchmarkConfig(BaseModel):
 
 
 class VendorDebugInfo(BaseModel):
-    """Statistics about benchmark coverage for a specific vendor."""
+    """Per-vendor benchmark coverage statistics.
+
+    Servers are bucketed into ``active`` (``evaluated`` or ``missing`` with
+    pricing data) and ``inactive`` (without pricing data or explicitly marked as
+    inactive by the vendor).
+    """
 
     vendor_id: str = Field(description="Vendor identifier (e.g., 'aws', 'gcp')")
     all: int = Field(description="Total number of server types for this vendor")
-    active: int = Field(description="Number of active server types")
+    active: int = Field(description="Number of active server types with pricing data")
     evaluated: int = Field(
-        description="Number of servers with at least one benchmark score"
+        description=(
+            "Number of active, priced servers with at least one benchmark score"
+        )
     )
     missing: int = Field(
         description="Number of active servers with prices but no benchmark data"
