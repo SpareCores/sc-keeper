@@ -86,7 +86,8 @@ def get_stats(
 def get_debug_info(db: Session = Depends(get_db)) -> DebugInfoResponse:
     """Return debug information about the availability of benchmark scores for servers.
 
-    Returns vendor-level statistics, per-server details, and a list of all benchmark families.
+    Returns vendor-level statistics (active priced servers split into evaluated vs
+    missing), per-server details, and a list of all benchmark families.
     """
 
     servers_query = (
