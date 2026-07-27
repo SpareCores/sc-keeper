@@ -1165,22 +1165,14 @@ def search_databases(
         if order_by in ("min_price", "min_price_ondemand"):
             order_field = best_price_ref
         else:
-            if live_price_query is not None and order_by in (
-                "min_price",
-                "min_price_ondemand",
-            ):
-                order_field = getattr(live_price_query.c, order_by)
-            else:
-                order_obj = [
-                    o
-                    for o in [Database, DatabaseExtra]
-                    if mapped_class_has_column(o, order_by)
-                ]
-                if len(order_obj) == 0:
-                    raise HTTPException(
-                        status_code=400, detail="Unknown order_by field."
-                    )
-                order_field = getattr(order_obj[0], order_by)
+            order_obj = [
+                o
+                for o in [Database, DatabaseExtra]
+                if mapped_class_has_column(o, order_by)
+            ]
+            if len(order_obj) == 0:
+                raise HTTPException(status_code=400, detail="Unknown order_by field.")
+            order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
         else:

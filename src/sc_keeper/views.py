@@ -161,6 +161,8 @@ class DatabaseExtra(DatabaseExtraBase, table=True):
             select(
                 DatabasePrice.vendor_id,
                 DatabasePrice.database_id,
+                # TODO: when spot (or other) allocations exist, drop the ONDEMAND-only
+                # filter and differentiate aggregates like ServerExtra / gen_live_price_query.
                 func.round(func.min(DatabasePrice.price * Currency.rate), 4).label(
                     "min_price"
                 ),

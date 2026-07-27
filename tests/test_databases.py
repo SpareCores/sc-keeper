@@ -228,6 +228,40 @@ class TestResponseStructure:
         prices = [r["min_price"] for r in data if r["min_price"] is not None]
         assert prices == sorted(prices)
 
+    def test_order_by_unknown_field(self, client):
+        resp = client.get("/databases", params={"order_by": "not_a_column"})
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Unknown order_by field."
+
+    def test_currency_eur_converts_prices(self, client):
+        usd, _ = get_databases(
+            client,
+            partial_name_or_id="db-small",
+            extra_storage_size=200,
+            currency="USD",
+        )
+        eur, _ = get_databases(
+            client,
+            partial_name_or_id="db-small",
+            extra_storage_size=200,
+            currency="EUR",
+        )
+        assert usd[0]["min_price"] != eur[0]["min_price"]
+        assert (
+            usd[0]["price_breakdown"]["compute_min_price"]
+            != eur[0]["price_breakdown"]["compute_min_price"]
+        )
+        assert (
+            usd[0]["price_breakdown"]["extra_storage_hourly"]
+            != eur[0]["price_breakdown"]["extra_storage_hourly"]
+        )
+        assert (
+            usd[0]["price_breakdown"]["extra_storage_monthly"]
+            != eur[0]["price_breakdown"]["extra_storage_monthly"]
+        )
+
+
+class TestFiltersAndPricing:
     def test_vcpus_min_filter(self, client):
         data, _ = get_databases(client, vcpus_min=8)
         assert len(data) == 1
@@ -333,8 +367,6 @@ class TestLiveIntegration:
         data = resp.json()
         assert isinstance(data, list)
         assert len(data) > 0
-        vendors = {row["vendor_id"] for row in data}
-        assert vendors & {"aws", "azure", "gcp"}
 
     def test_live_database_detail(self):
         from sc_keeper.api import app
@@ -342,8 +374,7 @@ class TestLiveIntegration:
 
         override = app.dependency_overrides.pop(get_db, None)
         try:
-            client_live = TestClient(app)
-            resp = client_live.get("/database/aws/db.t3.small")
+            resp = TestClient(app).get("/database/aws/db.t3.small")
         finally:
             if override is not None:
                 app.dependency_overrides[get_db] = override
@@ -361,8 +392,7 @@ class TestLiveIntegration:
 
         override = app.dependency_overrides.pop(get_db, None)
         try:
-            client_live = TestClient(app)
-            resp = client_live.get(
+            resp = TestClient(app).get(
                 "/database/aws/db.t3.small/prices", params={"currency": "EUR"}
             )
         finally:

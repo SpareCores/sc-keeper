@@ -825,10 +825,9 @@ database_extra_storage_size = Annotated[
         description=(
             "Total storage needed in GBs, combining bundled (where applicable) and "
             "on-demand database storage. The database instance's bundled storage is "
-            "subtracted from this amount, and only the difference is priced as "
-            "additional external storage via DatabaseStoragePrice. The database instance's "
-            "bundled storage already meets or exceeds this value incur no extra "
-            "storage cost."
+            "subtracted from this amount, and only the difference is priced as additional "
+            "external storage via DatabaseStoragePrice. Database instances whose bundled "
+            "storage already meets or exceeds this value incur no extra storage cost."
         ),
         json_schema_extra={
             "category_id": CommonFilterCategory.STORAGE,

@@ -345,6 +345,10 @@ def gen_database_live_price_query(
         select(
             DatabasePrice.vendor_id,
             DatabasePrice.database_id,
+            # TODO: when spot (or other) allocations exist, drop the ONDEMAND-only
+            # filter and differentiate aggregates like gen_live_price_query (min_price =
+            # best of any; min_price_ondemand via CASE). Today both labels are the same
+            # because we only read ONDEMAND rows.
             func.round(func.min(DatabasePrice.price * Currency.rate), 4).label(
                 "min_price"
             ),
