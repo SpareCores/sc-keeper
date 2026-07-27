@@ -1366,7 +1366,7 @@ def search_server_prices(
     if only_active:
         joins.add(ServerPrice.server)
         conditions.add(Server.status == Status.ACTIVE)
-    if green_energy:
+    if green_energy is not None:
         joins.add(ServerPrice.region)
         conditions.add(Region.green_energy == green_energy)
     if allocation:
@@ -1617,7 +1617,7 @@ def search_storage_prices(
         joins.add(StoragePrice.region)
         conditions.add(Region.country_id.in_(countries))
 
-    if green_energy:
+    if green_energy is not None:
         joins.add(StoragePrice.region)
         conditions.add(Region.green_energy == green_energy)
 
@@ -1748,7 +1748,7 @@ def search_database_storage_prices(
         joins.add(DatabaseStoragePrice.region)
         conditions.add(Region.country_id.in_(countries))
 
-    if green_energy:
+    if green_energy is not None:
         joins.add(DatabaseStoragePrice.region)
         conditions.add(Region.green_energy == green_energy)
 
@@ -1877,7 +1877,7 @@ def search_traffic_prices(
         joins.add(TrafficPrice.region)
         conditions.add(Region.country_id.in_(countries))
 
-    if green_energy:
+    if green_energy is not None:
         joins.add(TrafficPrice.region)
         conditions.add(Region.green_energy == green_energy)
 
