@@ -17,6 +17,8 @@ from sc_crawler.tables import (
     ComplianceFramework,
     Country,
     Database,
+    DatabaseStorage,
+    DatabaseStoragePrice,
     Region,
     Server,
     ServerDescription,
@@ -79,6 +81,7 @@ from .references import (
     BestPriceAllocation,
     DatabasePKs,
     DatabasePriceBreakdown,
+    DatabaseStoragePriceWithPKs,
     OrderDir,
     PriceBreakdown,
     RegionPKs,
@@ -1656,6 +1659,139 @@ def search_storage_prices(
         order_obj = [
             o
             for o in [StoragePrice, Region, Storage]
+            if mapped_class_has_column(o, order_by)
+        ]
+        if len(order_obj) == 0:
+            raise HTTPException(status_code=400, detail="Unknown order_by field.")
+        if len(order_obj) > 1:
+            raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
+        order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
+
+    # pagination
+    if limit > 0:
+        query = query.limit(limit)
+    # only apply if limit is set
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
+
+    prices = db.exec(query).all()
+
+    # update prices to currency requested
+    for price in prices:
+        if currency:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    db.expunge(price)
+                    try:
+                        price.price = round(
+                            currency_converter.convert(
+                                price.price, price.currency, currency
+                            ),
+                            6,
+                        )
+                    except ValueError as e:
+                        raise HTTPException(
+                            status_code=400, detail="Invalid currency code"
+                        ) from e
+                    price.currency = currency
+
+    return prices
+
+
+@app.get("/database_storage_prices", tags=["Query Resources"])
+def search_database_storage_prices(
+    response: Response,
+    vendor: options.vendor = None,
+    green_energy: options.green_energy = None,
+    storage_min: options.storage_size = None,
+    compliance_framework: options.compliance_framework = None,
+    regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
+    countries: options.countries = None,
+    limit: options.limit = 10,
+    page: options.page = None,
+    order_by: options.order_by = "price",
+    order_dir: options.order_dir = OrderDir.ASC,
+    currency: options.currency = "USD",
+    add_total_count_header: options.add_total_count_header = False,
+    db: Session = Depends(get_db),
+) -> List[DatabaseStoragePriceWithPKs]:
+    # compliance frameworks are defined at the vendor level,
+    # let's filter for vendors instead of exploding the storages table
+    if compliance_framework:
+        if not vendor:
+            vendor = db.exec(select(Vendor.vendor_id)).all()
+        query = select(VendorComplianceLink.vendor_id).where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+        compliant_vendors = db.exec(query).all()
+        vendor = list(set(vendor or []) & set(compliant_vendors))
+
+    # keep track of tables to be joins and filter conditions
+    joins = set()
+    conditions = set()
+
+    # always filter for ACTIVE prices
+    conditions.add(DatabaseStoragePrice.status == Status.ACTIVE)
+
+    if vendor:
+        conditions.add(DatabaseStoragePrice.vendor_id.in_(vendor))
+
+    if storage_min:
+        joins.add(DatabaseStoragePrice.database_storage)
+        conditions.add(DatabaseStorage.min_size <= storage_min)
+        conditions.add(DatabaseStorage.max_size >= storage_min)
+
+    if regions:
+        conditions.add(DatabaseStoragePrice.region_id.in_(regions))
+
+    if vendor_regions:
+        conditions.add(vendor_region_filter(vendor_regions, DatabaseStoragePrice))
+
+    if countries:
+        joins.add(DatabaseStoragePrice.region)
+        conditions.add(Region.country_id.in_(countries))
+
+    if green_energy:
+        joins.add(DatabaseStoragePrice.region)
+        conditions.add(Region.green_energy == green_energy)
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        query = select(func.count()).select_from(DatabaseStoragePrice)
+        for j in joins:
+            query = query.join(j)
+        for condition in conditions:
+            query = query.where(condition)
+        response.headers["X-Total-Count"] = str(db.exec(query).one())
+
+    region_alias = Region
+    query = (
+        select(DatabaseStoragePrice)
+        .join(DatabaseStoragePrice.vendor)
+        .options(contains_eager(DatabaseStoragePrice.vendor))
+        .join(DatabaseStoragePrice.region)
+        .join(region_alias.country)
+        .options(
+            contains_eager(DatabaseStoragePrice.region).contains_eager(
+                region_alias.country
+            )
+        )
+        .join(DatabaseStoragePrice.database_storage)
+        .options(contains_eager(DatabaseStoragePrice.database_storage))
+    )
+    for condition in conditions:
+        query = query.where(condition)
+
+    # ordering
+    if order_by:
+        order_obj = [
+            o
+            for o in [DatabaseStoragePrice, Region, DatabaseStorage]
             if mapped_class_has_column(o, order_by)
         ]
         if len(order_obj) == 0:

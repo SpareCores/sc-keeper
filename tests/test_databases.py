@@ -282,6 +282,37 @@ class TestResponseStructure:
         _, resp = get_databases(client, add_total_count_header=True, limit=1)
         assert resp.headers.get("X-Total-Count") == "2"
 
+    def test_database_storage_prices(self, client):
+        resp = client.get(
+            "/database_storage_prices",
+            params={"limit": 10, "add_total_count_header": True},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) >= 1
+        row = data[0]
+        assert row["vendor_id"] == "test"
+        assert row["database_storage_id"] == "gp3"
+        assert "vendor" in row
+        assert "region" in row
+        assert "database_storage" in row
+        assert resp.headers.get("X-Total-Count") == "1"
+
+    def test_database_storage_prices_storage_min(self, client):
+        resp = client.get(
+            "/database_storage_prices",
+            params={"storage_min": 50},
+        )
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+
+        resp = client.get(
+            "/database_storage_prices",
+            params={"storage_min": 20000},
+        )
+        assert resp.status_code == 200
+        assert len(resp.json()) == 0
+
 
 class TestLiveIntegration:
     """Smoke tests against the real sc-data database when available."""

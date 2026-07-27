@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 from sc_crawler.table_bases import (
     CountryBase,
     DatabaseBase,
+    DatabaseStorageBase,
+    DatabaseStoragePriceBase,
     RegionBase,
     ServerBase,
     ServerPriceBase,
@@ -261,6 +263,12 @@ class StoragePriceWithPKs(StoragePriceBase):
     region: RegionBaseWithPKs
     vendor: VendorBase
     storage: StorageBase
+
+
+class DatabaseStoragePriceWithPKs(DatabaseStoragePriceBase):
+    region: RegionBaseWithPKs
+    vendor: VendorBase
+    database_storage: DatabaseStorageBase
 
 
 class TrafficPriceWithPKs(TrafficPriceBase):
