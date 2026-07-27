@@ -161,6 +161,54 @@ def update_server_price_currency(
     return server_obj
 
 
+def update_database_price_currency(
+    database_obj,
+    to_currency: str = "USD",
+    price_ndigits: int = _PRICE_NDIGITS,
+    monthly_price_ndigits: int = _MONTHLY_PRICE_NDIGITS,
+):
+    """In-place conversion of database price attributes to the target currency."""
+    from_currency = getattr(database_obj, "currency", "USD")
+    if from_currency != to_currency:
+        for attr, ndigits in [
+            ("price", price_ndigits),
+            ("min_price", price_ndigits),
+            ("min_price_ondemand", price_ndigits),
+        ]:
+            value = getattr(database_obj, attr, None)
+            if value:
+                setattr(
+                    database_obj,
+                    attr,
+                    round(
+                        currency_converter.convert(value, from_currency, to_currency),
+                        ndigits,
+                    ),
+                )
+        if hasattr(database_obj, "price_breakdown") and database_obj.price_breakdown:
+            for attr, ndigits in [
+                ("compute_min_price", price_ndigits),
+                ("compute_min_price_ondemand", price_ndigits),
+                ("extra_storage_hourly", price_ndigits),
+                ("extra_storage_monthly", monthly_price_ndigits),
+            ]:
+                value = getattr(database_obj.price_breakdown, attr, None)
+                if value:
+                    setattr(
+                        database_obj.price_breakdown,
+                        attr,
+                        round(
+                            currency_converter.convert(
+                                value, from_currency, to_currency
+                            ),
+                            ndigits,
+                        ),
+                    )
+        if hasattr(database_obj, "currency"):
+            database_obj.currency = to_currency
+    return database_obj
+
+
 def get_sort_key_for_benchmark_configs(item):
     """Helper function to determine the sort order for benchmark configs"""
 

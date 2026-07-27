@@ -1,8 +1,13 @@
 from typing import List, Optional
 
+from sc_crawler.table_fields import DatabaseStorageScope
 from sc_crawler.tables import (
     Allocation,
     BenchmarkScore,
+    Database,
+    DatabasePrice,
+    DatabaseStorage,
+    DatabaseStoragePrice,
     Region,
     Server,
     ServerPrice,
@@ -324,5 +329,141 @@ def gen_storage_price_query(
             total_price_expr.label("total_storage_price"),
         )
         .join(cheapest, Server.vendor_id == cheapest.c.vendor_id)
+        .subquery()
+    )
+
+
+def gen_database_live_price_query(
+    countries: Optional[countries] = None,
+    regions: Optional[regions] = None,
+    vendor_regions: Optional[vendor_regions] = None,
+) -> Optional[Subquery]:
+    """Generate a subquery for live database prices in USD (hourly, on-demand only)."""
+    if not (countries or regions or vendor_regions):
+        return None
+    lp = (
+        select(
+            DatabasePrice.vendor_id,
+            DatabasePrice.database_id,
+            func.round(func.min(DatabasePrice.price * Currency.rate), 4).label(
+                "min_price"
+            ),
+            func.round(func.min(DatabasePrice.price * Currency.rate), 4).label(
+                "min_price_ondemand"
+            ),
+            func.round(func.min(DatabasePrice.price_monthly * Currency.rate), 2).label(
+                "min_price_ondemand_monthly"
+            ),
+        )
+        .where(DatabasePrice.status == Status.ACTIVE)
+        .where(DatabasePrice.allocation == Allocation.ONDEMAND)
+        .join(
+            Currency,
+            (DatabasePrice.currency == Currency.base) & (Currency.quote == "USD"),
+        )
+    )
+    if countries:
+        lp = lp.join(
+            Region,
+            (DatabasePrice.vendor_id == Region.vendor_id)
+            & (DatabasePrice.region_id == Region.region_id),
+        )
+        lp = lp.where(Region.country_id.in_(countries))
+    if regions:
+        lp = lp.where(DatabasePrice.region_id.in_(regions))
+    if vendor_regions:
+        lp = lp.where(vendor_region_filter(vendor_regions, DatabasePrice))
+    return lp.group_by(DatabasePrice.vendor_id, DatabasePrice.database_id).subquery()
+
+
+def gen_database_storage_price_query(
+    extra_storage_size: int,
+    countries: Optional[countries] = None,
+    regions: Optional[regions] = None,
+    vendor_regions: Optional[vendor_regions] = None,
+) -> Subquery:
+    """Per-database subquery for cheapest total external database storage price in USD.
+
+    Returns columns: vendor_id, database_id, total_storage_price (monthly USD).
+    """
+    inner = (
+        select(
+            DatabaseStoragePrice.vendor_id,
+            DatabaseStoragePrice.price,
+            DatabaseStoragePrice.price_upfront,
+            DatabaseStoragePrice.price_tiered,
+            DatabaseStorage.min_size,
+            DatabaseStorage.max_size,
+            Currency.rate.label("currency_rate"),
+            func.row_number()
+            .over(
+                partition_by=DatabaseStoragePrice.vendor_id,
+                order_by=DatabaseStoragePrice.price * Currency.rate,
+            )
+            .label("rn"),
+        )
+        .join(DatabaseStoragePrice.database_storage)
+        .where(DatabaseStoragePrice.status == Status.ACTIVE)
+        .where(DatabaseStorage.status == Status.ACTIVE)
+        .where(DatabaseStorage.scope == DatabaseStorageScope.DATA)
+        .where(DatabaseStorage.max_size >= extra_storage_size)
+        .join(
+            Currency,
+            (DatabaseStoragePrice.currency == Currency.base)
+            & (Currency.quote == "USD"),
+        )
+    )
+    if countries:
+        inner = inner.join(
+            Region,
+            (DatabaseStoragePrice.vendor_id == Region.vendor_id)
+            & (DatabaseStoragePrice.region_id == Region.region_id),
+        )
+        inner = inner.where(Region.country_id.in_(countries))
+    if regions:
+        inner = inner.where(DatabaseStoragePrice.region_id.in_(regions))
+    if vendor_regions:
+        inner = inner.where(vendor_region_filter(vendor_regions, DatabaseStoragePrice))
+    inner = inner.subquery()
+
+    cheapest = (
+        select(
+            inner.c.vendor_id,
+            inner.c.price,
+            inner.c.price_upfront,
+            inner.c.price_tiered,
+            inner.c.min_size,
+            inner.c.max_size,
+            inner.c.currency_rate,
+        )
+        .where(inner.c.rn == 1)
+        .subquery()
+    )
+
+    bundled_storage = func.coalesce(Database.storage_size, 0)
+    actual_extra = literal(extra_storage_size) - bundled_storage
+    effective_usage = func.max(actual_extra, cheapest.c.min_size)
+
+    tiered_raw = _tiered_total_subq(cheapest.c.price_tiered, effective_usage)
+    total_price_raw = (
+        func.coalesce(tiered_raw, cheapest.c.price * effective_usage)
+        + func.coalesce(cheapest.c.price_upfront, 0.0)
+    ) * cheapest.c.currency_rate
+
+    total_price_expr = func.round(
+        case(
+            (bundled_storage >= extra_storage_size, literal(0.0)),
+            else_=total_price_raw,
+        ),
+        4,
+    )
+
+    return (
+        select(
+            Database.vendor_id,
+            Database.database_id,
+            total_price_expr.label("total_storage_price"),
+        )
+        .join(cheapest, Database.vendor_id == cheapest.c.vendor_id)
         .subquery()
     )

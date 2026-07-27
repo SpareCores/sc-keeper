@@ -22,6 +22,7 @@ DEFAULT_CREDIT_COST = int(environ.get("RATE_LIMIT_DEFAULT_CREDIT_COST", 1))
 # "/expensive"=5 means that a request to any endpoint starting with "/expensive" costs 5 credits
 CUSTOM_RATE_LIMIT_COSTS: dict[str, int] = {
     "/servers": 3,
+    "/databases": 3,
     "/server_prices": 5,
     "/table/server_prices": 10,
     "/benchmark_score_stats": 10,

@@ -16,6 +16,7 @@ from sc_crawler.tables import (
     BenchmarkScore,
     ComplianceFramework,
     Country,
+    Database,
     Region,
     Server,
     ServerDescription,
@@ -36,6 +37,7 @@ from .helpers import (
     add_extra_to_price,
     get_sort_key_for_benchmark_configs,
     mapped_class_has_column,
+    update_database_price_currency,
     update_server_price_currency,
     vendor_region_filter,
 )
@@ -65,6 +67,8 @@ from .limits import heavy_job_dep
 from .logger import LogMiddleware
 from .queries import (
     gen_benchmark_query,
+    gen_database_live_price_query,
+    gen_database_storage_price_query,
     gen_live_price_query,
     gen_storage_price_query,
     gen_traffic_price_query,
@@ -73,6 +77,8 @@ from .rate_limit import RateLimitMiddleware, create_rate_limiter
 from .references import (
     BenchmarkConfig,
     BestPriceAllocation,
+    DatabasePKs,
+    DatabasePriceBreakdown,
     OrderDir,
     PriceBreakdown,
     RegionPKs,
@@ -83,7 +89,7 @@ from .references import (
 )
 from .sentry import before_send as sentry_before_send
 from .validators import check_currency, check_filter_limits
-from .views import Currency, ServerExtra
+from .views import Currency, DatabaseExtra, ServerExtra
 
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
@@ -952,6 +958,292 @@ def search_servers(
         serverlist.append(server)
 
     return serverlist
+
+
+@app.get("/databases", tags=["Query Resources"])
+def search_databases(
+    request: Request,
+    response: Response,
+    partial_name_or_id: options.database_partial_name_or_id = None,
+    engine: options.database_engine = None,
+    engine_versions: options.database_engine_versions = None,
+    vcpus_min: options.vcpus_min = 1,
+    vcpus_max: options.vcpus_max = None,
+    memory_min: options.memory_min = None,
+    ha_supported: options.ha_supported = None,
+    storage_autoscaling: options.storage_autoscaling = None,
+    scheduled_backups: options.scheduled_backups = None,
+    continuous_backups_min: options.continuous_backups_min = None,
+    engine_auto_upgrade: options.engine_auto_upgrade = None,
+    autotuning: options.autotuning = None,
+    custom_config: options.custom_config = None,
+    custom_extensions: options.custom_extensions = None,
+    support_levels: options.database_support_levels = None,
+    sla_min: options.sla_min = None,
+    only_active: options.only_active = True,
+    vendor: options.vendor = None,
+    regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
+    countries: options.countries = None,
+    storage_size: options.database_storage_size = None,
+    extra_storage_size: options.database_extra_storage_size = 0,
+    currency: options.currency = "USD",
+    limit: options.limit = 25,
+    page: options.page = None,
+    order_by: options.order_by = "min_price",
+    order_dir: options.order_dir = OrderDir.ASC,
+    add_total_count_header: options.add_total_count_header = False,
+    db: Session = Depends(get_db),
+) -> List[DatabasePKs]:
+    check_filter_limits(request, countries, regions, vendor_regions)
+    check_currency(currency)
+
+    if engine_versions and not engine:
+        raise HTTPException(
+            status_code=400,
+            detail="engine is required when filtering by engine_versions",
+        )
+
+    conditions = set()
+
+    live_price_query = gen_database_live_price_query(countries, regions, vendor_regions)
+    storage_query = (
+        gen_database_storage_price_query(
+            extra_storage_size, countries, regions, vendor_regions
+        )
+        if extra_storage_size
+        else None
+    )
+
+    best_price_ref = (
+        live_price_query.c.min_price
+        if live_price_query is not None
+        else DatabaseExtra.min_price
+    )
+    if storage_query is not None:
+        best_price_ref = (
+            best_price_ref
+            + func.coalesce(storage_query.c.total_storage_price, 0.0) / 730
+        )
+
+    if partial_name_or_id:
+        ilike = "%" + partial_name_or_id + "%"
+        conditions.add(
+            or_(
+                Database.database_id.ilike(ilike),
+                Database.name.ilike(ilike),
+                Database.api_reference.ilike(ilike),
+                Database.display_name.ilike(ilike),
+            )
+        )
+
+    if engine:
+        conditions.add(Database.engine == engine)
+    if engine_versions:
+        je = func.json_each(Database.engine_versions).table_valued("value")
+        version_count = (
+            select(func.count())
+            .select_from(je)
+            .where(je.c.value.in_(engine_versions))
+            .correlate(Database)
+            .scalar_subquery()
+        )
+        conditions.add(version_count == len(engine_versions))
+    if vcpus_min:
+        conditions.add(Database.vcpus >= vcpus_min)
+    if vcpus_max:
+        conditions.add(Database.vcpus <= vcpus_max)
+    if memory_min:
+        conditions.add(Database.memory_amount >= memory_min * 1024)
+    if ha_supported is not None:
+        conditions.add(Database.ha_supported.is_(ha_supported))
+    if storage_autoscaling is not None:
+        conditions.add(Database.storage_autoscaling.is_(storage_autoscaling))
+    if scheduled_backups is not None:
+        conditions.add(Database.scheduled_backups.is_(scheduled_backups))
+    if continuous_backups_min:
+        conditions.add(Database.continuous_backups >= continuous_backups_min)
+    if engine_auto_upgrade is not None:
+        conditions.add(Database.engine_auto_upgrade.is_(engine_auto_upgrade))
+    if autotuning is not None:
+        conditions.add(Database.autotuning.is_(autotuning))
+    if custom_config is not None:
+        conditions.add(Database.custom_config.is_(custom_config))
+    if custom_extensions is not None:
+        conditions.add(Database.custom_extensions.is_(custom_extensions))
+    if support_levels:
+        conditions.add(Database.support_level.in_(support_levels))
+    if sla_min:
+        conditions.add(Database.sla >= sla_min)
+    if storage_size:
+        conditions.add(Database.storage_size >= storage_size)
+    if vendor:
+        conditions.add(Database.vendor_id.in_(vendor))
+
+    if only_active:
+        conditions.add(Database.status == Status.ACTIVE)
+        conditions.add(best_price_ref.isnot(None))
+
+    if order_by in ("min_price", "min_price_ondemand"):
+        conditions.add(best_price_ref.isnot(None))
+
+    if add_total_count_header:
+        query = select(func.count()).select_from(Database)
+        if only_active or order_by in ("min_price", "min_price_ondemand"):
+            query = query.join(
+                DatabaseExtra,
+                (Database.vendor_id == DatabaseExtra.vendor_id)
+                & (Database.database_id == DatabaseExtra.database_id),
+                isouter=True,
+            )
+        if live_price_query is not None:
+            query = query.join(
+                live_price_query,
+                (Database.vendor_id == live_price_query.c.vendor_id)
+                & (Database.database_id == live_price_query.c.database_id),
+                isouter=True,
+            )
+        if storage_query is not None:
+            query = query.join(
+                storage_query,
+                (Database.vendor_id == storage_query.c.vendor_id)
+                & (Database.database_id == storage_query.c.database_id),
+            )
+        for condition in conditions:
+            query = query.where(condition)
+        if live_price_query is not None and order_by in (
+            "min_price",
+            "min_price_ondemand",
+        ):
+            query = query.where(getattr(live_price_query.c, order_by).isnot(None))
+        response.headers["X-Total-Count"] = str(db.exec(query).one())
+
+    select_cols = [Database, DatabaseExtra]
+    if live_price_query is not None:
+        select_cols.extend(
+            [
+                live_price_query.c.min_price,
+                live_price_query.c.min_price_ondemand,
+            ]
+        )
+    if storage_query is not None:
+        select_cols.append(storage_query.c.total_storage_price)
+
+    query = select(*select_cols)
+    query = query.join(Database.vendor)
+    query = query.join(
+        DatabaseExtra,
+        (Database.vendor_id == DatabaseExtra.vendor_id)
+        & (Database.database_id == DatabaseExtra.database_id),
+        isouter=True,
+    )
+    if live_price_query is not None:
+        query = query.join(
+            live_price_query,
+            (Database.vendor_id == live_price_query.c.vendor_id)
+            & (Database.database_id == live_price_query.c.database_id),
+            isouter=True,
+        )
+    if storage_query is not None:
+        query = query.join(
+            storage_query,
+            (Database.vendor_id == storage_query.c.vendor_id)
+            & (Database.database_id == storage_query.c.database_id),
+        )
+    query = query.options(contains_eager(Database.vendor))
+    for condition in conditions:
+        query = query.where(condition)
+
+    if live_price_query is not None and order_by in ("min_price", "min_price_ondemand"):
+        query = query.where(getattr(live_price_query.c, order_by).isnot(None))
+
+    if order_by:
+        if order_by in ("min_price", "min_price_ondemand"):
+            order_field = best_price_ref
+        else:
+            if live_price_query is not None and order_by in (
+                "min_price",
+                "min_price_ondemand",
+            ):
+                order_field = getattr(live_price_query.c, order_by)
+            else:
+                order_obj = [
+                    o
+                    for o in [Database, DatabaseExtra]
+                    if mapped_class_has_column(o, order_by)
+                ]
+                if len(order_obj) == 0:
+                    raise HTTPException(
+                        status_code=400, detail="Unknown order_by field."
+                    )
+                order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
+
+    if limit > 0:
+        query = query.limit(limit)
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
+
+    databases = db.exec(query).all()
+
+    databaselist = []
+    for database_items in databases:
+        items = iter(database_items)
+        database_data = next(items)
+        database_extra = next(items)
+        if live_price_query is not None:
+            lp_min, lp_ondemand = next(items), next(items)
+        else:
+            lp_min = lp_ondemand = None
+        extra_storage_monthly_price = (
+            next(items) or 0 if storage_query is not None else 0
+        )
+        extra_storage_hourly_price = extra_storage_monthly_price / 730
+
+        database = DatabasePKs.model_validate(database_data)
+
+        with suppress(Exception):
+            database.score = database_extra.score
+            compute_min_price = (
+                lp_min if lp_min is not None else database_extra.min_price
+            )
+            compute_min_price_ondemand = (
+                lp_ondemand
+                if lp_ondemand is not None
+                else database_extra.min_price_ondemand
+            )
+
+            database.min_price_ondemand = add_extra_to_price(
+                compute_min_price_ondemand,
+                extra_storage_hourly_price,
+                _PRICE_NDIGITS,
+            )
+            database.min_price = add_extra_to_price(
+                compute_min_price,
+                extra_storage_hourly_price,
+                _PRICE_NDIGITS,
+            )
+            if database_extra.score and database.min_price:
+                database.score_per_price = round(
+                    database_extra.score / database.min_price, _PRICE_NDIGITS
+                )
+            database.price_breakdown = DatabasePriceBreakdown(
+                compute_min_price=compute_min_price,
+                compute_min_price_ondemand=compute_min_price_ondemand,
+                extra_storage_hourly=round(extra_storage_hourly_price, _PRICE_NDIGITS),
+                extra_storage_monthly=round(
+                    extra_storage_monthly_price, _MONTHLY_PRICE_NDIGITS
+                ),
+            )
+
+        database = update_database_price_currency(database, currency)
+        database.price = database.min_price
+        databaselist.append(database)
+
+    return databaselist
 
 
 @app.get(

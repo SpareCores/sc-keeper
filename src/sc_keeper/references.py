@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from sc_crawler.table_bases import (
     CountryBase,
+    DatabaseBase,
     RegionBase,
     ServerBase,
     ServerPriceBase,
@@ -215,6 +216,26 @@ class ServerPKs(ServerWithScore):
     price_breakdown: PriceBreakdown = PriceBreakdown()
 
 
+class DatabaseWithScore(DatabaseBase):
+    price: Optional[float] = None  # legacy
+    min_price: Optional[float] = None
+    min_price_ondemand: Optional[float] = None
+    score: Optional[float] = None
+    score_per_price: Optional[float] = None
+
+
+class DatabasePriceBreakdown(BaseModel):
+    compute_min_price: Optional[float] = None
+    compute_min_price_ondemand: Optional[float] = None
+    extra_storage_hourly: Optional[float] = None
+    extra_storage_monthly: Optional[float] = None
+
+
+class DatabasePKs(DatabaseWithScore):
+    vendor: VendorBase
+    price_breakdown: DatabasePriceBreakdown = DatabasePriceBreakdown()
+
+
 class ServerPricePKs(ServerPriceBase):
     region: RegionBase
     zone: ZoneBase
@@ -256,18 +277,33 @@ class OrderDir(Enum):
     DESC = "desc"
 
 
-class FilterCategories(Enum):
+class CommonFilterCategory(Enum):
+    """Filter panel groups shared by multiple resource endpoints."""
+
     BASIC = "basic"
     PRICE = "price"
-    PERFORMANCE = "performance"
-    PROCESSOR = "processor"
-    CPU_CACHE = "cpu_cache"
-    MEMORY = "memory"
     REGION = "region"
     VENDOR = "vendor"
+    MEMORY = "memory"
     STORAGE = "storage"
+    VCPUS = "vcpus"
+
+
+class ServerFilterCategory(Enum):
+    """Filter panel groups for server-specific query parameters."""
+
+    PROCESSOR = "processor"
+    CPU_CACHE = "cpu_cache"
     GPU = "gpu"
     TRAFFIC = "traffic"
+    PERFORMANCE = "performance"
+
+
+class DatabaseFilterCategory(Enum):
+    """Filter panel groups for managed database query parameters."""
+
+    ENGINE = "engine"
+    FEATURES = "features"
 
 
 class BenchmarkConfig(BaseModel):
