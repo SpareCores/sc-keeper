@@ -1,3 +1,11 @@
+## July 2026
+
+New feature(s):
+
+- Add `/databases`, `/database/{vendor}/{database}`, `/database/{vendor}/{database}/prices`, and
+  `/database_storage_prices` endpoints to support the newly implemented DBaaS data from `sparecores-crawler`.
+- Add `/table/database`, `/table/database_price`, and `/table/database_storage` table dump endpoints.
+
 ## June 2026
 
 New feature(s):

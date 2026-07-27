@@ -6,6 +6,9 @@ from sc_crawler.tables import (
     Benchmark,
     ComplianceFramework,
     Country,
+    Database,
+    DatabasePrice,
+    DatabaseStorage,
     Region,
     Server,
     ServerPrice,
@@ -133,3 +136,58 @@ def table_server_prices(
 def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
     """Return the Storage table as-is, without filtering options or relationships resolved."""
     return db.exec(select(Storage)).all()
+
+
+@router.get("/database")
+def table_database(db: Session = Depends(get_db)) -> List[Database]:
+    """Return the Database table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(Database)).all()
+
+
+@router.get("/database_price")
+def table_database_price(
+    vendor: options.vendor = None,
+    region: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
+    allocation: options.allocation = None,
+    only_active: options.only_active = True,
+    currency: options.currency = None,
+    user: User = Security(current_user),
+    db: Session = Depends(get_db),
+) -> List[DatabasePrice]:
+    """Query DatabasePrice records without relationships resolved."""
+    query = select(DatabasePrice)
+    if vendor:
+        query = query.where(DatabasePrice.vendor_id.in_(vendor))
+    if region:
+        query = query.where(DatabasePrice.region_id.in_(region))
+    if vendor_regions:
+        query = query.where(vendor_region_filter(vendor_regions, DatabasePrice))
+    if allocation:
+        query = query.where(DatabasePrice.allocation == allocation)
+    if only_active:
+        query = query.where(DatabasePrice.status == Status.ACTIVE)
+    prices = db.exec(query).all()
+    if currency:
+        for price in prices:
+            if price.currency != currency:
+                db.expunge(price)
+                try:
+                    price.price = round(
+                        currency_converter.convert(
+                            price.price, price.currency, currency
+                        ),
+                        4,
+                    )
+                except ValueError as e:
+                    raise HTTPException(
+                        status_code=400, detail="Invalid currency code"
+                    ) from e
+                price.currency = currency
+    return prices
+
+
+@router.get("/database_storage")
+def table_database_storage(db: Session = Depends(get_db)) -> List[DatabaseStorage]:
+    """Return the DatabaseStorage table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(DatabaseStorage)).all()
