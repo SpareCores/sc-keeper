@@ -304,3 +304,44 @@ class TestLiveIntegration:
         assert len(data) > 0
         vendors = {row["vendor_id"] for row in data}
         assert vendors & {"aws", "azure", "gcp"}
+
+    def test_live_database_detail(self):
+        from sc_keeper.api import app
+        from sc_keeper.database import get_db
+
+        override = app.dependency_overrides.pop(get_db, None)
+        try:
+            client_live = TestClient(app)
+            resp = client_live.get("/database/aws/db.t3.small")
+        finally:
+            if override is not None:
+                app.dependency_overrides[get_db] = override
+
+        if resp.status_code != 200:
+            pytest.skip("Live database not available")
+        data = resp.json()
+        assert data["vendor_id"] == "aws"
+        assert data["database_id"] == "db.t3.small"
+        assert "vendor" not in data
+
+    def test_live_database_prices(self):
+        from sc_keeper.api import app
+        from sc_keeper.database import get_db
+
+        override = app.dependency_overrides.pop(get_db, None)
+        try:
+            client_live = TestClient(app)
+            resp = client_live.get(
+                "/database/aws/db.t3.small/prices", params={"currency": "EUR"}
+            )
+        finally:
+            if override is not None:
+                app.dependency_overrides[get_db] = override
+
+        if resp.status_code != 200:
+            pytest.skip("Live database not available")
+        data = resp.json()
+        assert len(data) > 0
+        assert data[0]["database_id"] == "db.t3.small"
+        assert data[0]["currency"] == "EUR"
+        assert "region" not in data[0]

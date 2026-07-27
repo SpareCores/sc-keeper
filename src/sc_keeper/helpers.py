@@ -4,8 +4,8 @@ from json import loads as json_loads
 
 from cachier import cachier
 from fastapi import HTTPException
-from sc_crawler.table_bases import ServerBase
-from sc_crawler.tables import Server
+from sc_crawler.table_bases import DatabaseBase, ServerBase
+from sc_crawler.tables import Database, Server
 from sc_crawler.utils import nesteddefaultdict
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.inspection import inspect as sa_inspect
@@ -14,7 +14,7 @@ from sqlmodel import Session, and_, or_, select
 
 from .currency import currency_converter
 from .database import get_db
-from .references import ServerPKs
+from .references import DatabasePKs, ServerPKs
 
 _PRICE_NDIGITS = 4
 _MONTHLY_PRICE_NDIGITS = 2
@@ -61,6 +61,52 @@ def get_server_pks(vendor: str, server: str, db: Session) -> ServerPKs:
         ).one()
     except NoResultFound as e:
         raise HTTPException(status_code=404, detail="Server not found") from e
+
+
+@cachier(stale_after=timedelta(minutes=10), backend="memory")
+def get_database_dicts():
+    with next(get_db()) as db:
+        database_rows = db.exec(select(Database)).all()
+    databases = nesteddefaultdict()
+    for database_row in database_rows:
+        databaseobj = database_row.model_dump()
+        databases[database_row.vendor_id][database_row.database_id] = databaseobj
+        databases[database_row.vendor_id][database_row.api_reference] = databaseobj
+    return databases
+
+
+def get_database_dict(vendor: str, database: str):
+    databaseobj = get_database_dicts()[vendor][database]
+    if databaseobj:
+        return databaseobj
+    raise HTTPException(status_code=404, detail="Database not found")
+
+
+def get_database_base(vendor_id: str, database_id: str, db: Session) -> DatabaseBase:
+    try:
+        return db.exec(
+            select(Database)
+            .where(Database.vendor_id == vendor_id)
+            .where(Database.database_id == database_id)
+        ).one()
+    except NoResultFound as e:
+        raise HTTPException(status_code=404, detail="Database not found") from e
+
+
+def get_database_pks(vendor: str, database: str, db: Session) -> DatabasePKs:
+    try:
+        return db.exec(
+            select(Database)
+            .where(Database.vendor_id == vendor)
+            .where(
+                (Database.database_id == database)
+                | (Database.api_reference == database)
+            )
+            .join(Database.vendor)
+            .options(contains_eager(Database.vendor))
+        ).one()
+    except NoResultFound as e:
+        raise HTTPException(status_code=404, detail="Database not found") from e
 
 
 def mapped_class_has_column(mapped_entity, column_key: str) -> bool:
@@ -172,8 +218,10 @@ def update_database_price_currency(
     if from_currency != to_currency:
         for attr, ndigits in [
             ("price", price_ndigits),
+            ("price_monthly", monthly_price_ndigits),
             ("min_price", price_ndigits),
             ("min_price_ondemand", price_ndigits),
+            ("min_price_ondemand_monthly", monthly_price_ndigits),
         ]:
             value = getattr(database_obj, attr, None)
             if value:
@@ -189,6 +237,7 @@ def update_database_price_currency(
             for attr, ndigits in [
                 ("compute_min_price", price_ndigits),
                 ("compute_min_price_ondemand", price_ndigits),
+                ("compute_min_price_ondemand_monthly", monthly_price_ndigits),
                 ("extra_storage_hourly", price_ndigits),
                 ("extra_storage_monthly", monthly_price_ndigits),
             ]:

@@ -11,7 +11,7 @@ from sc_crawler.table_fields import (
     TrafficDirection,
 )
 
-from .helpers import get_server_dict
+from .helpers import get_database_dict, get_server_dict
 from .references import (
     BestPriceAllocation,
     CommonFilterCategory,
@@ -749,6 +749,16 @@ def server_args_tuple(
 
 
 server_args = Annotated[tuple[str, str], Depends(server_args_tuple)]
+
+
+def database_args_tuple(
+    vendor: Annotated[str, Path(description="A Vendor's ID.")],
+    database: Annotated[str, Path(description="A Database's ID or API reference.")],
+):
+    return vendor, get_database_dict(vendor, database)["database_id"]
+
+
+database_args = Annotated[tuple[str, str], Depends(database_args_tuple)]
 
 server_columns = Annotated[
     Optional[List[ServerColumns]],

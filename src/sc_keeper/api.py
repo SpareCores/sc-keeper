@@ -343,6 +343,7 @@ app.include_router(routers.administrative.router, tags=["Administrative endpoint
 app.include_router(routers.tables.router, prefix="/table", tags=["Table dumps"])
 app.include_router(routers.table_metadata.router)
 app.include_router(routers.server.router, tags=["Server Details"])
+app.include_router(routers.database.router, tags=["Database Details"])
 app.include_router(routers.ai.router, prefix="/ai", tags=["AI"])
 
 
