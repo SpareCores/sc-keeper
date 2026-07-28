@@ -147,6 +147,10 @@ def _seed_db(session: Session):
     session.add(Currency(base="USD", quote="USD", rate=1.0))
     session.commit()
 
+    from sc_keeper.crawler_extend import DatabasePriceExtender
+
+    DatabasePriceExtender().update(session.get_bind())
+
     session.execute(delete(DatabaseExtra))
     session.execute(
         insert(DatabaseExtra).from_select(
@@ -315,6 +319,30 @@ class TestFiltersAndPricing:
     def test_total_count_header(self, client):
         _, resp = get_databases(client, add_total_count_header=True, limit=1)
         assert resp.headers.get("X-Total-Count") == "2"
+
+    def test_best_price_allocation_spot_only_rejected(self, client):
+        resp = client.get("/databases", params={"best_price_allocation": "SPOT_ONLY"})
+        assert resp.status_code == 400
+        assert "SPOT_ONLY" in resp.json()["detail"]
+
+    def test_best_price_allocation_ondemand_only(self, client):
+        data, _ = get_databases(
+            client,
+            partial_name_or_id="db-small",
+            best_price_allocation="ONDEMAND_ONLY",
+        )
+        row = data[0]
+        assert row["min_price"] == row["min_price_ondemand"]
+
+    def test_best_price_allocation_monthly(self, client):
+        data, _ = get_databases(
+            client,
+            partial_name_or_id="db-small",
+            best_price_allocation="MONTHLY",
+        )
+        row = data[0]
+        assert row["min_price"] == row["min_price_ondemand_monthly"]
+        assert row["min_price_ondemand_monthly"] > row["min_price_ondemand"]
 
     def test_database_storage_prices(self, client):
         resp = client.get(

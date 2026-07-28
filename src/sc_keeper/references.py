@@ -222,6 +222,7 @@ class DatabaseWithScore(DatabaseBase):
     price: Optional[float] = None  # legacy
     min_price: Optional[float] = None
     min_price_ondemand: Optional[float] = None
+    min_price_ondemand_monthly: Optional[float] = None
     score: Optional[float] = None
     score_per_price: Optional[float] = None
 
@@ -229,6 +230,7 @@ class DatabaseWithScore(DatabaseBase):
 class DatabasePriceBreakdown(BaseModel):
     compute_min_price: Optional[float] = None
     compute_min_price_ondemand: Optional[float] = None
+    compute_min_price_ondemand_monthly: Optional[float] = None
     extra_storage_hourly: Optional[float] = None
     extra_storage_monthly: Optional[float] = None
 

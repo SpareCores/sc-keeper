@@ -992,6 +992,7 @@ def search_databases(
     storage_size: options.database_storage_size = None,
     extra_storage_size: options.database_extra_storage_size = 0,
     currency: options.currency = "USD",
+    best_price_allocation: options.best_price_allocation = BestPriceAllocation.ANY,
     limit: options.limit = 25,
     page: options.page = None,
     order_by: options.order_by = "min_price",
@@ -1001,6 +1002,12 @@ def search_databases(
 ) -> List[DatabasePKs]:
     check_filter_limits(request, countries, regions, vendor_regions)
     check_currency(currency)
+
+    if best_price_allocation == BestPriceAllocation.SPOT_ONLY:
+        raise HTTPException(
+            status_code=400,
+            detail="SPOT_ONLY is not supported for managed databases",
+        )
 
     if engine_versions and not engine:
         raise HTTPException(
@@ -1024,11 +1031,26 @@ def search_databases(
         if live_price_query is not None
         else DatabaseExtra.min_price
     )
-    if storage_query is not None:
+    if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
         best_price_ref = (
-            best_price_ref
-            + func.coalesce(storage_query.c.total_storage_price, 0.0) / 730
+            live_price_query.c.min_price_ondemand
+            if live_price_query is not None
+            else DatabaseExtra.min_price_ondemand
         )
+    if best_price_allocation == BestPriceAllocation.MONTHLY:
+        best_price_ref = (
+            live_price_query.c.min_price_ondemand_monthly
+            if live_price_query is not None
+            else DatabaseExtra.min_price_ondemand_monthly
+        )
+    if storage_query is not None:
+        extra_storage_monthly_sql = func.coalesce(
+            storage_query.c.total_storage_price, 0.0
+        )
+        if best_price_allocation == BestPriceAllocation.MONTHLY:
+            best_price_ref = best_price_ref + extra_storage_monthly_sql
+        else:
+            best_price_ref = best_price_ref + extra_storage_monthly_sql / 730
 
     if partial_name_or_id:
         ilike = "%" + partial_name_or_id + "%"
@@ -1087,13 +1109,36 @@ def search_databases(
     if only_active:
         conditions.add(Database.status == Status.ACTIVE)
         conditions.add(best_price_ref.isnot(None))
-
-    if order_by in ("min_price", "min_price_ondemand"):
+    if best_price_allocation != BestPriceAllocation.ANY:
         conditions.add(best_price_ref.isnot(None))
+
+    if order_by == "min_price":
+        conditions.add(best_price_ref.isnot(None))
+    if order_by == "min_price_ondemand":
+        if live_price_query is not None:
+            conditions.add(live_price_query.c.min_price_ondemand.isnot(None))
+        else:
+            conditions.add(DatabaseExtra.min_price_ondemand.isnot(None))
+    if order_by == "min_price_ondemand_monthly":
+        if live_price_query is not None:
+            conditions.add(live_price_query.c.min_price_ondemand_monthly.isnot(None))
+        else:
+            conditions.add(DatabaseExtra.min_price_ondemand_monthly.isnot(None))
+
+    _live_price_best_min_price_map = {
+        BestPriceAllocation.ANY: "min_price",
+        BestPriceAllocation.ONDEMAND_ONLY: "min_price_ondemand",
+        BestPriceAllocation.MONTHLY: "min_price_ondemand_monthly",
+    }
+    _live_price_order_fields = {
+        "min_price": "min_price",
+        "min_price_ondemand": "min_price_ondemand",
+        "min_price_ondemand_monthly": "min_price_ondemand_monthly",
+    }
 
     if add_total_count_header:
         query = select(func.count()).select_from(Database)
-        if only_active or order_by in ("min_price", "min_price_ondemand"):
+        if only_active or order_by in _live_price_order_fields:
             query = query.join(
                 DatabaseExtra,
                 (Database.vendor_id == DatabaseExtra.vendor_id)
@@ -1115,11 +1160,12 @@ def search_databases(
             )
         for condition in conditions:
             query = query.where(condition)
-        if live_price_query is not None and order_by in (
-            "min_price",
-            "min_price_ondemand",
-        ):
-            query = query.where(getattr(live_price_query.c, order_by).isnot(None))
+        if live_price_query is not None and order_by in _live_price_order_fields:
+            query = query.where(
+                getattr(live_price_query.c, _live_price_order_fields[order_by]).isnot(
+                    None
+                )
+            )
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     select_cols = [Database, DatabaseExtra]
@@ -1128,6 +1174,7 @@ def search_databases(
             [
                 live_price_query.c.min_price,
                 live_price_query.c.min_price_ondemand,
+                live_price_query.c.min_price_ondemand_monthly,
             ]
         )
     if storage_query is not None:
@@ -1158,21 +1205,31 @@ def search_databases(
     for condition in conditions:
         query = query.where(condition)
 
-    if live_price_query is not None and order_by in ("min_price", "min_price_ondemand"):
-        query = query.where(getattr(live_price_query.c, order_by).isnot(None))
+    if live_price_query is not None and order_by in _live_price_order_fields:
+        query = query.where(
+            getattr(live_price_query.c, _live_price_order_fields[order_by]).isnot(None)
+        )
 
     if order_by:
-        if order_by in ("min_price", "min_price_ondemand"):
+        if order_by == "min_price":
             order_field = best_price_ref
         else:
-            order_obj = [
-                o
-                for o in [Database, DatabaseExtra]
-                if mapped_class_has_column(o, order_by)
-            ]
-            if len(order_obj) == 0:
-                raise HTTPException(status_code=400, detail="Unknown order_by field.")
-            order_field = getattr(order_obj[0], order_by)
+            if (
+                live_price_query is not None
+                and order_by in _live_price_best_min_price_map.values()
+            ):
+                order_field = getattr(live_price_query.c, order_by)
+            else:
+                order_obj = [
+                    o
+                    for o in [Database, DatabaseExtra]
+                    if mapped_class_has_column(o, order_by)
+                ]
+                if len(order_obj) == 0:
+                    raise HTTPException(
+                        status_code=400, detail="Unknown order_by field."
+                    )
+                order_field = getattr(order_obj[0], order_by)
         if OrderDir(order_dir) == OrderDir.ASC:
             query = query.order_by(order_field)
         else:
@@ -1191,9 +1248,9 @@ def search_databases(
         database_data = next(items)
         database_extra = next(items)
         if live_price_query is not None:
-            lp_min, lp_ondemand = next(items), next(items)
+            lp_min, lp_ondemand, lp_monthly = next(items), next(items), next(items)
         else:
-            lp_min = lp_ondemand = None
+            lp_min = lp_ondemand = lp_monthly = None
         extra_storage_monthly_price = (
             next(items) or 0 if storage_query is not None else 0
         )
@@ -1211,17 +1268,32 @@ def search_databases(
                 if lp_ondemand is not None
                 else database_extra.min_price_ondemand
             )
+            compute_min_price_ondemand_monthly = (
+                lp_monthly
+                if lp_monthly is not None
+                else database_extra.min_price_ondemand_monthly
+            )
 
             database.min_price_ondemand = add_extra_to_price(
                 compute_min_price_ondemand,
                 extra_storage_hourly_price,
                 _PRICE_NDIGITS,
             )
+            database.min_price_ondemand_monthly = add_extra_to_price(
+                compute_min_price_ondemand_monthly,
+                extra_storage_monthly_price,
+                _MONTHLY_PRICE_NDIGITS,
+            )
             database.min_price = add_extra_to_price(
                 compute_min_price,
                 extra_storage_hourly_price,
                 _PRICE_NDIGITS,
             )
+
+            if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
+                database.min_price = database.min_price_ondemand
+            if best_price_allocation == BestPriceAllocation.MONTHLY:
+                database.min_price = database.min_price_ondemand_monthly
             if database_extra.score and database.min_price:
                 database.score_per_price = round(
                     database_extra.score / database.min_price, _PRICE_NDIGITS
@@ -1229,6 +1301,7 @@ def search_databases(
             database.price_breakdown = DatabasePriceBreakdown(
                 compute_min_price=compute_min_price,
                 compute_min_price_ondemand=compute_min_price_ondemand,
+                compute_min_price_ondemand_monthly=compute_min_price_ondemand_monthly,
                 extra_storage_hourly=round(extra_storage_hourly_price, _PRICE_NDIGITS),
                 extra_storage_monthly=round(
                     extra_storage_monthly_price, _MONTHLY_PRICE_NDIGITS
