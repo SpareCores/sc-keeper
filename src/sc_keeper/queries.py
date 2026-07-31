@@ -18,7 +18,7 @@ from sc_crawler.tables import (
     TrafficDirection,
     TrafficPrice,
 )
-from sqlalchemy import Float, Subquery, cast, func, literal
+from sqlalchemy import Float, Subquery, and_, cast, func, literal, or_
 from sqlmodel import String, case, select
 
 from .helpers import vendor_region_filter
@@ -394,7 +394,8 @@ def gen_database_storage_price_query(
     constraints:
     - if bundled storage covers the request → price = 0
     - otherwise bill MAX(needed - bundled, storage_extra_min, product.min_size)
-    - drop instances where bundled + storage_extra_max < requested size
+    - drop instances where bundled + storage_extra_max < requested size, or where the
+      selected storage product cannot cover the billed extra amount
     """
     inner = (
         select(
@@ -416,7 +417,6 @@ def gen_database_storage_price_query(
         .where(DatabaseStoragePrice.status == Status.ACTIVE)
         .where(DatabaseStorage.status == Status.ACTIVE)
         .where(DatabaseStorage.scope == DatabaseStorageScope.DATA)
-        .where(DatabaseStorage.max_size >= extra_storage_size)
         .join(
             Currency,
             (DatabaseStoragePrice.currency == Currency.base)
@@ -472,8 +472,13 @@ def gen_database_storage_price_query(
         4,
     )
 
-    can_cover = bundled_storage + func.coalesce(Database.storage_extra_max, 0) >= (
-        extra_storage_size
+    can_cover = or_(
+        bundled_storage >= extra_storage_size,
+        and_(
+            bundled_storage + func.coalesce(Database.storage_extra_max, 0)
+            >= extra_storage_size,
+            cheapest.c.max_size >= effective_usage,
+        ),
     )
 
     return (

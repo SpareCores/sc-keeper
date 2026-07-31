@@ -111,7 +111,7 @@ def _seed(session: Session):
             name="gp3",
             scope=DatabaseStorageScope.DATA,
             min_size=1,
-            max_size=100000,
+            max_size=70369,
             status=Status.ACTIVE,
             observed_at=NOW,
         )

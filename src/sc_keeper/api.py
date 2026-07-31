@@ -17,6 +17,7 @@ from sc_crawler.tables import (
     ComplianceFramework,
     Country,
     Database,
+    DatabasePrice,
     DatabaseStorage,
     DatabaseStoragePrice,
     Region,
@@ -135,6 +136,20 @@ example_data = {
     "prices": db.exec(
         select(ServerPrice).where(ServerPrice.vendor_id == "aws").limit(5)
     ).all(),
+    "database": db.exec(
+        select(Database).where(Database.vendor_id == "aws").limit(1)
+    ).one(),
+    "database_storage": db.exec(
+        select(DatabaseStorage).where(DatabaseStorage.vendor_id == "aws").limit(1)
+    ).one(),
+    "database_prices": db.exec(
+        select(DatabasePrice).where(DatabasePrice.vendor_id == "aws").limit(5)
+    ).all(),
+    "database_storage_prices": db.exec(
+        select(DatabaseStoragePrice)
+        .where(DatabaseStoragePrice.vendor_id == "aws")
+        .limit(5)
+    ).all(),
 }
 db.close()
 
@@ -192,6 +207,46 @@ ServerPriceWithPKs.model_config["json_schema_extra"] = {
             | {"country": example_data["country"].model_dump()},
             "zone": example_data["zone"].model_dump(),
             "server": ServerPKs.model_config["json_schema_extra"]["examples"][0],
+        }
+    ]
+}
+
+Database.model_config["json_schema_extra"] = {
+    "examples": [example_data["database"].model_dump()]
+}
+DatabasePKs.model_config["json_schema_extra"] = {
+    "examples": [
+        example_data["database"].model_dump()
+        | {
+            "price": 0.5,
+            "min_price": 0.5,
+            "min_price_ondemand": 0.5,
+            "min_price_ondemand_monthly": 0.5 * 730,
+            "vendor": example_data["vendor"].model_dump(),
+            "price_breakdown": {
+                "compute_min_price": 0.5,
+                "compute_min_price_ondemand": 0.5,
+                "compute_min_price_ondemand_monthly": 0.5 * 730,
+                "extra_storage_hourly": 0.0,
+                "extra_storage_monthly": 0.0,
+            },
+        }
+    ]
+}
+DatabaseStorage.model_config["json_schema_extra"] = {
+    "examples": [example_data["database_storage"].model_dump()]
+}
+DatabasePrice.model_config["json_schema_extra"] = {
+    "examples": [example_data["database_prices"][0].model_dump()]
+}
+DatabaseStoragePriceWithPKs.model_config["json_schema_extra"] = {
+    "examples": [
+        example_data["database_storage_prices"][0].model_dump()
+        | {
+            "vendor": example_data["vendor"].model_dump(),
+            "region": example_data["region"].model_dump()
+            | {"country": example_data["country"].model_dump()},
+            "database_storage": example_data["database_storage"].model_dump(),
         }
     ]
 }
