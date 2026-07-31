@@ -971,19 +971,27 @@ def search_databases(
     partial_name_or_id: options.database_partial_name_or_id = None,
     engine: options.database_engine = None,
     engine_versions: options.database_engine_versions = None,
+    wire_protocol: options.database_wire_protocol = None,
     vcpus_min: options.vcpus_min = 1,
     vcpus_max: options.vcpus_max = None,
     memory_min: options.memory_min = None,
-    ha_supported: options.ha_supported = None,
-    storage_autoscaling: options.storage_autoscaling = None,
-    scheduled_backups: options.scheduled_backups = None,
-    continuous_backups_min: options.continuous_backups_min = None,
-    engine_auto_upgrade: options.engine_auto_upgrade = None,
-    autotuning: options.autotuning = None,
-    custom_config: options.custom_config = None,
-    custom_extensions: options.custom_extensions = None,
+    ha: options.database_ha = None,
+    max_read_replicas_min: options.database_max_read_replicas_min = None,
+    storage_extra_autosize: options.database_storage_extra_autosize = None,
+    disk_encryption: options.database_disk_encryption = None,
+    scheduled_backups: options.database_scheduled_backups = None,
+    continuous_backups_min: options.database_continuous_backups_min = None,
+    connection_pool: options.database_connection_pool = None,
+    system_monitoring: options.database_system_monitoring = None,
+    database_monitoring: options.database_monitoring = None,
+    auto_upgrade_versions: options.database_auto_upgrade_versions = None,
+    autotuning_advice: options.database_autotuning_advice = None,
+    autotuning_apply: options.database_autotuning_apply = None,
+    custom_config: options.database_custom_config = None,
+    custom_extensions: options.database_custom_extensions = None,
+    security_features: options.database_security_features = None,
     support_levels: options.database_support_levels = None,
-    sla_min: options.sla_min = None,
+    sla_min: options.database_sla_min = None,
     only_active: options.only_active = True,
     vendor: options.vendor = None,
     regions: options.regions = None,
@@ -1075,28 +1083,52 @@ def search_databases(
             .scalar_subquery()
         )
         conditions.add(version_count == len(engine_versions))
+    if wire_protocol:
+        conditions.add(Database.wire_protocol.in_(wire_protocol))
     if vcpus_min:
         conditions.add(Database.vcpus >= vcpus_min)
     if vcpus_max:
         conditions.add(Database.vcpus <= vcpus_max)
     if memory_min:
         conditions.add(Database.memory_amount >= memory_min * 1024)
-    if ha_supported is not None:
-        conditions.add(Database.ha_supported.is_(ha_supported))
-    if storage_autoscaling is not None:
-        conditions.add(Database.storage_autoscaling.is_(storage_autoscaling))
+    if ha:
+        conditions.add(Database.ha.in_(ha))
+    if max_read_replicas_min is not None:
+        conditions.add(Database.max_read_replicas >= max_read_replicas_min)
+    if storage_extra_autosize is not None:
+        conditions.add(Database.storage_extra_autosize.is_(storage_extra_autosize))
+    if disk_encryption is not None:
+        conditions.add(Database.disk_encryption.is_(disk_encryption))
     if scheduled_backups is not None:
         conditions.add(Database.scheduled_backups.is_(scheduled_backups))
     if continuous_backups_min:
         conditions.add(Database.continuous_backups >= continuous_backups_min)
-    if engine_auto_upgrade is not None:
-        conditions.add(Database.engine_auto_upgrade.is_(engine_auto_upgrade))
-    if autotuning is not None:
-        conditions.add(Database.autotuning.is_(autotuning))
+    if connection_pool is not None:
+        conditions.add(Database.connection_pool.is_(connection_pool))
+    if system_monitoring is not None:
+        conditions.add(Database.system_monitoring.is_(system_monitoring))
+    if database_monitoring is not None:
+        conditions.add(Database.database_monitoring.is_(database_monitoring))
+    if auto_upgrade_versions is not None:
+        conditions.add(Database.auto_upgrade_versions.is_(auto_upgrade_versions))
+    if autotuning_advice is not None:
+        conditions.add(Database.autotuning_advice.is_(autotuning_advice))
+    if autotuning_apply is not None:
+        conditions.add(Database.autotuning_apply.is_(autotuning_apply))
     if custom_config is not None:
         conditions.add(Database.custom_config.is_(custom_config))
     if custom_extensions is not None:
         conditions.add(Database.custom_extensions.is_(custom_extensions))
+    if security_features:
+        jf = func.json_each(Database.security_features).table_valued("value")
+        feature_count = (
+            select(func.count())
+            .select_from(jf)
+            .where(jf.c.value.in_([f.value for f in security_features]))
+            .correlate(Database)
+            .scalar_subquery()
+        )
+        conditions.add(feature_count == len(security_features))
     if support_levels:
         conditions.add(Database.support_level.in_(support_levels))
     if sla_min:

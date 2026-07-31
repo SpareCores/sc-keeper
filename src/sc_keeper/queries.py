@@ -389,6 +389,12 @@ def gen_database_storage_price_query(
     """Per-database subquery for cheapest total external database storage price in USD.
 
     Returns columns: vendor_id, database_id, total_storage_price (monthly USD).
+
+    Mirrors gen_storage_price_query (no storage-type filter), with Database.storage_extra_*
+    constraints:
+    - if bundled storage covers the request → price = 0
+    - otherwise bill MAX(needed - bundled, storage_extra_min, product.min_size)
+    - drop instances where bundled + storage_extra_max < requested size
     """
     inner = (
         select(
@@ -446,7 +452,11 @@ def gen_database_storage_price_query(
 
     bundled_storage = func.coalesce(Database.storage_size, 0)
     actual_extra = literal(extra_storage_size) - bundled_storage
-    effective_usage = func.max(actual_extra, cheapest.c.min_size)
+    effective_usage = func.max(
+        actual_extra,
+        func.coalesce(Database.storage_extra_min, 0),
+        cheapest.c.min_size,
+    )
 
     tiered_raw = _tiered_total_subq(cheapest.c.price_tiered, effective_usage)
     total_price_raw = (
@@ -462,6 +472,10 @@ def gen_database_storage_price_query(
         4,
     )
 
+    can_cover = bundled_storage + func.coalesce(Database.storage_extra_max, 0) >= (
+        extra_storage_size
+    )
+
     return (
         select(
             Database.vendor_id,
@@ -469,5 +483,6 @@ def gen_database_storage_price_query(
             total_price_expr.label("total_storage_price"),
         )
         .join(cheapest, Database.vendor_id == cheapest.c.vendor_id)
+        .where(can_cover)
         .subquery()
     )

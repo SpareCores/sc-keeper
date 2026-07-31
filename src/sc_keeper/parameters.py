@@ -6,7 +6,10 @@ from sc_crawler.table_fields import (
     CpuAllocation,
     CpuArchitecture,
     DatabaseEngine,
+    DatabaseHaLevel,
+    DatabaseSecurityFeature,
     DatabaseSupportLevel,
+    DatabaseWireProtocol,
     StorageType,
     TrafficDirection,
 )
@@ -824,10 +827,9 @@ database_extra_storage_size = Annotated[
         title="Required storage size",
         description=(
             "Total storage needed in GBs, combining bundled (where applicable) and "
-            "on-demand database storage. The database instance's bundled storage is "
-            "subtracted from this amount, and only the difference is priced as additional "
-            "external storage via DatabaseStoragePrice. Database instances whose bundled "
-            "storage already meets or exceeds this value incur no extra storage cost."
+            "on-demand database storage. Bundled storage is subtracted; any remainder "
+            "is billed as extra storage (at least the instance's storage_extra_min). "
+            "Instances where bundled + storage_extra_max is below this value are excluded."
         ),
         json_schema_extra={
             "category_id": CommonFilterCategory.STORAGE,
@@ -837,25 +839,78 @@ database_extra_storage_size = Annotated[
     ),
 ]
 
-ha_supported = Annotated[
+database_wire_protocol = Annotated[
+    Optional[List[DatabaseWireProtocol]],
+    Query(
+        title="Wire protocol",
+        description="Network protocol used for client connections.",
+        json_schema_extra={
+            "category_id": DatabaseFilterCategory.ENGINE,
+            "enum": [e.value for e in DatabaseWireProtocol],
+        },
+    ),
+]
+
+database_auto_upgrade_versions = Annotated[
     Optional[bool],
     Query(
-        title="High availability supported",
-        description="Filter for database instances that support high availability.",
+        title="Auto-upgrade versions",
+        description=(
+            "Filter for database instances that support auto-upgrade between minor "
+            "engine versions."
+        ),
+        json_schema_extra={"category_id": DatabaseFilterCategory.ENGINE},
+    ),
+]
+
+database_ha = Annotated[
+    Optional[List[DatabaseHaLevel]],
+    Query(
+        title="High availability level",
+        description="Level of HA (high availability) supported by the database instance.",
+        json_schema_extra={
+            "category_id": DatabaseFilterCategory.FEATURES,
+            "enum": [e.value for e in DatabaseHaLevel],
+        },
+    ),
+]
+
+database_max_read_replicas_min = Annotated[
+    Optional[int],
+    Query(
+        title="Minimum max read replicas",
+        description=(
+            "Minimum number of read-only replica nodes the database instance must support."
+        ),
+        json_schema_extra={
+            "category_id": DatabaseFilterCategory.FEATURES,
+            "step": 1,
+        },
+    ),
+]
+
+database_storage_extra_autosize = Annotated[
+    Optional[bool],
+    Query(
+        title="Storage autosize",
+        description=(
+            "Filter for database instances that can automatically expand storage as "
+            "disk usage grows."
+        ),
+        json_schema_extra={"category_id": CommonFilterCategory.STORAGE},
+    ),
+]
+
+database_disk_encryption = Annotated[
+    Optional[bool],
+    Query(
+        title="Disk encryption",
+        description="Filter for database instances with storage encrypted at rest.",
         json_schema_extra={"category_id": DatabaseFilterCategory.FEATURES},
     ),
 ]
 
-storage_autoscaling = Annotated[
-    Optional[bool],
-    Query(
-        title="Storage autoscaling",
-        description="Filter for database instances that support storage autoscaling.",
-        json_schema_extra={"category_id": DatabaseFilterCategory.FEATURES},
-    ),
-]
-
-scheduled_backups = Annotated[
+database_scheduled_backups = Annotated[
     Optional[bool],
     Query(
         title="Scheduled backups",
@@ -864,7 +919,7 @@ scheduled_backups = Annotated[
     ),
 ]
 
-continuous_backups_min = Annotated[
+database_continuous_backups_min = Annotated[
     Optional[int],
     Query(
         title="Minimum continuous backup retention",
@@ -877,25 +932,63 @@ continuous_backups_min = Annotated[
     ),
 ]
 
-engine_auto_upgrade = Annotated[
+database_connection_pool = Annotated[
     Optional[bool],
     Query(
-        title="Engine auto upgrade",
-        description="Filter for database instances that support automatic engine upgrades.",
+        title="Connection pool",
+        description="Filter for database instances with managed connection proxy support.",
         json_schema_extra={"category_id": DatabaseFilterCategory.FEATURES},
     ),
 ]
 
-autotuning = Annotated[
+database_system_monitoring = Annotated[
     Optional[bool],
     Query(
-        title="Autotuning",
-        description="Filter for database instances with vendor autotuning available.",
+        title="System monitoring",
+        description=(
+            "Filter for database instances with host-level CPU, RAM, and disk metrics."
+        ),
         json_schema_extra={"category_id": DatabaseFilterCategory.FEATURES},
     ),
 ]
 
-custom_config = Annotated[
+database_monitoring = Annotated[
+    Optional[bool],
+    Query(
+        title="Database monitoring",
+        description=(
+            "Filter for database instances with engine performance insights "
+            "(slow queries, locks, execution plans)."
+        ),
+        json_schema_extra={"category_id": DatabaseFilterCategory.FEATURES},
+    ),
+]
+
+database_autotuning_advice = Annotated[
+    Optional[bool],
+    Query(
+        title="Autotuning advice",
+        description=(
+            "Filter for database instances that analyze workload and generate "
+            "performance tuning advice."
+        ),
+        json_schema_extra={"category_id": DatabaseFilterCategory.FEATURES},
+    ),
+]
+
+database_autotuning_apply = Annotated[
+    Optional[bool],
+    Query(
+        title="Autotuning apply",
+        description=(
+            "Filter for database instances that automatically apply performance fixes "
+            "without operator intervention."
+        ),
+        json_schema_extra={"category_id": DatabaseFilterCategory.FEATURES},
+    ),
+]
+
+database_custom_config = Annotated[
     Optional[bool],
     Query(
         title="Custom configuration",
@@ -904,12 +997,26 @@ custom_config = Annotated[
     ),
 ]
 
-custom_extensions = Annotated[
+database_custom_extensions = Annotated[
     Optional[bool],
     Query(
         title="Custom extensions",
         description="Filter for database instances that support custom extensions.",
         json_schema_extra={"category_id": DatabaseFilterCategory.FEATURES},
+    ),
+]
+
+database_security_features = Annotated[
+    Optional[List[DatabaseSecurityFeature]],
+    Query(
+        title="Security features",
+        description=(
+            "Required security features; all must be supported by the database instance."
+        ),
+        json_schema_extra={
+            "category_id": DatabaseFilterCategory.FEATURES,
+            "enum": [e.value for e in DatabaseSecurityFeature],
+        },
     ),
 ]
 
@@ -925,7 +1032,7 @@ database_support_levels = Annotated[
     ),
 ]
 
-sla_min = Annotated[
+database_sla_min = Annotated[
     Optional[float],
     Query(
         title="Minimum SLA",
