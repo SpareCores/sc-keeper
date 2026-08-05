@@ -7,8 +7,8 @@ from sc_crawler.table_fields import (
     CpuArchitecture,
     DatabaseEngine,
     DatabaseHaLevel,
+    DatabaseHaStrategy,
     DatabaseSecurityFeature,
-    DatabaseSupportLevel,
     DatabaseWireProtocol,
     StorageType,
     TrafficDirection,
@@ -866,11 +866,27 @@ database_auto_upgrade_versions = Annotated[
 database_ha = Annotated[
     Optional[List[DatabaseHaLevel]],
     Query(
-        title="High availability level",
-        description="Level of HA (high availability) supported by the database instance.",
+        title="High availability levels",
+        description=(
+            "Required HA levels; all must appear in the database instance's supported list."
+        ),
         json_schema_extra={
             "category_id": DatabaseFilterCategory.FEATURES,
             "enum": [e.value for e in DatabaseHaLevel],
+        },
+    ),
+]
+
+database_ha_strategy = Annotated[
+    Optional[List[DatabaseHaStrategy]],
+    Query(
+        title="High availability strategies",
+        description=(
+            "Required HA strategies; all must appear in the database instance's supported list."
+        ),
+        json_schema_extra={
+            "category_id": DatabaseFilterCategory.FEATURES,
+            "enum": [e.value for e in DatabaseHaStrategy],
         },
     ),
 ]
@@ -1016,18 +1032,6 @@ database_security_features = Annotated[
         json_schema_extra={
             "category_id": DatabaseFilterCategory.FEATURES,
             "enum": [e.value for e in DatabaseSecurityFeature],
-        },
-    ),
-]
-
-database_support_levels = Annotated[
-    Optional[List[DatabaseSupportLevel]],
-    Query(
-        title="Support levels",
-        description="Vendor support tier for the database instance.",
-        json_schema_extra={
-            "category_id": DatabaseFilterCategory.FEATURES,
-            "enum": [e.value for e in DatabaseSupportLevel],
         },
     ),
 ]

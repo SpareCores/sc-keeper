@@ -137,17 +137,27 @@ example_data = {
         select(ServerPrice).where(ServerPrice.vendor_id == "aws").limit(5)
     ).all(),
     "database": db.exec(
-        select(Database).where(Database.vendor_id == "aws").limit(1)
+        select(Database)
+        .where(Database.vendor_id == "aws")
+        .where(Database.status == Status.ACTIVE)
+        .limit(1)
     ).one(),
     "database_storage": db.exec(
-        select(DatabaseStorage).where(DatabaseStorage.vendor_id == "aws").limit(1)
+        select(DatabaseStorage)
+        .where(DatabaseStorage.vendor_id == "aws")
+        .where(DatabaseStorage.status == Status.ACTIVE)
+        .limit(1)
     ).one(),
     "database_prices": db.exec(
-        select(DatabasePrice).where(DatabasePrice.vendor_id == "aws").limit(5)
+        select(DatabasePrice)
+        .where(DatabasePrice.vendor_id == "aws")
+        .where(DatabasePrice.status == Status.ACTIVE)
+        .limit(5)
     ).all(),
     "database_storage_prices": db.exec(
         select(DatabaseStoragePrice)
         .where(DatabaseStoragePrice.vendor_id == "aws")
+        .where(DatabaseStoragePrice.status == Status.ACTIVE)
         .limit(5)
     ).all(),
 }
@@ -1031,6 +1041,7 @@ def search_databases(
     vcpus_max: options.vcpus_max = None,
     memory_min: options.memory_min = None,
     ha: options.database_ha = None,
+    ha_strategy: options.database_ha_strategy = None,
     max_read_replicas_min: options.database_max_read_replicas_min = None,
     storage_extra_autosize: options.database_storage_extra_autosize = None,
     disk_encryption: options.database_disk_encryption = None,
@@ -1045,7 +1056,6 @@ def search_databases(
     custom_config: options.database_custom_config = None,
     custom_extensions: options.database_custom_extensions = None,
     security_features: options.database_security_features = None,
-    support_levels: options.database_support_levels = None,
     sla_min: options.database_sla_min = None,
     only_active: options.only_active = True,
     vendor: options.vendor = None,
@@ -1147,7 +1157,25 @@ def search_databases(
     if memory_min:
         conditions.add(Database.memory_amount >= memory_min * 1024)
     if ha:
-        conditions.add(Database.ha.in_(ha))
+        jh = func.json_each(Database.ha).table_valued("value")
+        ha_count = (
+            select(func.count())
+            .select_from(jh)
+            .where(jh.c.value.in_([level.value for level in ha]))
+            .correlate(Database)
+            .scalar_subquery()
+        )
+        conditions.add(ha_count == len(ha))
+    if ha_strategy:
+        jhs = func.json_each(Database.ha_strategy).table_valued("value")
+        strategy_count = (
+            select(func.count())
+            .select_from(jhs)
+            .where(jhs.c.value.in_([s.value for s in ha_strategy]))
+            .correlate(Database)
+            .scalar_subquery()
+        )
+        conditions.add(strategy_count == len(ha_strategy))
     if max_read_replicas_min is not None:
         conditions.add(Database.max_read_replicas >= max_read_replicas_min)
     if storage_extra_autosize is not None:
@@ -1184,8 +1212,6 @@ def search_databases(
             .scalar_subquery()
         )
         conditions.add(feature_count == len(security_features))
-    if support_levels:
-        conditions.add(Database.support_level.in_(support_levels))
     if sla_min:
         conditions.add(Database.sla >= sla_min)
     if storage_size:

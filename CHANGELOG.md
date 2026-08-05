@@ -7,14 +7,18 @@ New feature(s):
 - Add `/table/database`, `/table/database_price`, and `/table/database_storage` table dump endpoints.
 - Add `/databases` filters for new `sparecores-crawler` v0.8.5 fields (`wire_protocol`,
   `max_read_replicas`, monitoring, `connection_pool`, `disk_encryption`, `security_features`,
-  `autotuning_apply`, and related capabilities).
+  `autotuning_apply`, `ha_strategy`, and related capabilities).
+- Treat `ha` / `ha_strategy` as `database_price` primary keys (min price = cheapest HA row).
 
 ‼ Breaking changes:
 
 - Rename `/databases` filters for the v0.8.5 `Database` schema: `ha_supported` → `ha`
-  (`DatabaseHaLevel` list), `storage_autoscaling` → `storage_extra_autosize`,
-  `engine_auto_upgrade` → `auto_upgrade_versions`, `autotuning` → `autotuning_advice`, and
-  `support_level` values `standard` → `tier-1` / `tier-2` / `tier-3`.
+  (ordered `DatabaseHaLevel` list), add `ha_strategy` (ordered `DatabaseHaStrategy` list),
+  `storage_autoscaling` → `storage_extra_autosize`, `engine_auto_upgrade` →
+  `auto_upgrade_versions`, `autotuning` → `autotuning_advice`, and drop `support_level` /
+  `support_levels`.
+- Update `security_features` filter values for crawler v0.8.5 (e.g. `ip-allowlisting` →
+  `ip-filtering`).
 
 ## June 2026
 

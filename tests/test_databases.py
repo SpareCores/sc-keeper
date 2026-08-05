@@ -8,9 +8,9 @@ from sc_crawler.table_fields import (
     Allocation,
     DatabaseEngine,
     DatabaseHaLevel,
+    DatabaseHaStrategy,
     DatabaseSecurityFeature,
     DatabaseStorageScope,
-    DatabaseSupportLevel,
     DatabaseWireProtocol,
     PriceUnit,
     Status,
@@ -58,7 +58,8 @@ def _make_database(
     vcpus: int = 2,
     memory: int = 4096,
     storage_size: int | None = None,
-    ha: DatabaseHaLevel = DatabaseHaLevel.MULTI_ZONE,
+    ha: list | None = None,
+    ha_strategy: list | None = None,
     storage_extra_min: int | None = 10,
     storage_extra_max: int | None = 10000,
     max_read_replicas: int = 5,
@@ -82,7 +83,9 @@ def _make_database(
         "storage_extra_max": storage_extra_max,
         "storage_extra_autosize": True,
         "disk_encryption": True,
-        "ha": ha,
+        "ha": ha or [DatabaseHaLevel.MULTI_ZONE, DatabaseHaLevel.NONE],
+        "ha_strategy": ha_strategy
+        or [DatabaseHaStrategy.PASSIVE_STANDBY, DatabaseHaStrategy.NONE],
         "max_read_replicas": max_read_replicas,
         "connection_pool": True,
         "system_monitoring": True,
@@ -92,8 +95,7 @@ def _make_database(
         "custom_config": True,
         "custom_extensions": True,
         "security_features": security_features
-        or [DatabaseSecurityFeature.IP_ALLOWLISTING],
-        "support_level": DatabaseSupportLevel.TIER_1,
+        or [DatabaseSecurityFeature.IP_FILTERING],
         "status": Status.ACTIVE,
         "observed_at": NOW,
     }
@@ -113,20 +115,38 @@ _DATABASES = [
         vcpus=8,
         memory=32768,
         storage_size=None,
-        ha=DatabaseHaLevel.MULTI_REGION,
+        ha=[DatabaseHaLevel.MULTI_REGION, DatabaseHaLevel.MULTI_ZONE],
+        ha_strategy=[DatabaseHaStrategy.MULTI_MASTER],
         max_read_replicas=15,
         storage_extra_min=10,
         storage_extra_max=10000,
         security_features=[
-            DatabaseSecurityFeature.IP_ALLOWLISTING,
+            DatabaseSecurityFeature.IP_FILTERING,
             DatabaseSecurityFeature.NETWORK_PEERING,
         ],
     ),
 ]
 
 _PRICES = {
-    "db-small": 0.10,
-    "db-large": 0.50,
+    "db-small": [
+        {
+            "ha": DatabaseHaLevel.NONE,
+            "ha_strategy": DatabaseHaStrategy.NONE,
+            "price": 0.10,
+        },
+        {
+            "ha": DatabaseHaLevel.MULTI_ZONE,
+            "ha_strategy": DatabaseHaStrategy.PASSIVE_STANDBY,
+            "price": 0.20,
+        },
+    ],
+    "db-large": [
+        {
+            "ha": DatabaseHaLevel.MULTI_REGION,
+            "ha_strategy": DatabaseHaStrategy.MULTI_MASTER,
+            "price": 0.50,
+        },
+    ],
 }
 
 
@@ -149,20 +169,23 @@ def _seed_db(session: Session):
     for row in _DATABASES:
         session.add(Database(**row))
 
-    for database_id, price in _PRICES.items():
-        session.add(
-            DatabasePrice(
-                vendor_id="test",
-                region_id="us-east-1",
-                database_id=database_id,
-                allocation=Allocation.ONDEMAND,
-                unit=PriceUnit.HOUR,
-                price=price,
-                currency="USD",
-                status=Status.ACTIVE,
-                observed_at=NOW,
+    for database_id, price_rows in _PRICES.items():
+        for price_row in price_rows:
+            session.add(
+                DatabasePrice(
+                    vendor_id="test",
+                    region_id="us-east-1",
+                    database_id=database_id,
+                    allocation=Allocation.ONDEMAND,
+                    ha=price_row["ha"],
+                    ha_strategy=price_row["ha_strategy"],
+                    unit=PriceUnit.HOUR,
+                    price=price_row["price"],
+                    currency="USD",
+                    status=Status.ACTIVE,
+                    observed_at=NOW,
+                )
             )
-        )
 
     session.add(
         DatabaseStorage(
@@ -336,7 +359,20 @@ class TestFiltersAndPricing:
         data, _ = get_databases(client, ha=["multi-region"])
         assert len(data) == 1
         assert data[0]["database_id"] == "db-large"
-        assert data[0]["ha"] == "multi-region"
+        assert "multi-region" in data[0]["ha"]
+
+    def test_ha_strategy_filter(self, client):
+        data, _ = get_databases(client, ha_strategy=["multi-master"])
+        assert len(data) == 1
+        assert data[0]["database_id"] == "db-large"
+        assert "multi-master" in data[0]["ha_strategy"]
+
+    def test_min_price_across_ha_price_rows(self, client):
+        data, _ = get_databases(client, partial_name_or_id="db-small")
+        assert len(data) == 1
+        assert data[0]["min_price"] == 0.1
+        assert data[0]["min_price_ondemand"] == 0.1
+        assert data[0]["min_price_ondemand_monthly"] == 73.0
 
     def test_wire_protocol_filter(self, client):
         data, _ = get_databases(client, wire_protocol=["postgresql"])
@@ -353,7 +389,7 @@ class TestFiltersAndPricing:
 
     def test_security_features_filter(self, client):
         data, _ = get_databases(
-            client, security_features=["ip-allowlisting", "network-peering"]
+            client, security_features=["ip-filtering", "network-peering"]
         )
         assert len(data) == 1
         assert data[0]["database_id"] == "db-large"
@@ -363,10 +399,6 @@ class TestFiltersAndPricing:
         assert len(data) == 2
         none, _ = get_databases(client, autotuning_apply=True)
         assert len(none) == 0
-
-    def test_support_levels_filter(self, client):
-        data, _ = get_databases(client, support_levels=["tier-1"])
-        assert len(data) == 2
 
     def test_extra_storage_increases_min_price(self, client):
         base, _ = get_databases(client, partial_name_or_id="db-large")

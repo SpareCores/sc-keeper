@@ -267,10 +267,12 @@ class DatabasePriceExtender(TableExtender):
                     or abs(monthly_price - price.price_monthly) > 0.02
                 ):
                     logger.debug(
-                        "Updating price_monthly for %s/%s/%s from %s to %s",
+                        "Updating price_monthly for %s/%s/%s/%s/%s from %s to %s",
                         price.vendor_id,
                         price.region_id,
                         price.database_id,
+                        price.ha.name,
+                        price.ha_strategy.name,
                         price.price_monthly,
                         monthly_price,
                     )
@@ -283,6 +285,8 @@ class DatabasePriceExtender(TableExtender):
                               AND region_id = :region_id
                               AND database_id = :database_id
                               AND allocation = :allocation
+                              AND ha = :ha
+                              AND ha_strategy = :ha_strategy
                             """
                         ).bindparams(
                             monthly_price=monthly_price,
@@ -290,6 +294,8 @@ class DatabasePriceExtender(TableExtender):
                             region_id=price.region_id,
                             database_id=price.database_id,
                             allocation=price.allocation.name,
+                            ha=price.ha.name,
+                            ha_strategy=price.ha_strategy.name,
                         )
                     )
             session.commit()
