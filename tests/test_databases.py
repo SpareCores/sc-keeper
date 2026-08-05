@@ -516,65 +516,268 @@ class TestFiltersAndPricing:
         assert len(resp.json()) == 0
 
 
-class TestLiveIntegration:
-    """Smoke tests against the real sc-data database when available."""
+@pytest.fixture
+def live_client():
+    """Real sc-data client; skips if DB is missing or schema is outdated."""
+    from sc_keeper.api import app
+    from sc_keeper.database import get_db
 
-    def test_live_returns_databases(self):
-        from sc_keeper.api import app
-        from sc_keeper.database import get_db
-
-        override = app.dependency_overrides.pop(get_db, None)
-        try:
-            resp = TestClient(app, raise_server_exceptions=False).get(
-                "/databases", params={"limit": 5}
-            )
-        finally:
-            if override is not None:
-                app.dependency_overrides[get_db] = override
-
+    override = app.dependency_overrides.pop(get_db, None)
+    client = TestClient(app, raise_server_exceptions=False)
+    try:
+        resp = client.get("/databases", params={"limit": 1})
         if resp.status_code != 200:
             pytest.skip("Live database not available or schema outdated")
-        data = resp.json()
+        yield client
+    finally:
+        if override is not None:
+            app.dependency_overrides[get_db] = override
+
+
+def get_live_databases(live_client, **params):
+    resp = live_client.get("/databases", params=params)
+    assert resp.status_code == 200
+    return resp.json(), resp
+
+
+class TestLiveResponseStructure:
+    def test_default_returns_list(self, live_client):
+        data, _ = get_live_databases(live_client)
         assert isinstance(data, list)
         assert len(data) > 0
 
-    def test_live_database_detail(self):
-        from sc_keeper.api import app
-        from sc_keeper.database import get_db
+    def test_default_limit(self, live_client):
+        data, _ = get_live_databases(live_client)
+        assert len(data) <= 25
 
-        override = app.dependency_overrides.pop(get_db, None)
-        try:
-            resp = TestClient(app, raise_server_exceptions=False).get(
-                "/database/aws/db.t3.small"
+    def test_custom_limit(self, live_client):
+        data, _ = get_live_databases(live_client, limit=5)
+        assert len(data) <= 5
+
+    def test_required_fields(self, live_client):
+        data, _ = get_live_databases(live_client, limit=1)
+        row = data[0]
+        for field in [
+            "vendor_id",
+            "database_id",
+            "engine",
+            "ha",
+            "ha_strategy",
+            "min_price",
+            "vendor",
+            "price_breakdown",
+        ]:
+            assert field in row, f"Missing field: {field}"
+        assert isinstance(row["ha"], list)
+        assert isinstance(row["ha_strategy"], list)
+
+    def test_vendor_nested(self, live_client):
+        data, _ = get_live_databases(live_client, limit=1)
+        vendor = data[0]["vendor"]
+        assert "vendor_id" in vendor
+        assert "name" in vendor
+
+
+class TestLiveOrdering:
+    def test_order_by_min_price_asc(self, live_client):
+        data, _ = get_live_databases(
+            live_client, limit=10, order_by="min_price", order_dir="asc"
+        )
+        prices = [r["min_price"] for r in data if r["min_price"] is not None]
+        assert prices == sorted(prices)
+
+    def test_order_by_min_price_desc(self, live_client):
+        data, _ = get_live_databases(
+            live_client, limit=10, order_by="min_price", order_dir="desc"
+        )
+        prices = [r["min_price"] for r in data if r["min_price"] is not None]
+        assert prices == sorted(prices, reverse=True)
+
+    def test_order_by_vcpus(self, live_client):
+        data, _ = get_live_databases(
+            live_client, limit=10, order_by="vcpus", order_dir="asc"
+        )
+        assert [r["vcpus"] for r in data] == sorted(r["vcpus"] for r in data)
+
+
+class TestLiveFiltering:
+    def test_vendor_filter(self, live_client):
+        data, _ = get_live_databases(live_client, vendor=["aws"], limit=10)
+        assert data
+        assert all(r["vendor_id"] == "aws" for r in data)
+
+    def test_multi_vendor_filter(self, live_client):
+        data, _ = get_live_databases(live_client, vendor=["aws", "azure"], limit=50)
+        assert data
+        assert {r["vendor_id"] for r in data} <= {"aws", "azure"}
+
+    def test_vcpus_min(self, live_client):
+        data, _ = get_live_databases(live_client, vcpus_min=8, limit=10)
+        assert data
+        assert all(r["vcpus"] >= 8 for r in data)
+
+    def test_vcpus_max(self, live_client):
+        data, _ = get_live_databases(live_client, vcpus_max=4, limit=10)
+        assert data
+        assert all(r["vcpus"] <= 4 for r in data)
+
+    def test_memory_min(self, live_client):
+        data, _ = get_live_databases(live_client, memory_min=16, limit=10)
+        assert data
+        assert all(r["memory_amount"] >= 16 * 1024 for r in data)
+
+    def test_engine_filter(self, live_client):
+        data, _ = get_live_databases(live_client, engine="postgresql", limit=10)
+        assert data
+        assert all(r["engine"] == "postgresql" for r in data)
+
+    def test_ha_filter(self, live_client):
+        data, _ = get_live_databases(live_client, ha=["multi-zone"], limit=10)
+        assert data
+        assert all("multi-zone" in r["ha"] for r in data)
+
+    def test_partial_name_or_id(self, live_client):
+        data, _ = get_live_databases(
+            live_client, partial_name_or_id="db.t3", vendor=["aws"], limit=10
+        )
+        assert data
+        assert all(
+            any(
+                "db.t3" in (r.get(f) or "").lower()
+                for f in ("database_id", "name", "api_reference", "display_name")
             )
-        finally:
-            if override is not None:
-                app.dependency_overrides[get_db] = override
+            for r in data
+        )
 
-        if resp.status_code != 200:
-            pytest.skip("Live database not available or schema outdated")
+    def test_countries_filter(self, live_client):
+        _, baseline = get_live_databases(
+            live_client, vendor=["aws"], limit=1, add_total_count_header=True
+        )
+        _, filtered = get_live_databases(
+            live_client,
+            vendor=["aws"],
+            countries=["DE"],
+            limit=1,
+            add_total_count_header=True,
+        )
+        assert int(filtered.headers["x-total-count"]) < int(
+            baseline.headers["x-total-count"]
+        )
+
+
+class TestLiveCurrency:
+    def test_eur_currency(self, live_client):
+        data, _ = get_live_databases(live_client, limit=1, currency="EUR")
+        assert data[0].get("currency", "EUR") == "EUR"
+
+    def test_different_prices_for_different_currencies(self, live_client):
+        usd, _ = get_live_databases(live_client, limit=1, currency="USD")
+        eur, _ = get_live_databases(live_client, limit=1, currency="EUR")
+        if usd[0]["min_price"] is not None and eur[0]["min_price"] is not None:
+            assert usd[0]["min_price"] != eur[0]["min_price"]
+
+
+class TestLiveBestPriceAllocation:
+    def test_spot_only_rejected(self, live_client):
+        resp = live_client.get(
+            "/databases", params={"best_price_allocation": "SPOT_ONLY"}
+        )
+        assert resp.status_code == 422
+
+    def test_ondemand_only(self, live_client):
+        data, _ = get_live_databases(
+            live_client, best_price_allocation="ONDEMAND_ONLY", limit=10
+        )
+        for row in data:
+            if row["min_price_ondemand"] is not None:
+                assert row["min_price"] == row["min_price_ondemand"]
+
+    def test_monthly(self, live_client):
+        data, _ = get_live_databases(
+            live_client, best_price_allocation="MONTHLY", limit=10
+        )
+        for row in data:
+            if row["min_price_ondemand_monthly"] is not None:
+                assert row["min_price"] == row["min_price_ondemand_monthly"]
+
+
+class TestLiveExtraStorage:
+    def test_extra_storage_adds_to_price(self, live_client):
+        base, _ = get_live_databases(
+            live_client, vendor=["aws"], limit=5, order_by="vcpus"
+        )
+        with_extra, _ = get_live_databases(
+            live_client,
+            vendor=["aws"],
+            extra_storage_size=200,
+            limit=5,
+            order_by="vcpus",
+        )
+        base_by_id = {r["database_id"]: r for r in base}
+        extra_by_id = {r["database_id"]: r for r in with_extra}
+        common = base_by_id.keys() & extra_by_id.keys()
+        assert common
+        for database_id in common:
+            b = base_by_id[database_id]
+            e = extra_by_id[database_id]
+            if b["min_price"] is not None and e["min_price"] is not None:
+                assert e["min_price"] >= b["min_price"]
+
+    def test_breakdown_components_sum_to_min_price(self, live_client):
+        data, _ = get_live_databases(
+            live_client, vendor=["aws"], extra_storage_size=100, limit=10
+        )
+        for row in data:
+            pb = row["price_breakdown"]
+            if row["min_price"] is not None and pb["compute_min_price"] is not None:
+                expected = (pb["compute_min_price"] or 0) + (
+                    pb["extra_storage_hourly"] or 0
+                )
+                assert abs(row["min_price"] - expected) < 0.001
+
+
+class TestLiveDetailAndPrices:
+    def test_database_detail(self, live_client):
+        listing, _ = get_live_databases(live_client, vendor=["aws"], limit=1)
+        assert listing
+        vendor_id = listing[0]["vendor_id"]
+        database_id = listing[0]["database_id"]
+        resp = live_client.get(f"/database/{vendor_id}/{database_id}")
+        assert resp.status_code == 200
         data = resp.json()
-        assert data["vendor_id"] == "aws"
-        assert data["database_id"] == "db.t3.small"
+        assert data["vendor_id"] == vendor_id
+        assert data["database_id"] == database_id
         assert "vendor" not in data
 
-    def test_live_database_prices(self):
-        from sc_keeper.api import app
-        from sc_keeper.database import get_db
-
-        override = app.dependency_overrides.pop(get_db, None)
-        try:
-            resp = TestClient(app, raise_server_exceptions=False).get(
-                "/database/aws/db.t3.small/prices", params={"currency": "EUR"}
-            )
-        finally:
-            if override is not None:
-                app.dependency_overrides[get_db] = override
-
-        if resp.status_code != 200:
-            pytest.skip("Live database not available or schema outdated")
+    def test_database_prices(self, live_client):
+        listing, _ = get_live_databases(live_client, vendor=["aws"], limit=1)
+        vendor_id = listing[0]["vendor_id"]
+        database_id = listing[0]["database_id"]
+        resp = live_client.get(
+            f"/database/{vendor_id}/{database_id}/prices",
+            params={"currency": "EUR"},
+        )
+        assert resp.status_code == 200
         data = resp.json()
         assert len(data) > 0
-        assert data[0]["database_id"] == "db.t3.small"
+        assert data[0]["database_id"] == database_id
         assert data[0]["currency"] == "EUR"
-        assert "region" not in data[0]
+        assert "ha" in data[0]
+        assert "ha_strategy" in data[0]
+
+
+class TestLivePaging:
+    def test_page_1_and_2_differ(self, live_client):
+        page1, _ = get_live_databases(live_client, limit=5, page=1)
+        page2, _ = get_live_databases(live_client, limit=5, page=2)
+        assert page1
+        assert page2
+        assert [r["database_id"] for r in page1] != [r["database_id"] for r in page2]
+
+    def test_total_count_header(self, live_client):
+        _, resp = get_live_databases(live_client, limit=1, add_total_count_header=True)
+        assert int(resp.headers["x-total-count"]) > 1
+
+    def test_no_total_count_by_default(self, live_client):
+        _, resp = get_live_databases(live_client, limit=1)
+        assert "x-total-count" not in resp.headers
