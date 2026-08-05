@@ -9,6 +9,7 @@ New feature(s):
   `max_read_replicas`, monitoring, `connection_pool`, `disk_encryption`, `security_features`,
   `autotuning_apply`, `ha_strategy`, and related capabilities).
 - Treat `ha` / `ha_strategy` as `database_price` primary keys (min price = cheapest HA row).
+- Use `BestDatabasePriceAllocation` for `/databases` (no `SPOT_ONLY`; schema rejects it).
 
 ‼ Breaking changes:
 

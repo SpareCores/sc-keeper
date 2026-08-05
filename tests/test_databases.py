@@ -463,8 +463,7 @@ class TestFiltersAndPricing:
 
     def test_best_price_allocation_spot_only_rejected(self, client):
         resp = client.get("/databases", params={"best_price_allocation": "SPOT_ONLY"})
-        assert resp.status_code == 400
-        assert "SPOT_ONLY" in resp.json()["detail"]
+        assert resp.status_code == 422
 
     def test_best_price_allocation_ondemand_only(self, client):
         data, _ = get_databases(

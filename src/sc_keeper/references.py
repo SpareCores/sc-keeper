@@ -509,6 +509,14 @@ class BestPriceAllocation(StrEnum):
     MONTHLY = "MONTHLY"
 
 
+class BestDatabasePriceAllocation(StrEnum):
+    """Controls how the database's "best price" is computed: on-demand hourly, monthly, or the lowest available on-demand price."""
+
+    ANY = "ANY"
+    ONDEMAND_ONLY = "ONDEMAND_ONLY"
+    MONTHLY = "MONTHLY"
+
+
 class NetworkSpeedSnapPoints(Enum):
     """Predefined snap points for network speed filtering, based on common values in the dataset (in Gbps)."""
 

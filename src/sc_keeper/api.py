@@ -79,6 +79,7 @@ from .queries import (
 from .rate_limit import RateLimitMiddleware, create_rate_limiter
 from .references import (
     BenchmarkConfig,
+    BestDatabasePriceAllocation,
     BestPriceAllocation,
     DatabasePKs,
     DatabasePriceBreakdown,
@@ -1065,7 +1066,9 @@ def search_databases(
     storage_size: options.database_storage_size = None,
     extra_storage_size: options.database_extra_storage_size = 0,
     currency: options.currency = "USD",
-    best_price_allocation: options.best_price_allocation = BestPriceAllocation.ANY,
+    best_price_allocation: options.best_database_price_allocation = (
+        BestDatabasePriceAllocation.ANY
+    ),
     limit: options.limit = 25,
     page: options.page = None,
     order_by: options.order_by = "min_price",
@@ -1075,12 +1078,6 @@ def search_databases(
 ) -> List[DatabasePKs]:
     check_filter_limits(request, countries, regions, vendor_regions)
     check_currency(currency)
-
-    if best_price_allocation == BestPriceAllocation.SPOT_ONLY:
-        raise HTTPException(
-            status_code=400,
-            detail="SPOT_ONLY is not supported for managed databases",
-        )
 
     if engine_versions and not engine:
         raise HTTPException(
@@ -1104,13 +1101,13 @@ def search_databases(
         if live_price_query is not None
         else DatabaseExtra.min_price
     )
-    if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
+    if best_price_allocation == BestDatabasePriceAllocation.ONDEMAND_ONLY:
         best_price_ref = (
             live_price_query.c.min_price_ondemand
             if live_price_query is not None
             else DatabaseExtra.min_price_ondemand
         )
-    if best_price_allocation == BestPriceAllocation.MONTHLY:
+    if best_price_allocation == BestDatabasePriceAllocation.MONTHLY:
         best_price_ref = (
             live_price_query.c.min_price_ondemand_monthly
             if live_price_query is not None
@@ -1120,7 +1117,7 @@ def search_databases(
         extra_storage_monthly_sql = func.coalesce(
             storage_query.c.total_storage_price, 0.0
         )
-        if best_price_allocation == BestPriceAllocation.MONTHLY:
+        if best_price_allocation == BestDatabasePriceAllocation.MONTHLY:
             best_price_ref = best_price_ref + extra_storage_monthly_sql
         else:
             best_price_ref = best_price_ref + extra_storage_monthly_sql / 730
@@ -1222,7 +1219,7 @@ def search_databases(
     if only_active:
         conditions.add(Database.status == Status.ACTIVE)
         conditions.add(best_price_ref.isnot(None))
-    if best_price_allocation != BestPriceAllocation.ANY:
+    if best_price_allocation != BestDatabasePriceAllocation.ANY:
         conditions.add(best_price_ref.isnot(None))
 
     if order_by == "min_price":
@@ -1239,9 +1236,9 @@ def search_databases(
             conditions.add(DatabaseExtra.min_price_ondemand_monthly.isnot(None))
 
     _live_price_best_min_price_map = {
-        BestPriceAllocation.ANY: "min_price",
-        BestPriceAllocation.ONDEMAND_ONLY: "min_price_ondemand",
-        BestPriceAllocation.MONTHLY: "min_price_ondemand_monthly",
+        BestDatabasePriceAllocation.ANY: "min_price",
+        BestDatabasePriceAllocation.ONDEMAND_ONLY: "min_price_ondemand",
+        BestDatabasePriceAllocation.MONTHLY: "min_price_ondemand_monthly",
     }
     _live_price_order_fields = {
         "min_price": "min_price",
@@ -1403,9 +1400,9 @@ def search_databases(
                 _PRICE_NDIGITS,
             )
 
-            if best_price_allocation == BestPriceAllocation.ONDEMAND_ONLY:
+            if best_price_allocation == BestDatabasePriceAllocation.ONDEMAND_ONLY:
                 database.min_price = database.min_price_ondemand
-            if best_price_allocation == BestPriceAllocation.MONTHLY:
+            if best_price_allocation == BestDatabasePriceAllocation.MONTHLY:
                 database.min_price = database.min_price_ondemand_monthly
             if database_extra.score and database.min_price:
                 database.score_per_price = round(

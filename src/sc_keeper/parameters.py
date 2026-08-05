@@ -16,6 +16,7 @@ from sc_crawler.table_fields import (
 
 from .helpers import get_database_dict, get_server_dict
 from .references import (
+    BestDatabasePriceAllocation,
     BestPriceAllocation,
     CommonFilterCategory,
     ComplianceFrameworks,
@@ -722,6 +723,18 @@ best_price_allocation = Annotated[
         title="Best price allocation strategy",
         description='Controls how the server\'s "best price" is computed: use only spot prices, only on-demand prices, or the lowest available price from any allocation type.',
         json_schema_extra={"enum": [e.value for e in BestPriceAllocation]},
+    ),
+]
+
+best_database_price_allocation = Annotated[
+    Optional[BestDatabasePriceAllocation],
+    Query(
+        title="Best price allocation strategy",
+        description=(
+            'Controls how the database\'s "best price" is computed: on-demand hourly, '
+            "monthly, or the lowest available on-demand price."
+        ),
+        json_schema_extra={"enum": [e.value for e in BestDatabasePriceAllocation]},
     ),
 ]
 
