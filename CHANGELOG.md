@@ -11,16 +11,6 @@ New feature(s):
 - Treat `ha` / `ha_strategy` as `database_price` primary keys (min price = cheapest HA row).
 - Use `BestDatabasePriceAllocation` for `/databases` (no `SPOT_ONLY`; schema rejects it).
 
-‼ Breaking changes:
-
-- Rename `/databases` filters for the v0.8.5 `Database` schema: `ha_supported` → `ha`
-  (ordered `DatabaseHaLevel` list), add `ha_strategy` (ordered `DatabaseHaStrategy` list),
-  `storage_autoscaling` → `storage_extra_autosize`, `engine_auto_upgrade` →
-  `auto_upgrade_versions`, `autotuning` → `autotuning_advice`, and drop `support_level` /
-  `support_levels`.
-- Update `security_features` filter values for crawler v0.8.5 (e.g. `ip-allowlisting` →
-  `ip-filtering`).
-
 ## June 2026
 
 New feature(s):

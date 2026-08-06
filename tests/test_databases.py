@@ -1,4 +1,4 @@
-"""Unit tests for GET /databases endpoint."""
+"""Tests for GET /databases: seeded in-memory DB and live sc-data."""
 
 from datetime import datetime, timezone
 
@@ -27,7 +27,10 @@ from sc_crawler.tables import (
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, delete, insert
 
+from sc_keeper.api import app
 from sc_keeper.views import Currency, DatabaseExtra
+
+live_client = TestClient(app)
 
 NOW = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
@@ -249,9 +252,8 @@ def test_engine():
     return engine
 
 
-@pytest.fixture(scope="module")
-def client(test_engine):
-    from sc_keeper.api import app
+@pytest.fixture
+def seeded_client(test_engine):
     from sc_keeper.database import get_db
 
     def _override():
@@ -266,20 +268,20 @@ def client(test_engine):
     app.dependency_overrides.pop(get_db, None)
 
 
-def get_databases(client, **params):
-    resp = client.get("/databases", params=params)
+def get_databases(seeded_client, **params):
+    resp = seeded_client.get("/databases", params=params)
     assert resp.status_code == 200
     return resp.json(), resp
 
 
 class TestResponseStructure:
-    def test_default_returns_list(self, client):
-        data, _ = get_databases(client)
+    def test_default_returns_list(self, seeded_client):
+        data, _ = get_databases(seeded_client)
         assert isinstance(data, list)
         assert len(data) == 2
 
-    def test_required_fields(self, client):
-        data, _ = get_databases(client, limit=1)
+    def test_required_fields(self, seeded_client):
+        data, _ = get_databases(seeded_client, limit=1)
         row = data[0]
         for field in [
             "vendor_id",
@@ -295,26 +297,26 @@ class TestResponseStructure:
         assert row["score"] is None
         assert row["score_per_price"] is None
 
-    def test_order_by_min_price_asc(self, client):
-        data, _ = get_databases(client, order_by="min_price", order_dir="asc")
+    def test_order_by_min_price_asc(self, seeded_client):
+        data, _ = get_databases(seeded_client, order_by="min_price", order_dir="asc")
         prices = [r["min_price"] for r in data if r["min_price"] is not None]
         assert prices == sorted(prices)
 
-    def test_order_by_unknown_field(self, client):
-        resp = client.get("/databases", params={"order_by": "not_a_column"})
+    def test_order_by_unknown_field(self, seeded_client):
+        resp = seeded_client.get("/databases", params={"order_by": "not_a_column"})
         assert resp.status_code == 400
         assert resp.json()["detail"] == "Unknown order_by field."
 
-    def test_currency_eur_converts_prices(self, client):
+    def test_currency_eur_converts_prices(self, seeded_client):
         # db-small: 100 bundled + 50 max extra → request must fit within 150
         usd, _ = get_databases(
-            client,
+            seeded_client,
             partial_name_or_id="db-small",
             extra_storage_size=150,
             currency="USD",
         )
         eur, _ = get_databases(
-            client,
+            seeded_client,
             partial_name_or_id="db-small",
             extra_storage_size=150,
             currency="EUR",
@@ -335,75 +337,75 @@ class TestResponseStructure:
 
 
 class TestFiltersAndPricing:
-    def test_vcpus_min_filter(self, client):
-        data, _ = get_databases(client, vcpus_min=8)
+    def test_vcpus_min_filter(self, seeded_client):
+        data, _ = get_databases(seeded_client, vcpus_min=8)
         assert len(data) == 1
         assert data[0]["database_id"] == "db-large"
 
-    def test_storage_size_filter(self, client):
-        data, _ = get_databases(client, storage_size=50)
+    def test_storage_size_filter(self, seeded_client):
+        data, _ = get_databases(seeded_client, storage_size=50)
         assert len(data) == 1
         assert data[0]["database_id"] == "db-small"
 
-    def test_engine_versions_requires_engine(self, client):
-        resp = client.get("/databases", params={"engine_versions": ["15"]})
+    def test_engine_versions_requires_engine(self, seeded_client):
+        resp = seeded_client.get("/databases", params={"engine_versions": ["15"]})
         assert resp.status_code == 400
 
-    def test_engine_versions_filter(self, client):
+    def test_engine_versions_filter(self, seeded_client):
         data, _ = get_databases(
-            client, engine="postgresql", engine_versions=["15", "16"]
+            seeded_client, engine="postgresql", engine_versions=["15", "16"]
         )
         assert len(data) == 2
 
-    def test_ha_filter(self, client):
-        data, _ = get_databases(client, ha=["multi-region"])
+    def test_ha_filter(self, seeded_client):
+        data, _ = get_databases(seeded_client, ha=["multi-region"])
         assert len(data) == 1
         assert data[0]["database_id"] == "db-large"
         assert "multi-region" in data[0]["ha"]
 
-    def test_ha_strategy_filter(self, client):
-        data, _ = get_databases(client, ha_strategy=["multi-master"])
+    def test_ha_strategy_filter(self, seeded_client):
+        data, _ = get_databases(seeded_client, ha_strategy=["multi-master"])
         assert len(data) == 1
         assert data[0]["database_id"] == "db-large"
         assert "multi-master" in data[0]["ha_strategy"]
 
-    def test_min_price_across_ha_price_rows(self, client):
-        data, _ = get_databases(client, partial_name_or_id="db-small")
+    def test_min_price_across_ha_price_rows(self, seeded_client):
+        data, _ = get_databases(seeded_client, partial_name_or_id="db-small")
         assert len(data) == 1
         assert data[0]["min_price"] == 0.1
         assert data[0]["min_price_ondemand"] == 0.1
         assert data[0]["min_price_ondemand_monthly"] == 73.0
 
-    def test_wire_protocol_filter(self, client):
-        data, _ = get_databases(client, wire_protocol=["postgresql"])
+    def test_wire_protocol_filter(self, seeded_client):
+        data, _ = get_databases(seeded_client, wire_protocol=["postgresql"])
         assert len(data) == 2
 
-    def test_max_read_replicas_min_filter(self, client):
-        data, _ = get_databases(client, max_read_replicas_min=10)
+    def test_max_read_replicas_min_filter(self, seeded_client):
+        data, _ = get_databases(seeded_client, max_read_replicas_min=10)
         assert len(data) == 1
         assert data[0]["database_id"] == "db-large"
 
-    def test_storage_extra_autosize_filter(self, client):
-        data, _ = get_databases(client, storage_extra_autosize=True)
+    def test_storage_extra_autosize_filter(self, seeded_client):
+        data, _ = get_databases(seeded_client, storage_extra_autosize=True)
         assert len(data) == 2
 
-    def test_security_features_filter(self, client):
+    def test_security_features_filter(self, seeded_client):
         data, _ = get_databases(
-            client, security_features=["ip-filtering", "network-peering"]
+            seeded_client, security_features=["ip-filtering", "network-peering"]
         )
         assert len(data) == 1
         assert data[0]["database_id"] == "db-large"
 
-    def test_autotuning_apply_filter(self, client):
-        data, _ = get_databases(client, autotuning_apply=False)
+    def test_autotuning_apply_filter(self, seeded_client):
+        data, _ = get_databases(seeded_client, autotuning_apply=False)
         assert len(data) == 2
-        none, _ = get_databases(client, autotuning_apply=True)
+        none, _ = get_databases(seeded_client, autotuning_apply=True)
         assert len(none) == 0
 
-    def test_extra_storage_increases_min_price(self, client):
-        base, _ = get_databases(client, partial_name_or_id="db-large")
+    def test_extra_storage_increases_min_price(self, seeded_client):
+        base, _ = get_databases(seeded_client, partial_name_or_id="db-large")
         with_extra, _ = get_databases(
-            client,
+            seeded_client,
             partial_name_or_id="db-large",
             extra_storage_size=200,
         )
@@ -412,27 +414,27 @@ class TestFiltersAndPricing:
         assert pb["extra_storage_monthly"] > 0
         assert pb["extra_storage_hourly"] > 0
 
-    def test_storage_extra_min_floor(self, client):
+    def test_storage_extra_min_floor(self, seeded_client):
         # db-small: 100 GB bundled, storage_extra_min=5 → need 101 bills 5 GB extra
         data, _ = get_databases(
-            client,
+            seeded_client,
             partial_name_or_id="db-small",
             extra_storage_size=101,
         )
         assert len(data) == 1
         assert data[0]["price_breakdown"]["extra_storage_monthly"] == 0.5  # 5 * 0.10
 
-    def test_storage_extra_max_filters_out(self, client):
+    def test_storage_extra_max_filters_out(self, seeded_client):
         # db-small: 100 + 50 max = 150 → 151 excluded, 150 kept
         excluded, _ = get_databases(
-            client,
+            seeded_client,
             partial_name_or_id="db-small",
             extra_storage_size=151,
         )
         assert excluded == []
 
         included, _ = get_databases(
-            client,
+            seeded_client,
             partial_name_or_id="db-small",
             extra_storage_size=150,
         )
@@ -441,14 +443,14 @@ class TestFiltersAndPricing:
             included[0]["price_breakdown"]["extra_storage_monthly"] == 5.0
         )  # 50 * 0.10
 
-    def test_bundled_storage_reduces_extra_storage_cost(self, client):
+    def test_bundled_storage_reduces_extra_storage_cost(self, seeded_client):
         bundled, _ = get_databases(
-            client,
+            seeded_client,
             partial_name_or_id="db-small",
             extra_storage_size=150,
         )
         unbundled, _ = get_databases(
-            client,
+            seeded_client,
             partial_name_or_id="db-large",
             extra_storage_size=150,
         )
@@ -457,26 +459,28 @@ class TestFiltersAndPricing:
             < (unbundled[0]["price_breakdown"]["extra_storage_monthly"])
         )
 
-    def test_total_count_header(self, client):
-        _, resp = get_databases(client, add_total_count_header=True, limit=1)
+    def test_total_count_header(self, seeded_client):
+        _, resp = get_databases(seeded_client, add_total_count_header=True, limit=1)
         assert resp.headers.get("X-Total-Count") == "2"
 
-    def test_best_price_allocation_spot_only_rejected(self, client):
-        resp = client.get("/databases", params={"best_price_allocation": "SPOT_ONLY"})
+    def test_best_price_allocation_spot_only_rejected(self, seeded_client):
+        resp = seeded_client.get(
+            "/databases", params={"best_price_allocation": "SPOT_ONLY"}
+        )
         assert resp.status_code == 422
 
-    def test_best_price_allocation_ondemand_only(self, client):
+    def test_best_price_allocation_ondemand_only(self, seeded_client):
         data, _ = get_databases(
-            client,
+            seeded_client,
             partial_name_or_id="db-small",
             best_price_allocation="ONDEMAND_ONLY",
         )
         row = data[0]
         assert row["min_price"] == row["min_price_ondemand"]
 
-    def test_best_price_allocation_monthly(self, client):
+    def test_best_price_allocation_monthly(self, seeded_client):
         data, _ = get_databases(
-            client,
+            seeded_client,
             partial_name_or_id="db-small",
             best_price_allocation="MONTHLY",
         )
@@ -484,8 +488,8 @@ class TestFiltersAndPricing:
         assert row["min_price"] == row["min_price_ondemand_monthly"]
         assert row["min_price_ondemand_monthly"] > row["min_price_ondemand"]
 
-    def test_database_storage_prices(self, client):
-        resp = client.get(
+    def test_database_storage_prices(self, seeded_client):
+        resp = seeded_client.get(
             "/database_storage_prices",
             params={"limit": 10, "add_total_count_header": True},
         )
@@ -500,15 +504,15 @@ class TestFiltersAndPricing:
         assert "database_storage" in row
         assert resp.headers.get("X-Total-Count") == "1"
 
-    def test_database_storage_prices_storage_min(self, client):
-        resp = client.get(
+    def test_database_storage_prices_storage_min(self, seeded_client):
+        resp = seeded_client.get(
             "/database_storage_prices",
             params={"storage_min": 50},
         )
         assert resp.status_code == 200
         assert len(resp.json()) == 1
 
-        resp = client.get(
+        resp = seeded_client.get(
             "/database_storage_prices",
             params={"storage_min": 200000},
         )
@@ -516,46 +520,28 @@ class TestFiltersAndPricing:
         assert len(resp.json()) == 0
 
 
-@pytest.fixture
-def live_client():
-    """Real sc-data client; skips if DB is missing or schema is outdated."""
-    from sc_keeper.api import app
-    from sc_keeper.database import get_db
-
-    override = app.dependency_overrides.pop(get_db, None)
-    client = TestClient(app, raise_server_exceptions=False)
-    try:
-        resp = client.get("/databases", params={"limit": 1})
-        if resp.status_code != 200:
-            pytest.skip("Live database not available or schema outdated")
-        yield client
-    finally:
-        if override is not None:
-            app.dependency_overrides[get_db] = override
-
-
-def get_live_databases(live_client, **params):
+def get_live_databases(**params):
     resp = live_client.get("/databases", params=params)
     assert resp.status_code == 200
     return resp.json(), resp
 
 
 class TestLiveResponseStructure:
-    def test_default_returns_list(self, live_client):
-        data, _ = get_live_databases(live_client)
+    def test_default_returns_list(self):
+        data, _ = get_live_databases()
         assert isinstance(data, list)
         assert len(data) > 0
 
-    def test_default_limit(self, live_client):
-        data, _ = get_live_databases(live_client)
+    def test_default_limit(self):
+        data, _ = get_live_databases()
         assert len(data) <= 25
 
-    def test_custom_limit(self, live_client):
-        data, _ = get_live_databases(live_client, limit=5)
+    def test_custom_limit(self):
+        data, _ = get_live_databases(limit=5)
         assert len(data) <= 5
 
-    def test_required_fields(self, live_client):
-        data, _ = get_live_databases(live_client, limit=1)
+    def test_required_fields(self):
+        data, _ = get_live_databases(limit=1)
         row = data[0]
         for field in [
             "vendor_id",
@@ -571,74 +557,68 @@ class TestLiveResponseStructure:
         assert isinstance(row["ha"], list)
         assert isinstance(row["ha_strategy"], list)
 
-    def test_vendor_nested(self, live_client):
-        data, _ = get_live_databases(live_client, limit=1)
+    def test_vendor_nested(self):
+        data, _ = get_live_databases(limit=1)
         vendor = data[0]["vendor"]
         assert "vendor_id" in vendor
         assert "name" in vendor
 
 
 class TestLiveOrdering:
-    def test_order_by_min_price_asc(self, live_client):
-        data, _ = get_live_databases(
-            live_client, limit=10, order_by="min_price", order_dir="asc"
-        )
+    def test_order_by_min_price_asc(self):
+        data, _ = get_live_databases(limit=10, order_by="min_price", order_dir="asc")
         prices = [r["min_price"] for r in data if r["min_price"] is not None]
         assert prices == sorted(prices)
 
-    def test_order_by_min_price_desc(self, live_client):
-        data, _ = get_live_databases(
-            live_client, limit=10, order_by="min_price", order_dir="desc"
-        )
+    def test_order_by_min_price_desc(self):
+        data, _ = get_live_databases(limit=10, order_by="min_price", order_dir="desc")
         prices = [r["min_price"] for r in data if r["min_price"] is not None]
         assert prices == sorted(prices, reverse=True)
 
-    def test_order_by_vcpus(self, live_client):
-        data, _ = get_live_databases(
-            live_client, limit=10, order_by="vcpus", order_dir="asc"
-        )
+    def test_order_by_vcpus(self):
+        data, _ = get_live_databases(limit=10, order_by="vcpus", order_dir="asc")
         assert [r["vcpus"] for r in data] == sorted(r["vcpus"] for r in data)
 
 
 class TestLiveFiltering:
-    def test_vendor_filter(self, live_client):
-        data, _ = get_live_databases(live_client, vendor=["aws"], limit=10)
+    def test_vendor_filter(self):
+        data, _ = get_live_databases(vendor=["aws"], limit=10)
         assert data
         assert all(r["vendor_id"] == "aws" for r in data)
 
-    def test_multi_vendor_filter(self, live_client):
-        data, _ = get_live_databases(live_client, vendor=["aws", "azure"], limit=50)
+    def test_multi_vendor_filter(self):
+        data, _ = get_live_databases(vendor=["aws", "azure"], limit=50)
         assert data
         assert {r["vendor_id"] for r in data} <= {"aws", "azure"}
 
-    def test_vcpus_min(self, live_client):
-        data, _ = get_live_databases(live_client, vcpus_min=8, limit=10)
+    def test_vcpus_min(self):
+        data, _ = get_live_databases(vcpus_min=8, limit=10)
         assert data
         assert all(r["vcpus"] >= 8 for r in data)
 
-    def test_vcpus_max(self, live_client):
-        data, _ = get_live_databases(live_client, vcpus_max=4, limit=10)
+    def test_vcpus_max(self):
+        data, _ = get_live_databases(vcpus_max=4, limit=10)
         assert data
         assert all(r["vcpus"] <= 4 for r in data)
 
-    def test_memory_min(self, live_client):
-        data, _ = get_live_databases(live_client, memory_min=16, limit=10)
+    def test_memory_min(self):
+        data, _ = get_live_databases(memory_min=16, limit=10)
         assert data
         assert all(r["memory_amount"] >= 16 * 1024 for r in data)
 
-    def test_engine_filter(self, live_client):
-        data, _ = get_live_databases(live_client, engine="postgresql", limit=10)
+    def test_engine_filter(self):
+        data, _ = get_live_databases(engine="postgresql", limit=10)
         assert data
         assert all(r["engine"] == "postgresql" for r in data)
 
-    def test_ha_filter(self, live_client):
-        data, _ = get_live_databases(live_client, ha=["multi-zone"], limit=10)
+    def test_ha_filter(self):
+        data, _ = get_live_databases(ha=["multi-zone"], limit=10)
         assert data
         assert all("multi-zone" in r["ha"] for r in data)
 
-    def test_partial_name_or_id(self, live_client):
+    def test_partial_name_or_id(self):
         data, _ = get_live_databases(
-            live_client, partial_name_or_id="db.t3", vendor=["aws"], limit=10
+            partial_name_or_id="db.t3", vendor=["aws"], limit=10
         )
         assert data
         assert all(
@@ -649,12 +629,11 @@ class TestLiveFiltering:
             for r in data
         )
 
-    def test_countries_filter(self, live_client):
+    def test_countries_filter(self):
         _, baseline = get_live_databases(
-            live_client, vendor=["aws"], limit=1, add_total_count_header=True
+            vendor=["aws"], limit=1, add_total_count_header=True
         )
         _, filtered = get_live_databases(
-            live_client,
             vendor=["aws"],
             countries=["DE"],
             limit=1,
@@ -666,48 +645,41 @@ class TestLiveFiltering:
 
 
 class TestLiveCurrency:
-    def test_eur_currency(self, live_client):
-        data, _ = get_live_databases(live_client, limit=1, currency="EUR")
+    def test_eur_currency(self):
+        data, _ = get_live_databases(limit=1, currency="EUR")
         assert data[0].get("currency", "EUR") == "EUR"
 
-    def test_different_prices_for_different_currencies(self, live_client):
-        usd, _ = get_live_databases(live_client, limit=1, currency="USD")
-        eur, _ = get_live_databases(live_client, limit=1, currency="EUR")
+    def test_different_prices_for_different_currencies(self):
+        usd, _ = get_live_databases(limit=1, currency="USD")
+        eur, _ = get_live_databases(limit=1, currency="EUR")
         if usd[0]["min_price"] is not None and eur[0]["min_price"] is not None:
             assert usd[0]["min_price"] != eur[0]["min_price"]
 
 
 class TestLiveBestPriceAllocation:
-    def test_spot_only_rejected(self, live_client):
+    def test_spot_only_rejected(self):
         resp = live_client.get(
             "/databases", params={"best_price_allocation": "SPOT_ONLY"}
         )
         assert resp.status_code == 422
 
-    def test_ondemand_only(self, live_client):
-        data, _ = get_live_databases(
-            live_client, best_price_allocation="ONDEMAND_ONLY", limit=10
-        )
+    def test_ondemand_only(self):
+        data, _ = get_live_databases(best_price_allocation="ONDEMAND_ONLY", limit=10)
         for row in data:
             if row["min_price_ondemand"] is not None:
                 assert row["min_price"] == row["min_price_ondemand"]
 
-    def test_monthly(self, live_client):
-        data, _ = get_live_databases(
-            live_client, best_price_allocation="MONTHLY", limit=10
-        )
+    def test_monthly(self):
+        data, _ = get_live_databases(best_price_allocation="MONTHLY", limit=10)
         for row in data:
             if row["min_price_ondemand_monthly"] is not None:
                 assert row["min_price"] == row["min_price_ondemand_monthly"]
 
 
 class TestLiveExtraStorage:
-    def test_extra_storage_adds_to_price(self, live_client):
-        base, _ = get_live_databases(
-            live_client, vendor=["aws"], limit=5, order_by="vcpus"
-        )
+    def test_extra_storage_adds_to_price(self):
+        base, _ = get_live_databases(vendor=["aws"], limit=5, order_by="vcpus")
         with_extra, _ = get_live_databases(
-            live_client,
             vendor=["aws"],
             extra_storage_size=200,
             limit=5,
@@ -723,10 +695,8 @@ class TestLiveExtraStorage:
             if b["min_price"] is not None and e["min_price"] is not None:
                 assert e["min_price"] >= b["min_price"]
 
-    def test_breakdown_components_sum_to_min_price(self, live_client):
-        data, _ = get_live_databases(
-            live_client, vendor=["aws"], extra_storage_size=100, limit=10
-        )
+    def test_breakdown_components_sum_to_min_price(self):
+        data, _ = get_live_databases(vendor=["aws"], extra_storage_size=100, limit=10)
         for row in data:
             pb = row["price_breakdown"]
             if row["min_price"] is not None and pb["compute_min_price"] is not None:
@@ -737,8 +707,8 @@ class TestLiveExtraStorage:
 
 
 class TestLiveDetailAndPrices:
-    def test_database_detail(self, live_client):
-        listing, _ = get_live_databases(live_client, vendor=["aws"], limit=1)
+    def test_database_detail(self):
+        listing, _ = get_live_databases(vendor=["aws"], limit=1)
         assert listing
         vendor_id = listing[0]["vendor_id"]
         database_id = listing[0]["database_id"]
@@ -749,8 +719,8 @@ class TestLiveDetailAndPrices:
         assert data["database_id"] == database_id
         assert "vendor" not in data
 
-    def test_database_prices(self, live_client):
-        listing, _ = get_live_databases(live_client, vendor=["aws"], limit=1)
+    def test_database_prices(self):
+        listing, _ = get_live_databases(vendor=["aws"], limit=1)
         vendor_id = listing[0]["vendor_id"]
         database_id = listing[0]["database_id"]
         resp = live_client.get(
@@ -767,17 +737,17 @@ class TestLiveDetailAndPrices:
 
 
 class TestLivePaging:
-    def test_page_1_and_2_differ(self, live_client):
-        page1, _ = get_live_databases(live_client, limit=5, page=1)
-        page2, _ = get_live_databases(live_client, limit=5, page=2)
+    def test_page_1_and_2_differ(self):
+        page1, _ = get_live_databases(limit=5, page=1)
+        page2, _ = get_live_databases(limit=5, page=2)
         assert page1
         assert page2
         assert [r["database_id"] for r in page1] != [r["database_id"] for r in page2]
 
-    def test_total_count_header(self, live_client):
-        _, resp = get_live_databases(live_client, limit=1, add_total_count_header=True)
+    def test_total_count_header(self):
+        _, resp = get_live_databases(limit=1, add_total_count_header=True)
         assert int(resp.headers["x-total-count"]) > 1
 
-    def test_no_total_count_by_default(self, live_client):
-        _, resp = get_live_databases(live_client, limit=1)
+    def test_no_total_count_by_default(self):
+        _, resp = get_live_databases(limit=1)
         assert "x-total-count" not in resp.headers
