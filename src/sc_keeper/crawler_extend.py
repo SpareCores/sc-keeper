@@ -3,7 +3,7 @@ from typing import Any, List, Union
 
 from sc_crawler.table_bases import ScModel
 from sc_crawler.table_fields import Allocation, PriceTier, Status
-from sc_crawler.tables import ServerPrice
+from sc_crawler.tables import DatabasePrice, ServerPrice
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import column_property
 from sqlmodel import Column, Float, Session, select, text
@@ -224,6 +224,78 @@ class ServerPriceExtender(TableExtender):
                             zone_id=price.zone_id,
                             server_id=price.server_id,
                             allocation=price.allocation.name,
+                        )
+                    )
+            session.commit()
+
+
+class DatabasePriceExtender(TableExtender):
+    table = DatabasePrice
+    new_columns = [
+        NewColumn(
+            name="price_monthly",
+            sqlite_type="FLOAT",
+            sqlalchemy_type=Float,
+        ),
+    ]
+
+    def update(self, engine: Engine):
+        """Calculate price_monthly for each DatabasePrice row."""
+        with Session(engine) as session:
+            session.execute(
+                text(
+                    "UPDATE database_price SET price_monthly = ROUND(price * 730, 2) WHERE status = :status AND allocation = :allocation"
+                ).bindparams(
+                    status=Status.ACTIVE.name,
+                    allocation=Allocation.ONDEMAND.name,
+                )
+            )
+            prices = session.exec(
+                select(DatabasePrice)
+                .where(DatabasePrice.status == Status.ACTIVE)
+                .where(DatabasePrice.allocation == Allocation.ONDEMAND)
+            ).all()
+            for price in prices:
+                monthly_price = calculate_tiered_price(
+                    price_tiers=price.price_tiered,
+                    usage=730.0,
+                    fallback_unit_price=price.price,
+                    round_digits=2,
+                )
+                if monthly_price is not None and (
+                    price.price_monthly is None
+                    or abs(monthly_price - price.price_monthly) > 0.02
+                ):
+                    logger.debug(
+                        "Updating price_monthly for %s/%s/%s/%s/%s from %s to %s",
+                        price.vendor_id,
+                        price.region_id,
+                        price.database_id,
+                        price.ha.name,
+                        price.ha_strategy.name,
+                        price.price_monthly,
+                        monthly_price,
+                    )
+                    session.execute(
+                        text(
+                            """
+                            UPDATE database_price
+                            SET price_monthly = :monthly_price
+                            WHERE vendor_id = :vendor_id
+                              AND region_id = :region_id
+                              AND database_id = :database_id
+                              AND allocation = :allocation
+                              AND ha = :ha
+                              AND ha_strategy = :ha_strategy
+                            """
+                        ).bindparams(
+                            monthly_price=monthly_price,
+                            vendor_id=price.vendor_id,
+                            region_id=price.region_id,
+                            database_id=price.database_id,
+                            allocation=price.allocation.name,
+                            ha=price.ha.name,
+                            ha_strategy=price.ha_strategy.name,
                         )
                     )
             session.commit()

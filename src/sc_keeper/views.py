@@ -2,13 +2,14 @@ from typing import List, Optional
 
 from sc_crawler.insert import insert_items
 from sc_crawler.table_bases import (
+    HasDatabasePK,
     HasServerPK,
     HasVendorPKFK,
     ScModel,
 )
 from sc_crawler.table_fields import Allocation, Status
-from sc_crawler.tables import BenchmarkScore, ServerPrice, is_table
-from sqlmodel import Field, Session, case, func, select
+from sc_crawler.tables import BenchmarkScore, DatabasePrice, ServerPrice, is_table
+from sqlmodel import Field, Session, case, func, literal, select
 
 from .currency import currency_converter as cc
 
@@ -140,6 +141,58 @@ class ServerExtra(ServerExtraBase, table=True):
         )
 
         return query
+
+
+class DatabaseExtraBase(HasDatabasePK, HasVendorPKFK):
+    score: Optional[float]
+    score_per_price: Optional[float]
+    score1: Optional[float]
+    min_price: Optional[float]
+    min_price_ondemand: Optional[float]
+    min_price_ondemand_monthly: Optional[float]
+
+
+class DatabaseExtra(DatabaseExtraBase, table=True):
+    """Materialized view on min prices of databases standardized to USD."""
+
+    @staticmethod
+    def query():
+        price = (
+            select(
+                DatabasePrice.vendor_id,
+                DatabasePrice.database_id,
+                # TODO: when spot (or other) allocations exist, drop the ONDEMAND-only
+                # filter and differentiate aggregates like ServerExtra / gen_live_price_query.
+                func.round(func.min(DatabasePrice.price * Currency.rate), 4).label(
+                    "min_price"
+                ),
+                func.round(func.min(DatabasePrice.price * Currency.rate), 4).label(
+                    "min_price_ondemand"
+                ),
+                func.round(
+                    func.min(DatabasePrice.price_monthly * Currency.rate), 2
+                ).label("min_price_ondemand_monthly"),
+            )
+            .where(DatabasePrice.status == Status.ACTIVE)
+            .where(DatabasePrice.allocation == Allocation.ONDEMAND)
+            .join(
+                Currency,
+                (DatabasePrice.currency == Currency.base) & (Currency.quote == "USD"),
+            )
+            .group_by(DatabasePrice.vendor_id, DatabasePrice.database_id)
+            .order_by(DatabasePrice.vendor_id, DatabasePrice.database_id)
+            .subquery()
+        )
+        return select(
+            price.c.vendor_id,
+            price.c.database_id,
+            literal(None).label("score"),
+            literal(None).label("score_per_price"),
+            literal(None).label("score1"),
+            price.c.min_price,
+            price.c.min_price_ondemand,
+            price.c.min_price_ondemand_monthly,
+        ).select_from(price)
 
 
 views: List[ScModel] = [

@@ -16,6 +16,10 @@ from sc_crawler.tables import (
     BenchmarkScore,
     ComplianceFramework,
     Country,
+    Database,
+    DatabasePrice,
+    DatabaseStorage,
+    DatabaseStoragePrice,
     Region,
     Server,
     ServerDescription,
@@ -36,6 +40,7 @@ from .helpers import (
     add_extra_to_price,
     get_sort_key_for_benchmark_configs,
     mapped_class_has_column,
+    update_database_price_currency,
     update_server_price_currency,
     vendor_region_filter,
 )
@@ -65,6 +70,8 @@ from .limits import heavy_job_dep
 from .logger import LogMiddleware
 from .queries import (
     gen_benchmark_query,
+    gen_database_live_price_query,
+    gen_database_storage_price_query,
     gen_live_price_query,
     gen_storage_price_query,
     gen_traffic_price_query,
@@ -72,7 +79,11 @@ from .queries import (
 from .rate_limit import RateLimitMiddleware, create_rate_limiter
 from .references import (
     BenchmarkConfig,
+    BestDatabasePriceAllocation,
     BestPriceAllocation,
+    DatabasePKs,
+    DatabasePriceBreakdown,
+    DatabaseStoragePriceWithPKs,
     OrderDir,
     PriceBreakdown,
     RegionPKs,
@@ -83,7 +94,7 @@ from .references import (
 )
 from .sentry import before_send as sentry_before_send
 from .validators import check_currency, check_filter_limits
-from .views import Currency, ServerExtra
+from .views import Currency, DatabaseExtra, ServerExtra
 
 if environ.get("SENTRY_DSN"):
     import sentry_sdk
@@ -125,6 +136,30 @@ example_data = {
     ).one(),
     "prices": db.exec(
         select(ServerPrice).where(ServerPrice.vendor_id == "aws").limit(5)
+    ).all(),
+    "database": db.exec(
+        select(Database)
+        .where(Database.vendor_id == "aws")
+        .where(Database.status == Status.ACTIVE)
+        .limit(1)
+    ).one(),
+    "database_storage": db.exec(
+        select(DatabaseStorage)
+        .where(DatabaseStorage.vendor_id == "aws")
+        .where(DatabaseStorage.status == Status.ACTIVE)
+        .limit(1)
+    ).one(),
+    "database_prices": db.exec(
+        select(DatabasePrice)
+        .where(DatabasePrice.vendor_id == "aws")
+        .where(DatabasePrice.status == Status.ACTIVE)
+        .limit(5)
+    ).all(),
+    "database_storage_prices": db.exec(
+        select(DatabaseStoragePrice)
+        .where(DatabaseStoragePrice.vendor_id == "aws")
+        .where(DatabaseStoragePrice.status == Status.ACTIVE)
+        .limit(5)
     ).all(),
 }
 db.close()
@@ -183,6 +218,46 @@ ServerPriceWithPKs.model_config["json_schema_extra"] = {
             | {"country": example_data["country"].model_dump()},
             "zone": example_data["zone"].model_dump(),
             "server": ServerPKs.model_config["json_schema_extra"]["examples"][0],
+        }
+    ]
+}
+
+Database.model_config["json_schema_extra"] = {
+    "examples": [example_data["database"].model_dump()]
+}
+DatabasePKs.model_config["json_schema_extra"] = {
+    "examples": [
+        example_data["database"].model_dump()
+        | {
+            "price": 0.5,
+            "min_price": 0.5,
+            "min_price_ondemand": 0.5,
+            "min_price_ondemand_monthly": 0.5 * 730,
+            "vendor": example_data["vendor"].model_dump(),
+            "price_breakdown": {
+                "compute_min_price": 0.5,
+                "compute_min_price_ondemand": 0.5,
+                "compute_min_price_ondemand_monthly": 0.5 * 730,
+                "extra_storage_hourly": 0.0,
+                "extra_storage_monthly": 0.0,
+            },
+        }
+    ]
+}
+DatabaseStorage.model_config["json_schema_extra"] = {
+    "examples": [example_data["database_storage"].model_dump()]
+}
+DatabasePrice.model_config["json_schema_extra"] = {
+    "examples": [example_data["database_prices"][0].model_dump()]
+}
+DatabaseStoragePriceWithPKs.model_config["json_schema_extra"] = {
+    "examples": [
+        example_data["database_storage_prices"][0].model_dump()
+        | {
+            "vendor": example_data["vendor"].model_dump(),
+            "region": example_data["region"].model_dump()
+            | {"country": example_data["country"].model_dump()},
+            "database_storage": example_data["database_storage"].model_dump(),
         }
     ]
 }
@@ -337,6 +412,7 @@ app.include_router(routers.administrative.router, tags=["Administrative endpoint
 app.include_router(routers.tables.router, prefix="/table", tags=["Table dumps"])
 app.include_router(routers.table_metadata.router)
 app.include_router(routers.server.router, tags=["Server Details"])
+app.include_router(routers.database.router, tags=["Database Details"])
 app.include_router(routers.ai.router, prefix="/ai", tags=["AI"])
 
 
@@ -954,6 +1030,401 @@ def search_servers(
     return serverlist
 
 
+@app.get("/databases", tags=["Query Resources"])
+def search_databases(
+    request: Request,
+    response: Response,
+    partial_name_or_id: options.database_partial_name_or_id = None,
+    engine: options.database_engine = None,
+    engine_versions: options.database_engine_versions = None,
+    wire_protocol: options.database_wire_protocol = None,
+    vcpus_min: options.vcpus_min = 1,
+    vcpus_max: options.vcpus_max = None,
+    memory_min: options.memory_min = None,
+    ha: options.database_ha = None,
+    ha_strategy: options.database_ha_strategy = None,
+    max_read_replicas_min: options.database_max_read_replicas_min = None,
+    storage_extra_autosize: options.database_storage_extra_autosize = None,
+    disk_encryption: options.database_disk_encryption = None,
+    scheduled_backups: options.database_scheduled_backups = None,
+    continuous_backups_min: options.database_continuous_backups_min = None,
+    connection_pool: options.database_connection_pool = None,
+    system_monitoring: options.database_system_monitoring = None,
+    database_monitoring: options.database_monitoring = None,
+    auto_upgrade_versions: options.database_auto_upgrade_versions = None,
+    autotuning_advice: options.database_autotuning_advice = None,
+    autotuning_apply: options.database_autotuning_apply = None,
+    custom_config: options.database_custom_config = None,
+    custom_extensions: options.database_custom_extensions = None,
+    security_features: options.database_security_features = None,
+    sla_min: options.database_sla_min = None,
+    only_active: options.only_active = True,
+    vendor: options.vendor = None,
+    regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
+    countries: options.countries = None,
+    storage_size: options.database_storage_size = None,
+    extra_storage_size: options.database_extra_storage_size = 0,
+    currency: options.currency = "USD",
+    best_price_allocation: options.best_database_price_allocation = (
+        BestDatabasePriceAllocation.ANY
+    ),
+    limit: options.limit = 25,
+    page: options.page = None,
+    order_by: options.order_by = "min_price",
+    order_dir: options.order_dir = OrderDir.ASC,
+    add_total_count_header: options.add_total_count_header = False,
+    db: Session = Depends(get_db),
+) -> List[DatabasePKs]:
+    check_filter_limits(request, countries, regions, vendor_regions)
+    check_currency(currency)
+
+    if engine_versions and not engine:
+        raise HTTPException(
+            status_code=400,
+            detail="engine is required when filtering by engine_versions",
+        )
+
+    conditions = set()
+
+    live_price_query = gen_database_live_price_query(countries, regions, vendor_regions)
+    storage_query = (
+        gen_database_storage_price_query(
+            extra_storage_size, countries, regions, vendor_regions
+        )
+        if extra_storage_size
+        else None
+    )
+
+    best_price_ref = (
+        live_price_query.c.min_price
+        if live_price_query is not None
+        else DatabaseExtra.min_price
+    )
+    if best_price_allocation == BestDatabasePriceAllocation.ONDEMAND_ONLY:
+        best_price_ref = (
+            live_price_query.c.min_price_ondemand
+            if live_price_query is not None
+            else DatabaseExtra.min_price_ondemand
+        )
+    if best_price_allocation == BestDatabasePriceAllocation.MONTHLY:
+        best_price_ref = (
+            live_price_query.c.min_price_ondemand_monthly
+            if live_price_query is not None
+            else DatabaseExtra.min_price_ondemand_monthly
+        )
+    if storage_query is not None:
+        extra_storage_monthly_sql = func.coalesce(
+            storage_query.c.total_storage_price, 0.0
+        )
+        if best_price_allocation == BestDatabasePriceAllocation.MONTHLY:
+            best_price_ref = best_price_ref + extra_storage_monthly_sql
+        else:
+            best_price_ref = best_price_ref + extra_storage_monthly_sql / 730
+
+    if partial_name_or_id:
+        ilike = "%" + partial_name_or_id + "%"
+        conditions.add(
+            or_(
+                Database.database_id.ilike(ilike),
+                Database.name.ilike(ilike),
+                Database.api_reference.ilike(ilike),
+                Database.display_name.ilike(ilike),
+            )
+        )
+
+    if engine:
+        conditions.add(Database.engine == engine)
+    if engine_versions:
+        je = func.json_each(Database.engine_versions).table_valued("value")
+        version_count = (
+            select(func.count())
+            .select_from(je)
+            .where(je.c.value.in_(engine_versions))
+            .correlate(Database)
+            .scalar_subquery()
+        )
+        conditions.add(version_count == len(engine_versions))
+    if wire_protocol:
+        conditions.add(Database.wire_protocol.in_(wire_protocol))
+    if vcpus_min:
+        conditions.add(Database.vcpus >= vcpus_min)
+    if vcpus_max:
+        conditions.add(Database.vcpus <= vcpus_max)
+    if memory_min:
+        conditions.add(Database.memory_amount >= memory_min * 1024)
+    if ha:
+        jh = func.json_each(Database.ha).table_valued("value")
+        ha_count = (
+            select(func.count())
+            .select_from(jh)
+            .where(jh.c.value.in_([level.value for level in ha]))
+            .correlate(Database)
+            .scalar_subquery()
+        )
+        conditions.add(ha_count == len(ha))
+    if ha_strategy:
+        jhs = func.json_each(Database.ha_strategy).table_valued("value")
+        strategy_count = (
+            select(func.count())
+            .select_from(jhs)
+            .where(jhs.c.value.in_([s.value for s in ha_strategy]))
+            .correlate(Database)
+            .scalar_subquery()
+        )
+        conditions.add(strategy_count == len(ha_strategy))
+    if max_read_replicas_min is not None:
+        conditions.add(Database.max_read_replicas >= max_read_replicas_min)
+    if storage_extra_autosize is not None:
+        conditions.add(Database.storage_extra_autosize.is_(storage_extra_autosize))
+    if disk_encryption is not None:
+        conditions.add(Database.disk_encryption.is_(disk_encryption))
+    if scheduled_backups is not None:
+        conditions.add(Database.scheduled_backups.is_(scheduled_backups))
+    if continuous_backups_min:
+        conditions.add(Database.continuous_backups >= continuous_backups_min)
+    if connection_pool is not None:
+        conditions.add(Database.connection_pool.is_(connection_pool))
+    if system_monitoring is not None:
+        conditions.add(Database.system_monitoring.is_(system_monitoring))
+    if database_monitoring is not None:
+        conditions.add(Database.database_monitoring.is_(database_monitoring))
+    if auto_upgrade_versions is not None:
+        conditions.add(Database.auto_upgrade_versions.is_(auto_upgrade_versions))
+    if autotuning_advice is not None:
+        conditions.add(Database.autotuning_advice.is_(autotuning_advice))
+    if autotuning_apply is not None:
+        conditions.add(Database.autotuning_apply.is_(autotuning_apply))
+    if custom_config is not None:
+        conditions.add(Database.custom_config.is_(custom_config))
+    if custom_extensions is not None:
+        conditions.add(Database.custom_extensions.is_(custom_extensions))
+    if security_features:
+        jf = func.json_each(Database.security_features).table_valued("value")
+        feature_count = (
+            select(func.count())
+            .select_from(jf)
+            .where(jf.c.value.in_([f.value for f in security_features]))
+            .correlate(Database)
+            .scalar_subquery()
+        )
+        conditions.add(feature_count == len(security_features))
+    if sla_min:
+        conditions.add(Database.sla >= sla_min)
+    if storage_size:
+        conditions.add(Database.storage_size >= storage_size)
+    if vendor:
+        conditions.add(Database.vendor_id.in_(vendor))
+
+    if only_active:
+        conditions.add(Database.status == Status.ACTIVE)
+        conditions.add(best_price_ref.isnot(None))
+    if best_price_allocation != BestDatabasePriceAllocation.ANY:
+        conditions.add(best_price_ref.isnot(None))
+
+    if order_by == "min_price":
+        conditions.add(best_price_ref.isnot(None))
+    if order_by == "min_price_ondemand":
+        if live_price_query is not None:
+            conditions.add(live_price_query.c.min_price_ondemand.isnot(None))
+        else:
+            conditions.add(DatabaseExtra.min_price_ondemand.isnot(None))
+    if order_by == "min_price_ondemand_monthly":
+        if live_price_query is not None:
+            conditions.add(live_price_query.c.min_price_ondemand_monthly.isnot(None))
+        else:
+            conditions.add(DatabaseExtra.min_price_ondemand_monthly.isnot(None))
+
+    _live_price_best_min_price_map = {
+        BestDatabasePriceAllocation.ANY: "min_price",
+        BestDatabasePriceAllocation.ONDEMAND_ONLY: "min_price_ondemand",
+        BestDatabasePriceAllocation.MONTHLY: "min_price_ondemand_monthly",
+    }
+    _live_price_order_fields = {
+        "min_price": "min_price",
+        "min_price_ondemand": "min_price_ondemand",
+        "min_price_ondemand_monthly": "min_price_ondemand_monthly",
+    }
+
+    if add_total_count_header:
+        query = select(func.count()).select_from(Database)
+        if only_active or order_by in _live_price_order_fields:
+            query = query.join(
+                DatabaseExtra,
+                (Database.vendor_id == DatabaseExtra.vendor_id)
+                & (Database.database_id == DatabaseExtra.database_id),
+                isouter=True,
+            )
+        if live_price_query is not None:
+            query = query.join(
+                live_price_query,
+                (Database.vendor_id == live_price_query.c.vendor_id)
+                & (Database.database_id == live_price_query.c.database_id),
+                isouter=True,
+            )
+        if storage_query is not None:
+            query = query.join(
+                storage_query,
+                (Database.vendor_id == storage_query.c.vendor_id)
+                & (Database.database_id == storage_query.c.database_id),
+            )
+        for condition in conditions:
+            query = query.where(condition)
+        if live_price_query is not None and order_by in _live_price_order_fields:
+            query = query.where(
+                getattr(live_price_query.c, _live_price_order_fields[order_by]).isnot(
+                    None
+                )
+            )
+        response.headers["X-Total-Count"] = str(db.exec(query).one())
+
+    select_cols = [Database, DatabaseExtra]
+    if live_price_query is not None:
+        select_cols.extend(
+            [
+                live_price_query.c.min_price,
+                live_price_query.c.min_price_ondemand,
+                live_price_query.c.min_price_ondemand_monthly,
+            ]
+        )
+    if storage_query is not None:
+        select_cols.append(storage_query.c.total_storage_price)
+
+    query = select(*select_cols)
+    query = query.join(Database.vendor)
+    query = query.join(
+        DatabaseExtra,
+        (Database.vendor_id == DatabaseExtra.vendor_id)
+        & (Database.database_id == DatabaseExtra.database_id),
+        isouter=True,
+    )
+    if live_price_query is not None:
+        query = query.join(
+            live_price_query,
+            (Database.vendor_id == live_price_query.c.vendor_id)
+            & (Database.database_id == live_price_query.c.database_id),
+            isouter=True,
+        )
+    if storage_query is not None:
+        query = query.join(
+            storage_query,
+            (Database.vendor_id == storage_query.c.vendor_id)
+            & (Database.database_id == storage_query.c.database_id),
+        )
+    query = query.options(contains_eager(Database.vendor))
+    for condition in conditions:
+        query = query.where(condition)
+
+    if live_price_query is not None and order_by in _live_price_order_fields:
+        query = query.where(
+            getattr(live_price_query.c, _live_price_order_fields[order_by]).isnot(None)
+        )
+
+    if order_by:
+        if order_by == "min_price":
+            order_field = best_price_ref
+        else:
+            if (
+                live_price_query is not None
+                and order_by in _live_price_best_min_price_map.values()
+            ):
+                order_field = getattr(live_price_query.c, order_by)
+            else:
+                order_obj = [
+                    o
+                    for o in [Database, DatabaseExtra]
+                    if mapped_class_has_column(o, order_by)
+                ]
+                if len(order_obj) == 0:
+                    raise HTTPException(
+                        status_code=400, detail="Unknown order_by field."
+                    )
+                order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
+
+    if limit > 0:
+        query = query.limit(limit)
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
+
+    databases = db.exec(query).all()
+
+    databaselist = []
+    for database_items in databases:
+        items = iter(database_items)
+        database_data = next(items)
+        database_extra = next(items)
+        if live_price_query is not None:
+            lp_min, lp_ondemand, lp_monthly = next(items), next(items), next(items)
+        else:
+            lp_min = lp_ondemand = lp_monthly = None
+        extra_storage_monthly_price = (
+            next(items) or 0 if storage_query is not None else 0
+        )
+        extra_storage_hourly_price = extra_storage_monthly_price / 730
+
+        database = DatabasePKs.model_validate(database_data)
+
+        with suppress(Exception):
+            database.score = database_extra.score
+            compute_min_price = (
+                lp_min if lp_min is not None else database_extra.min_price
+            )
+            compute_min_price_ondemand = (
+                lp_ondemand
+                if lp_ondemand is not None
+                else database_extra.min_price_ondemand
+            )
+            compute_min_price_ondemand_monthly = (
+                lp_monthly
+                if lp_monthly is not None
+                else database_extra.min_price_ondemand_monthly
+            )
+
+            database.min_price_ondemand = add_extra_to_price(
+                compute_min_price_ondemand,
+                extra_storage_hourly_price,
+                _PRICE_NDIGITS,
+            )
+            database.min_price_ondemand_monthly = add_extra_to_price(
+                compute_min_price_ondemand_monthly,
+                extra_storage_monthly_price,
+                _MONTHLY_PRICE_NDIGITS,
+            )
+            database.min_price = add_extra_to_price(
+                compute_min_price,
+                extra_storage_hourly_price,
+                _PRICE_NDIGITS,
+            )
+
+            if best_price_allocation == BestDatabasePriceAllocation.ONDEMAND_ONLY:
+                database.min_price = database.min_price_ondemand
+            if best_price_allocation == BestDatabasePriceAllocation.MONTHLY:
+                database.min_price = database.min_price_ondemand_monthly
+            if database_extra.score and database.min_price:
+                database.score_per_price = round(
+                    database_extra.score / database.min_price, _PRICE_NDIGITS
+                )
+            database.price_breakdown = DatabasePriceBreakdown(
+                compute_min_price=compute_min_price,
+                compute_min_price_ondemand=compute_min_price_ondemand,
+                compute_min_price_ondemand_monthly=compute_min_price_ondemand_monthly,
+                extra_storage_hourly=round(extra_storage_hourly_price, _PRICE_NDIGITS),
+                extra_storage_monthly=round(
+                    extra_storage_monthly_price, _MONTHLY_PRICE_NDIGITS
+                ),
+            )
+
+        database = update_database_price_currency(database, currency)
+        database.price = database.min_price
+        databaselist.append(database)
+
+    return databaselist
+
+
 @app.get(
     "/server_prices",
     tags=["Query Resources"],
@@ -1078,7 +1549,7 @@ def search_server_prices(
     if only_active:
         joins.add(ServerPrice.server)
         conditions.add(Server.status == Status.ACTIVE)
-    if green_energy:
+    if green_energy is not None:
         joins.add(ServerPrice.region)
         conditions.add(Region.green_energy == green_energy)
     if allocation:
@@ -1329,7 +1800,7 @@ def search_storage_prices(
         joins.add(StoragePrice.region)
         conditions.add(Region.country_id.in_(countries))
 
-    if green_energy:
+    if green_energy is not None:
         joins.add(StoragePrice.region)
         conditions.add(Region.green_energy == green_energy)
 
@@ -1363,6 +1834,139 @@ def search_storage_prices(
         order_obj = [
             o
             for o in [StoragePrice, Region, Storage]
+            if mapped_class_has_column(o, order_by)
+        ]
+        if len(order_obj) == 0:
+            raise HTTPException(status_code=400, detail="Unknown order_by field.")
+        if len(order_obj) > 1:
+            raise HTTPException(status_code=400, detail="Ambiguous order_by field.")
+        order_field = getattr(order_obj[0], order_by)
+        if OrderDir(order_dir) == OrderDir.ASC:
+            query = query.order_by(order_field)
+        else:
+            query = query.order_by(order_field.desc())
+
+    # pagination
+    if limit > 0:
+        query = query.limit(limit)
+    # only apply if limit is set
+    if page and limit > 0:
+        query = query.offset((page - 1) * limit)
+
+    prices = db.exec(query).all()
+
+    # update prices to currency requested
+    for price in prices:
+        if currency:
+            if hasattr(price, "price") and hasattr(price, "currency"):
+                if price.currency != currency:
+                    db.expunge(price)
+                    try:
+                        price.price = round(
+                            currency_converter.convert(
+                                price.price, price.currency, currency
+                            ),
+                            6,
+                        )
+                    except ValueError as e:
+                        raise HTTPException(
+                            status_code=400, detail="Invalid currency code"
+                        ) from e
+                    price.currency = currency
+
+    return prices
+
+
+@app.get("/database_storage_prices", tags=["Query Resources"])
+def search_database_storage_prices(
+    response: Response,
+    vendor: options.vendor = None,
+    green_energy: options.green_energy = None,
+    storage_min: options.storage_size = None,
+    compliance_framework: options.compliance_framework = None,
+    regions: options.regions = None,
+    vendor_regions: options.vendor_regions = None,
+    countries: options.countries = None,
+    limit: options.limit = 10,
+    page: options.page = None,
+    order_by: options.order_by = "price",
+    order_dir: options.order_dir = OrderDir.ASC,
+    currency: options.currency = "USD",
+    add_total_count_header: options.add_total_count_header = False,
+    db: Session = Depends(get_db),
+) -> List[DatabaseStoragePriceWithPKs]:
+    # compliance frameworks are defined at the vendor level,
+    # let's filter for vendors instead of exploding the storages table
+    if compliance_framework:
+        if not vendor:
+            vendor = db.exec(select(Vendor.vendor_id)).all()
+        query = select(VendorComplianceLink.vendor_id).where(
+            VendorComplianceLink.compliance_framework_id.in_(compliance_framework)
+        )
+        compliant_vendors = db.exec(query).all()
+        vendor = list(set(vendor or []) & set(compliant_vendors))
+
+    # keep track of tables to be joins and filter conditions
+    joins = set()
+    conditions = set()
+
+    # always filter for ACTIVE prices
+    conditions.add(DatabaseStoragePrice.status == Status.ACTIVE)
+
+    if vendor:
+        conditions.add(DatabaseStoragePrice.vendor_id.in_(vendor))
+
+    if storage_min:
+        joins.add(DatabaseStoragePrice.database_storage)
+        conditions.add(DatabaseStorage.min_size <= storage_min)
+        conditions.add(DatabaseStorage.max_size >= storage_min)
+
+    if regions:
+        conditions.add(DatabaseStoragePrice.region_id.in_(regions))
+
+    if vendor_regions:
+        conditions.add(vendor_region_filter(vendor_regions, DatabaseStoragePrice))
+
+    if countries:
+        joins.add(DatabaseStoragePrice.region)
+        conditions.add(Region.country_id.in_(countries))
+
+    if green_energy is not None:
+        joins.add(DatabaseStoragePrice.region)
+        conditions.add(Region.green_energy == green_energy)
+
+    # count all records to be returned in header
+    if add_total_count_header:
+        query = select(func.count()).select_from(DatabaseStoragePrice)
+        for j in joins:
+            query = query.join(j)
+        for condition in conditions:
+            query = query.where(condition)
+        response.headers["X-Total-Count"] = str(db.exec(query).one())
+
+    region_alias = Region
+    query = (
+        select(DatabaseStoragePrice)
+        .join(DatabaseStoragePrice.vendor)
+        .options(contains_eager(DatabaseStoragePrice.vendor))
+        .join(DatabaseStoragePrice.region)
+        .join(region_alias.country)
+        .options(
+            contains_eager(DatabaseStoragePrice.region).contains_eager(
+                region_alias.country
+            )
+        )
+        .join(DatabaseStoragePrice.database_storage)
+        .options(contains_eager(DatabaseStoragePrice.database_storage))
+    )
+    for condition in conditions:
+        query = query.where(condition)
+
+    # ordering
+    if order_by:
+        order_obj = [
+            o
+            for o in [DatabaseStoragePrice, Region, DatabaseStorage]
             if mapped_class_has_column(o, order_by)
         ]
         if len(order_obj) == 0:
@@ -1456,7 +2060,7 @@ def search_traffic_prices(
         joins.add(TrafficPrice.region)
         conditions.add(Region.country_id.in_(countries))
 
-    if green_energy:
+    if green_energy is not None:
         joins.add(TrafficPrice.region)
         conditions.add(Region.green_energy == green_energy)
 
