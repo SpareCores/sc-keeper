@@ -336,12 +336,16 @@ def get_sort_key_for_benchmark_configs(item):
     concurrency_idx = 0 if config.get("concurrency", "") == "single" else 1
 
     # then sort by database engine version - pgbench only
-    database_engine_version_idx = 1
-    if environment and "database_engine_version" in environment:
-        try:
-            database_engine_version_idx = float(environment["database_engine_version"])
-        except (ValueError, TypeError):
-            pass
+    database_engine_version_idx = (float("inf"),)
+    if environment:
+        raw_version = environment.get("database_engine_version")
+        if raw_version is not None and raw_version != "":
+            try:
+                database_engine_version_idx = tuple(
+                    int(part) for part in str(raw_version).split(".")
+                )
+            except (ValueError, TypeError):
+                pass
 
     # then sort by tokens (if present)
     tokens = 0
