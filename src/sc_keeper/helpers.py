@@ -271,6 +271,7 @@ def get_sort_key_for_benchmark_configs(item):
         "Static web server",
         "Redis",
         "LLM inference speed",
+        "Database",
         "Other",
     ]
     sub_category_order = [
@@ -279,6 +280,8 @@ def get_sort_key_for_benchmark_configs(item):
         "passmark:memory_mark",
         "llm_speed:prompt_processing",
         "llm_speed:text_generation",
+        "membench:latency",
+        "pgbench:heavy_read_only",
     ]
     model_order = [
         "SmolLM-135M.Q4_K_M.gguf",
@@ -289,20 +292,19 @@ def get_sort_key_for_benchmark_configs(item):
         "Llama-3.3-70B-Instruct-Q4_K_M.gguf",
     ]
 
-    config = item.get("config_parsed")
-
-    if not isinstance(config, dict):
-        raw_config = item.get("config", "{}")
-        if isinstance(raw_config, dict):
-            config = raw_config
-        elif isinstance(raw_config, str):
-            try:
-                parsed_config = json_loads(raw_config)
-                config = parsed_config if isinstance(parsed_config, dict) else {}
-            except JSONDecodeError:
-                config = {}
-        else:
+    config = item.get("config") or {}
+    if isinstance(config, str):
+        try:
+            parsed = json_loads(config)
+            config = parsed if isinstance(parsed, dict) else {}
+        except JSONDecodeError:
             config = {}
+    elif not isinstance(config, dict):
+        config = {}
+
+    environment = item.get("environment")
+    if not isinstance(environment, dict):
+        environment = None
 
     # primary sort by category
     category = item.get("category") or "Other"
@@ -330,6 +332,17 @@ def get_sort_key_for_benchmark_configs(item):
     if "model" in config and config["model"] in model_order:
         model_idx = model_order.index(config["model"])
 
+    # then sort by concurrency (single-core first) - pgbench only
+    concurrency_idx = 0 if config.get("concurrency", "") == "single" else 1
+
+    # then sort by database engine version - pgbench only
+    database_engine_version_idx = 1
+    if environment and "database_engine_version" in environment:
+        try:
+            database_engine_version_idx = float(environment["database_engine_version"])
+        except (ValueError, TypeError):
+            pass
+
     # then sort by tokens (if present)
     tokens = 0
     if "tokens" in config:
@@ -356,6 +369,8 @@ def get_sort_key_for_benchmark_configs(item):
         subcategory_idx,
         cores_idx,
         model_idx,
+        concurrency_idx,
+        database_engine_version_idx,
         tokens,
         algo,
         int_type_field,

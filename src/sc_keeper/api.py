@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager, suppress
 from importlib.metadata import version
-from json import loads as json_loads
 from logging import getLogger
 from os import environ
 from textwrap import dedent
@@ -2247,10 +2246,6 @@ def search_benchmark_configs(
 
     for i, result in enumerate(results):
         result = result._asdict()
-        # store parsed config
-        result["config_parsed"] = json_loads(result["config"])
-
-        # keep original order
         result["original_order"] = i
         results[i] = result
 

@@ -2,14 +2,15 @@ from typing import List
 
 from fastapi import APIRouter, Depends, Request
 from sc_crawler.table_bases import DatabaseBase
-from sc_crawler.table_fields import Status
-from sc_crawler.tables import DatabasePrice, Region
+from sc_crawler.table_fields import ResourceType, Status
+from sc_crawler.tables import BenchmarkScore, DatabasePrice, Region
 from sqlmodel import Session, select
 
 from .. import parameters as options
 from ..database import get_db
 from ..helpers import (
     get_database_dict,
+    get_sort_key_for_benchmark_configs,
     update_database_price_currency,
     vendor_region_filter,
 )
@@ -63,3 +64,28 @@ def get_database_prices(
         prices.append(update_database_price_currency(price, currency))
 
     return prices
+
+
+@router.get("/database/{vendor}/{database}/benchmarks")
+def get_database_benchmarks(
+    database_args: options.database_args,
+    db: Session = Depends(get_db),
+) -> List[BenchmarkScore]:
+    """Query the current benchmark scores of a single database."""
+    vendor_id, database_id = database_args
+
+    results = db.exec(
+        select(BenchmarkScore)
+        .where(BenchmarkScore.resource_type == ResourceType.DATABASE)
+        .where(BenchmarkScore.status == Status.ACTIVE)
+        .where(BenchmarkScore.vendor_id == vendor_id)
+        .where(BenchmarkScore.database_id == database_id)
+    ).all()
+
+    benchmarks = []
+    for i, result in enumerate(results):
+        benchmark = result.model_dump()
+        benchmark["original_order"] = i
+        benchmarks.append(benchmark)
+
+    return sorted(benchmarks, key=get_sort_key_for_benchmark_configs)
