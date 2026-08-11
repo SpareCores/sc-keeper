@@ -289,13 +289,11 @@ class TestResponseStructure:
             "engine",
             "min_price",
             "vendor",
-            "score",
-            "score_per_price",
             "price_breakdown",
         ]:
             assert field in row, f"Missing field: {field}"
-        assert row["score"] is None
-        assert row["score_per_price"] is None
+        assert row.get("selected_benchmark_score") is None
+        assert row.get("selected_benchmark_score_per_price") is None
 
     def test_order_by_min_price_asc(self, seeded_client):
         data, _ = get_databases(seeded_client, order_by="min_price", order_dir="asc")

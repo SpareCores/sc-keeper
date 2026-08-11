@@ -43,10 +43,11 @@ index_defs = [
         Server.server_id,
     ],
     [
-        "benchmark_score_idx_benchmark_vendor_server",
+        "benchmark_score_idx_benchmark_vendor_resource",
         BenchmarkScore.benchmark_id,
         BenchmarkScore.vendor_id,
-        BenchmarkScore.server_id,
+        BenchmarkScore.resource_type,
+        BenchmarkScore.resource_id,
     ],
     [
         "server_price_idx_vendor_region_status",

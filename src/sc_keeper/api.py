@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.docs import get_redoc_html
-from sc_crawler.table_fields import Status, TrafficDirection
+from sc_crawler.table_fields import ResourceType, Status, TrafficDirection
 from sc_crawler.tables import (
     Benchmark,
     BenchmarkScore,
@@ -1041,6 +1041,10 @@ def search_databases(
     vcpus_min: options.vcpus_min = 1,
     vcpus_max: options.vcpus_max = None,
     memory_min: options.memory_min = None,
+    benchmark_id: options.benchmark_id = "pgbench:heavy_read_only",
+    benchmark_config: options.benchmark_config = None,
+    benchmark_score_min: options.benchmark_score_min = None,
+    benchmark_score_per_price_min: options.benchmark_score_per_price_min = None,
     ha: options.database_ha = None,
     ha_strategy: options.database_ha_strategy = None,
     max_read_replicas_min: options.database_max_read_replicas_min = None,
@@ -1086,6 +1090,24 @@ def search_databases(
         )
 
     conditions = set()
+
+    benchmark_query = (
+        gen_benchmark_query(benchmark_id, benchmark_config, ResourceType.DATABASE)
+        if benchmark_id
+        else None
+    )
+    if (benchmark_score_min or benchmark_score_per_price_min) and not benchmark_id:
+        raise HTTPException(
+            status_code=400,
+            detail="benchmark_id is required when filtering by benchmark_score or benchmark_score_per_price",
+        )
+    if (
+        order_by in ["selected_benchmark_score", "selected_benchmark_score_per_price"]
+    ) and not benchmark_id:
+        raise HTTPException(
+            status_code=400,
+            detail="benchmark_id is required when ordering by benchmark_score or benchmark_score_per_price",
+        )
 
     live_price_query = gen_database_live_price_query(countries, regions, vendor_regions)
     storage_query = (
@@ -1215,6 +1237,13 @@ def search_databases(
         conditions.add(Database.storage_size >= storage_size)
     if vendor:
         conditions.add(Database.vendor_id.in_(vendor))
+    if benchmark_score_min:
+        conditions.add(benchmark_query.c.benchmark_score >= benchmark_score_min)
+    if benchmark_score_per_price_min:
+        conditions.add(
+            (benchmark_query.c.benchmark_score / best_price_ref)
+            >= benchmark_score_per_price_min
+        )
 
     if only_active:
         conditions.add(Database.status == Status.ACTIVE)
@@ -1234,25 +1263,52 @@ def search_databases(
             conditions.add(live_price_query.c.min_price_ondemand_monthly.isnot(None))
         else:
             conditions.add(DatabaseExtra.min_price_ondemand_monthly.isnot(None))
+    if order_by == "selected_benchmark_score":
+        conditions.add(benchmark_query.c.benchmark_score.isnot(None))
+    if order_by == "selected_benchmark_score_per_price":
+        conditions.add(benchmark_query.c.benchmark_score.isnot(None))
+        conditions.add(best_price_ref.isnot(None))
 
     _live_price_best_min_price_map = {
         BestDatabasePriceAllocation.ANY: "min_price",
         BestDatabasePriceAllocation.ONDEMAND_ONLY: "min_price_ondemand",
         BestDatabasePriceAllocation.MONTHLY: "min_price_ondemand_monthly",
     }
+    _live_price_order_min_price = _live_price_best_min_price_map[best_price_allocation]
     _live_price_order_fields = {
         "min_price": "min_price",
         "min_price_ondemand": "min_price_ondemand",
         "min_price_ondemand_monthly": "min_price_ondemand_monthly",
+        "selected_benchmark_score_per_price": _live_price_order_min_price,
     }
 
     if add_total_count_header:
         query = select(func.count()).select_from(Database)
-        if only_active or order_by in _live_price_order_fields:
+        if (
+            only_active
+            or benchmark_score_per_price_min
+            or order_by
+            in [
+                "min_price",
+                "min_price_ondemand",
+                "min_price_ondemand_monthly",
+                "selected_benchmark_score_per_price",
+            ]
+        ):
             query = query.join(
                 DatabaseExtra,
                 (Database.vendor_id == DatabaseExtra.vendor_id)
                 & (Database.database_id == DatabaseExtra.database_id),
+                isouter=True,
+            )
+        if (benchmark_score_min or benchmark_score_per_price_min) or (
+            order_by
+            in ["selected_benchmark_score", "selected_benchmark_score_per_price"]
+        ):
+            query = query.join(
+                benchmark_query,
+                (Database.vendor_id == benchmark_query.c.vendor_id)
+                & (Database.database_id == benchmark_query.c.database_id),
                 isouter=True,
             )
         if live_price_query is not None:
@@ -1279,6 +1335,8 @@ def search_databases(
         response.headers["X-Total-Count"] = str(db.exec(query).one())
 
     select_cols = [Database, DatabaseExtra]
+    if benchmark_query is not None:
+        select_cols.append(benchmark_query.c.benchmark_score)
     if live_price_query is not None:
         select_cols.extend(
             [
@@ -1298,6 +1356,13 @@ def search_databases(
         & (Database.database_id == DatabaseExtra.database_id),
         isouter=True,
     )
+    if benchmark_query is not None:
+        query = query.join(
+            benchmark_query,
+            (Database.vendor_id == benchmark_query.c.vendor_id)
+            & (Database.database_id == benchmark_query.c.database_id),
+            isouter=True,
+        )
     if live_price_query is not None:
         query = query.join(
             live_price_query,
@@ -1323,6 +1388,10 @@ def search_databases(
     if order_by:
         if order_by == "min_price":
             order_field = best_price_ref
+        elif order_by == "selected_benchmark_score":
+            order_field = benchmark_query.c.benchmark_score
+        elif order_by == "selected_benchmark_score_per_price":
+            order_field = benchmark_query.c.benchmark_score / best_price_ref
         else:
             if (
                 live_price_query is not None
@@ -1357,6 +1426,7 @@ def search_databases(
         items = iter(database_items)
         database_data = next(items)
         database_extra = next(items)
+        benchmark_score = next(items) if benchmark_query is not None else None
         if live_price_query is not None:
             lp_min, lp_ondemand, lp_monthly = next(items), next(items), next(items)
         else:
@@ -1369,7 +1439,6 @@ def search_databases(
         database = DatabasePKs.model_validate(database_data)
 
         with suppress(Exception):
-            database.score = database_extra.score
             compute_min_price = (
                 lp_min if lp_min is not None else database_extra.min_price
             )
@@ -1405,9 +1474,16 @@ def search_databases(
             if best_price_allocation == BestDatabasePriceAllocation.MONTHLY:
                 database.min_price = database.min_price_ondemand_monthly
             if database_extra.score and database.min_price:
+                database.score = database_extra.score
                 database.score_per_price = round(
                     database_extra.score / database.min_price, _PRICE_NDIGITS
                 )
+            if benchmark_score is not None:
+                database.selected_benchmark_score = benchmark_score
+                if database.min_price:
+                    database.selected_benchmark_score_per_price = (
+                        benchmark_score / database.min_price
+                    )
             database.price_breakdown = DatabasePriceBreakdown(
                 compute_min_price=compute_min_price,
                 compute_min_price_ondemand=compute_min_price_ondemand,

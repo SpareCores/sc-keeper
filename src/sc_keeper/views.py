@@ -7,7 +7,7 @@ from sc_crawler.table_bases import (
     HasVendorPKFK,
     ScModel,
 )
-from sc_crawler.table_fields import Allocation, Status
+from sc_crawler.table_fields import Allocation, ResourceType, Status
 from sc_crawler.tables import BenchmarkScore, DatabasePrice, ServerPrice, is_table
 from sqlmodel import Field, Session, case, func, literal, select
 
@@ -61,6 +61,7 @@ class ServerExtra(ServerExtraBase, table=True):
                 BenchmarkScore.score.label("score1"),
             )
             .where(BenchmarkScore.status == Status.ACTIVE)
+            .where(BenchmarkScore.resource_type == ResourceType.SERVER)
             .where(BenchmarkScore.benchmark_id == "stress_ng:best1")
             .subquery()
         )
@@ -71,6 +72,7 @@ class ServerExtra(ServerExtraBase, table=True):
                 BenchmarkScore.score.label("score"),
             )
             .where(BenchmarkScore.status == Status.ACTIVE)
+            .where(BenchmarkScore.resource_type == ResourceType.SERVER)
             .where(BenchmarkScore.benchmark_id == "stress_ng:bestn")
             .subquery()
         )

@@ -1,3 +1,11 @@
+## August 2026
+
+New feature(s):
+
+- Add `/databases` benchmark filters (`benchmark_id` default `pgbench:heavy_read_only`,
+  `benchmark_config`, `benchmark_score_min`, `benchmark_score_per_price_min`) and
+  `selected_benchmark_score*` ordering.
+
 ## July 2026
 
 New feature(s):

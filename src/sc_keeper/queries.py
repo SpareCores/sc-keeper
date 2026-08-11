@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from sc_crawler.table_fields import DatabaseStorageScope
+from sc_crawler.table_fields import DatabaseStorageScope, ResourceType
 from sc_crawler.tables import (
     Allocation,
     BenchmarkScore,
@@ -131,25 +131,37 @@ def gen_live_price_query(
 
 
 def gen_benchmark_query(
-    benchmark_id: str, benchmark_config: Optional[str] = None
+    benchmark_id: str,
+    benchmark_config: Optional[str] = None,
+    resource_type: ResourceType = ResourceType.SERVER,
 ) -> Subquery:
-    """Generate a subquery for the filtered view of max benchmark scores of servers.
+    """Generate a subquery for the filtered view of max benchmark scores.
 
-    Use this subquery when you need to custom benchmark scores e.g. for ordering instead of the global ServerExtra.score.
+    Use this subquery when you need custom benchmark scores e.g. for ordering
+    instead of the global ServerExtra.score.
 
     Args:
         benchmark_id: The ID of the benchmark to filter the benchmark scores by.
         benchmark_config: Optional[str]: The configuration of the benchmark to filter the benchmark scores by.
+        resource_type: SERVER or DATABASE; selects the matching resource_id column
+            via BenchmarkScore.server_id / .database_id hybrid helpers.
     """
+    resource_id_col = getattr(BenchmarkScore, f"{resource_type.value}_id")
     query = select(
-        BenchmarkScore.server_id,
+        resource_id_col,
         BenchmarkScore.vendor_id,
-        # make sure to return only one score per server
+        # one score per resource
         func.max(BenchmarkScore.score).label("benchmark_score"),
-    ).where(BenchmarkScore.benchmark_id == benchmark_id)
+    ).where(
+        and_(
+            BenchmarkScore.benchmark_id == benchmark_id,
+            BenchmarkScore.resource_type == resource_type,
+            BenchmarkScore.status == Status.ACTIVE,
+        )
+    )
     if benchmark_config:
         query = query.where(BenchmarkScore.config.cast(String) == benchmark_config)
-    query = query.group_by(BenchmarkScore.server_id, BenchmarkScore.vendor_id)
+    query = query.group_by(resource_id_col, BenchmarkScore.vendor_id)
     return query.subquery()
 
 
