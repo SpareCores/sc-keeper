@@ -1473,11 +1473,6 @@ def search_databases(
                 database.min_price = database.min_price_ondemand
             if best_price_allocation == BestDatabasePriceAllocation.MONTHLY:
                 database.min_price = database.min_price_ondemand_monthly
-            if database_extra.score and database.min_price:
-                database.score = database_extra.score
-                database.score_per_price = round(
-                    database_extra.score / database.min_price, _PRICE_NDIGITS
-                )
             if benchmark_score is not None:
                 database.selected_benchmark_score = benchmark_score
                 if database.min_price:
