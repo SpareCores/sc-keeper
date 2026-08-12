@@ -30,6 +30,12 @@ async def assist_server_filters(text: str, request: Request) -> dict:
     return await assister(text, "/servers")
 
 
+@router.get("/assist_database_filters")
+async def assist_database_filters(text: str, request: Request) -> dict:
+    """Extract Database JSON filters from freetext."""
+    return await assister(text, "/databases")
+
+
 @router.get("/assist_server_price_filters")
 async def assist_server_price_filters(text: str, request: Request) -> dict:
     """Extract ServerPrice JSON filters from freetext."""
