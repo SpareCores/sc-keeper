@@ -1034,9 +1034,7 @@ def search_databases(
     request: Request,
     response: Response,
     partial_name_or_id: options.database_partial_name_or_id = None,
-    engine: options.database_engine = None,
-    engine_versions: options.database_engine_versions = None,
-    wire_protocol: options.database_wire_protocol = None,
+    engine_version: options.database_engine_version = None,
     vcpus_min: options.vcpus_min = 1,
     vcpus_max: options.vcpus_max = None,
     memory_min: options.memory_min = None,
@@ -1081,12 +1079,6 @@ def search_databases(
 ) -> List[DatabasePKs]:
     check_filter_limits(request, countries, regions, vendor_regions)
     check_currency(currency)
-
-    if engine_versions and not engine:
-        raise HTTPException(
-            status_code=400,
-            detail="engine is required when filtering by engine_versions",
-        )
 
     conditions = set()
 
@@ -1154,20 +1146,16 @@ def search_databases(
             )
         )
 
-    if engine:
-        conditions.add(Database.engine == engine)
-    if engine_versions:
+    if engine_version:
         je = func.json_each(Database.engine_versions).table_valued("value")
         version_count = (
             select(func.count())
             .select_from(je)
-            .where(je.c.value.in_(engine_versions))
+            .where(je.c.value == engine_version)
             .correlate(Database)
             .scalar_subquery()
         )
-        conditions.add(version_count == len(engine_versions))
-    if wire_protocol:
-        conditions.add(Database.wire_protocol.in_(wire_protocol))
+        conditions.add(version_count >= 1)
     if vcpus_min:
         conditions.add(Database.vcpus >= vcpus_min)
     if vcpus_max:

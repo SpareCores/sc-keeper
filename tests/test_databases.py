@@ -347,15 +347,10 @@ class TestFiltersAndPricing:
         assert len(data) == 1
         assert data[0]["database_id"] == "db-small"
 
-    def test_engine_versions_requires_engine(self, seeded_client):
-        resp = seeded_client.get("/databases", params={"engine_versions": ["15"]})
-        assert resp.status_code == 400
-
-    def test_engine_versions_filter(self, seeded_client):
-        data, _ = get_databases(
-            seeded_client, engine="postgresql", engine_versions=["15", "16"]
-        )
+    def test_engine_version_filter(self, seeded_client):
+        data, _ = get_databases(seeded_client, engine_version="15")
         assert len(data) == 2
+        assert all("15" in r["engine_versions"] for r in data)
 
     def test_ha_filter(self, seeded_client):
         data, _ = get_databases(seeded_client, ha=["multi-region"])
