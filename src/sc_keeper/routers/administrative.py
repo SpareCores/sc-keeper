@@ -227,7 +227,7 @@ _HISTOGRAM_BINS_SQL = text("""
             min(score) AS lo,
             max(score) AS hi
         FROM benchmark_score
-        WHERE status = :status AND score IS NOT NULL
+        WHERE status = :status AND score IS NOT NULL AND resource_type = :resource_type
         GROUP BY benchmark_id
     )
     SELECT
@@ -241,11 +241,12 @@ _HISTOGRAM_BINS_SQL = text("""
         count(*) AS cnt
     FROM benchmark_score s
     JOIN bounds b ON s.benchmark_id = b.benchmark_id
-    WHERE s.status = :status AND s.score IS NOT NULL
+    WHERE s.status = :status AND s.score IS NOT NULL AND s.resource_type = :resource_type
     GROUP BY s.benchmark_id, bin
     ORDER BY s.benchmark_id, bin
 """).bindparams(
     status=Status.ACTIVE.name,
+    resource_type=ResourceType.SERVER.name,
     num_bins=NUM_HISTOGRAM_BINS,
     max_bin=NUM_HISTOGRAM_BINS - 1,
 )
@@ -256,9 +257,10 @@ _BENCHMARK_CONFIG_VALUES_SQL = text("""
         je.key AS config_key,
         je.value AS config_value
     FROM benchmark_score bs, json_each(bs.config) je
-    WHERE bs.status = :status AND bs.score IS NOT NULL AND bs.config IS NOT NULL AND je.value IS NOT NULL
+    WHERE bs.status = :status AND bs.score IS NOT NULL AND bs.config IS NOT NULL
+      AND je.value IS NOT NULL AND bs.resource_type = :resource_type
     ORDER BY bs.benchmark_id, je.key
-""").bindparams(status=Status.ACTIVE.name)
+""").bindparams(status=Status.ACTIVE.name, resource_type=ResourceType.SERVER.name)
 
 
 @router.get("/benchmark_score_stats", dependencies=[Depends(heavy_job_dep)])
