@@ -16,6 +16,7 @@ from sc_crawler.table_fields import (
     CpuArchitecture,
     HashableDict,
     PriceUnit,
+    ResourceType,
     Status,
 )
 from sc_crawler.tables import (
@@ -269,7 +270,8 @@ def _seed_db(session: Session):
         session.add(
             BenchmarkScore(
                 vendor_id="test",
-                server_id=sid,
+                resource_type=ResourceType.SERVER,
+                resource_id=sid,
                 benchmark_id="stress_ng:bestn",
                 config=HashableDict(),
                 score=score,
@@ -283,7 +285,8 @@ def _seed_db(session: Session):
         session.add(
             BenchmarkScore(
                 vendor_id="test",
-                server_id=sid,
+                resource_type=ResourceType.SERVER,
+                resource_id=sid,
                 benchmark_id="geekbench:multi",
                 config=HashableDict(),
                 score=score,

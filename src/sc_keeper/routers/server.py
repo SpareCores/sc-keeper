@@ -9,7 +9,7 @@ from fastapi import (
     Request,
 )
 from sc_crawler.table_bases import ServerBase
-from sc_crawler.table_fields import Status
+from sc_crawler.table_fields import ResourceType, Status
 from sc_crawler.tables import (
     BenchmarkScore,
     Region,
@@ -428,6 +428,7 @@ def get_server_benchmarks(
 
     results = db.exec(
         select(BenchmarkScore)
+        .where(BenchmarkScore.resource_type == ResourceType.SERVER)
         .where(BenchmarkScore.status == Status.ACTIVE)
         .where(BenchmarkScore.vendor_id == vendor_id)
         .where(BenchmarkScore.server_id == server_id)

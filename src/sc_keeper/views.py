@@ -7,9 +7,9 @@ from sc_crawler.table_bases import (
     HasVendorPKFK,
     ScModel,
 )
-from sc_crawler.table_fields import Allocation, Status
+from sc_crawler.table_fields import Allocation, ResourceType, Status
 from sc_crawler.tables import BenchmarkScore, DatabasePrice, ServerPrice, is_table
-from sqlmodel import Field, Session, case, func, literal, select
+from sqlmodel import Field, Session, case, func, select
 
 from .currency import currency_converter as cc
 
@@ -61,6 +61,7 @@ class ServerExtra(ServerExtraBase, table=True):
                 BenchmarkScore.score.label("score1"),
             )
             .where(BenchmarkScore.status == Status.ACTIVE)
+            .where(BenchmarkScore.resource_type == ResourceType.SERVER)
             .where(BenchmarkScore.benchmark_id == "stress_ng:best1")
             .subquery()
         )
@@ -71,6 +72,7 @@ class ServerExtra(ServerExtraBase, table=True):
                 BenchmarkScore.score.label("score"),
             )
             .where(BenchmarkScore.status == Status.ACTIVE)
+            .where(BenchmarkScore.resource_type == ResourceType.SERVER)
             .where(BenchmarkScore.benchmark_id == "stress_ng:bestn")
             .subquery()
         )
@@ -144,9 +146,6 @@ class ServerExtra(ServerExtraBase, table=True):
 
 
 class DatabaseExtraBase(HasDatabasePK, HasVendorPKFK):
-    score: Optional[float]
-    score_per_price: Optional[float]
-    score1: Optional[float]
     min_price: Optional[float]
     min_price_ondemand: Optional[float]
     min_price_ondemand_monthly: Optional[float]
@@ -186,9 +185,6 @@ class DatabaseExtra(DatabaseExtraBase, table=True):
         return select(
             price.c.vendor_id,
             price.c.database_id,
-            literal(None).label("score"),
-            literal(None).label("score_per_price"),
-            literal(None).label("score1"),
             price.c.min_price,
             price.c.min_price_ondemand,
             price.c.min_price_ondemand_monthly,

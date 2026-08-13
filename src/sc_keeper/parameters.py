@@ -808,11 +808,11 @@ database_engine = Annotated[
     ),
 ]
 
-database_engine_versions = Annotated[
-    Optional[List[str]],
+database_engine_version = Annotated[
+    Optional[str],
     Query(
-        title="Engine versions",
-        description="Required major engine versions; all must be supported by the database instance.",
+        title="Engine version",
+        description="Required major engine version.",
         json_schema_extra={
             "category_id": DatabaseFilterCategory.ENGINE,
         },

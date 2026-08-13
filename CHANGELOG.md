@@ -1,3 +1,14 @@
+## August 2026
+
+New feature(s):
+
+- Add `/databases` benchmark filters (`benchmark_id` default `pgbench:heavy_read_only`,
+  `benchmark_config`, `benchmark_score_min`, `benchmark_score_per_price_min`) and
+  `selected_benchmark_score*` ordering.
+- Add `/ai/assist_database_filters` for natural-language database filter extraction.
+- Refactor `/databases` endpoint: drop `engine` and `wire_protocol` filters and modify 
+  `engine_versions` filter to `engine_version` (supports only one required major engine version).
+
 ## July 2026
 
 New feature(s):

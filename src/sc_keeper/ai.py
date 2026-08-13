@@ -53,6 +53,36 @@ def convert_swagger_to_json_schema(swagger: dict, endpoint: str) -> dict:
     }
 
 
+_ASSIST_PROFILES = {
+    "/servers": {
+        "function_name": "search_servers",
+        "function_description": (
+            "Search server instances across cloud vendors using the provided filters."
+        ),
+        "system": (
+            "You are a cloud server search assistant, "
+            "helping users to find the optimal instances across cloud providers. "
+            "The user describes their needs in plain English (or another natural language), "
+            "and you need to understand what kind of server is required to accomplish the task, "
+            "and generate a JSON describing the filters (e.g. number of CPUs or memory). "
+        ),
+    },
+    "/databases": {
+        "function_name": "search_databases",
+        "function_description": (
+            "Search managed database instances across cloud vendors using the provided filters."
+        ),
+        "system": (
+            "You are a cloud database search assistant, "
+            "helping users to find the optimal managed database instances across cloud providers. "
+            "The user describes their needs in plain English (or another natural language), "
+            "and you need to understand what kind of database is required to accomplish the task, "
+            "and generate a JSON describing the filters (e.g. engine, vCPUs, memory, high availability). "
+        ),
+    },
+}
+
+
 async def openai_extract_filters(prompt: str, endpoint: str) -> dict:
     """Ask ChatGPT to generate filter JSON based on freetext input."""
 
@@ -66,6 +96,9 @@ async def openai_extract_filters(prompt: str, endpoint: str) -> dict:
             "No OpenAI key found, which is required for this task."
         ) from exc
 
+    profile = _ASSIST_PROFILES.get(endpoint, _ASSIST_PROFILES["/servers"])
+    function_name = profile["function_name"]
+
     json_data = {
         "model": "gpt-4o-mini",
         "response_format": {"type": "json_object"},
@@ -73,8 +106,8 @@ async def openai_extract_filters(prompt: str, endpoint: str) -> dict:
             {
                 "type": "function",
                 "function": {
-                    "name": "search_servers",
-                    "description": "Search server instances across cloud vendors using the provided filters.",
+                    "name": function_name,
+                    "description": profile["function_description"],
                     "parameters": {
                         "type": "object",
                         "properties": convert_swagger_to_json_schema(
@@ -85,17 +118,11 @@ async def openai_extract_filters(prompt: str, endpoint: str) -> dict:
                 },
             }
         ],
-        "tool_choice": {"type": "function", "function": {"name": "search_servers"}},
+        "tool_choice": {"type": "function", "function": {"name": function_name}},
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "You are a cloud server search assistant, "
-                    "helping users to find the optimal instances across cloud providers. "
-                    "The user describes their needs in plain English (or another natural language), "
-                    "and you need to understand what kind of server is required to accomplish the task, "
-                    "and generate a JSON describing the filters (e.g. number of CPUs or memory). "
-                ),
+                "content": profile["system"],
             },
             {
                 "role": "user",
