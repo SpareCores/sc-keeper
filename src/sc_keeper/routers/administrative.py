@@ -13,6 +13,7 @@ from sc_crawler.tables import (
     Vendor,
     Zone,
 )
+from sc_crawler.table_fields import ResourceType
 from sqlmodel import Session, case, func, select, text
 
 from .. import parameters as options
@@ -209,13 +210,13 @@ _AGGREGATE_SCORES_SQL = text("""
     SELECT
         benchmark_id,
         count(*) AS cnt,
-        count(DISTINCT vendor_id || ':' || server_id) AS cnt_servers,
+        count(DISTINCT vendor_id || ':' || resource_id) AS cnt_servers,
         min(score) AS min_s,
         max(score) AS max_s
     FROM benchmark_score
-    WHERE status = :status AND score IS NOT NULL
+    WHERE status = :status AND score IS NOT NULL AND resource_type = :resource_type
     GROUP BY benchmark_id
-""").bindparams(status=Status.ACTIVE.name)
+""").bindparams(status=Status.ACTIVE.name, resource_type=ResourceType.SERVER.name)
 
 # histogram bin counts per benchmark using a CTE for min/max, then bin index in SQL.
 # note that bin min/max ranges are NOT returned, only the bin index and count
