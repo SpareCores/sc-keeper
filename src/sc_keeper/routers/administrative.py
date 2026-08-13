@@ -3,6 +3,7 @@ from importlib.metadata import version
 from typing import List
 
 from fastapi import APIRouter, Depends, Security
+from sc_crawler.table_fields import ResourceType
 from sc_crawler.tables import (
     Benchmark,
     BenchmarkScore,
@@ -13,7 +14,6 @@ from sc_crawler.tables import (
     Vendor,
     Zone,
 )
-from sc_crawler.table_fields import ResourceType
 from sqlmodel import Session, case, func, select, text
 
 from .. import parameters as options
