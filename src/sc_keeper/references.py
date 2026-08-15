@@ -296,13 +296,12 @@ class CommonFilterCategory(Enum):
     VENDOR = "vendor"
     MEMORY = "memory"
     STORAGE = "storage"
-    VCPUS = "vcpus"
+    PROCESSOR = "processor"
 
 
 class ServerFilterCategory(Enum):
     """Filter panel groups for server-specific query parameters."""
 
-    PROCESSOR = "processor"
     CPU_CACHE = "cpu_cache"
     GPU = "gpu"
     TRAFFIC = "traffic"
