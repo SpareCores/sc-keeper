@@ -78,7 +78,7 @@ vcpus_min = Annotated[
         ge=1,
         le=256,
         json_schema_extra={
-            "category_id": CommonFilterCategory.VCPUS,
+            "category_id": CommonFilterCategory.PROCESSOR,
             "unit": "vCPUs",
             "range_min": 1,
             "range_max": 256,
@@ -94,7 +94,7 @@ vcpus_max = Annotated[
         ge=1,
         le=256,
         json_schema_extra={
-            "category_id": CommonFilterCategory.VCPUS,
+            "category_id": CommonFilterCategory.PROCESSOR,
             "unit": "vCPUs",
             "range_min": 1,
             "range_max": 256,
@@ -109,7 +109,7 @@ architecture = Annotated[
         title="Processor architecture",
         description="Processor architecture.",
         json_schema_extra={
-            "category_id": ServerFilterCategory.PROCESSOR,
+            "category_id": CommonFilterCategory.PROCESSOR,
             "enum": [e.value for e in CpuArchitecture],
         },
     ),
@@ -120,7 +120,7 @@ cpu_manufacturer = Annotated[
     Query(
         title="Processor manufacturer",
         json_schema_extra={
-            "category_id": ServerFilterCategory.PROCESSOR,
+            "category_id": CommonFilterCategory.PROCESSOR,
             "enum": [e.value for e in CpuManufacturers],
         },
     ),
@@ -131,7 +131,7 @@ cpu_family = Annotated[
     Query(
         title="Processor family",
         json_schema_extra={
-            "category_id": ServerFilterCategory.PROCESSOR,
+            "category_id": CommonFilterCategory.PROCESSOR,
             "enum": [e.value for e in CpuFamilies],
         },
     ),
@@ -143,7 +143,7 @@ cpu_allocation = Annotated[
         title="CPU allocation",
         description="Allocation of the CPU(s) to the server, e.g. shared, burstable or dedicated.",
         json_schema_extra={
-            "category_id": ServerFilterCategory.PROCESSOR,
+            "category_id": CommonFilterCategory.PROCESSOR,
             "enum": [e.value for e in CpuAllocation],
         },
     ),
@@ -285,7 +285,7 @@ cpu_speed_min = Annotated[
         title="Required CPU speed",
         description="Required CPU speed in GHz.",
         json_schema_extra={
-            "category_id": ServerFilterCategory.PROCESSOR,
+            "category_id": CommonFilterCategory.PROCESSOR,
             "enum": [e.value for e in CpuSpeedSnapPoints],
             "unit": "GHz",
         },
@@ -401,7 +401,7 @@ hw_virt = Annotated[
     Query(
         title="Hardware virtualization",
         description="Filter for servers with hardware virtualization.",
-        json_schema_extra={"category_id": ServerFilterCategory.PROCESSOR},
+        json_schema_extra={"category_id": CommonFilterCategory.PROCESSOR},
     ),
 ]
 
