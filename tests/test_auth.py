@@ -267,7 +267,10 @@ def test_auth_api_key_verify(monkeypatch):
         assert response.status_code == 200
         response = client.get("/me", headers={"Authorization": "Bearer ak_test_key"})
         assert response.status_code == 200
-        assert response.json()["user_id"] == "user_api"
+        data = response.json()
+        assert data["user_id"] == "user_api"
+        # claims merge onto User; only declared fields appear in /me JSON
+        assert data["api_credits_per_minute"] == 150
 
 
 def test_auth_jwt_verify(monkeypatch, jwt_keypair):

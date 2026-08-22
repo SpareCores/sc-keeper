@@ -248,7 +248,7 @@ def client_with_auth(monkeypatch):
     return TestClient(app), introspection_url
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def jwt_keypair():
     """Generate an RSA key pair for JWT tests."""
     from cryptography.hazmat.primitives import serialization
