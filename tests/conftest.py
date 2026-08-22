@@ -76,6 +76,32 @@ def create_app_with_api_key_auth(
     return sc_keeper.api.app
 
 
+def create_app_with_static_tokens(monkeypatch, tokens_json: str, **extra_env):
+    """Create app with only the static token allowlist enabled."""
+    for var in (
+        "AUTH_TOKEN_INTROSPECTION_URL",
+        "AUTH_CLIENT_ID",
+        "AUTH_CLIENT_SECRET",
+        "AUTH_JWT_JWKS_URL",
+        "AUTH_JWT_PUBLIC_KEY",
+        "AUTH_API_KEY_VERIFY_URL",
+        "AUTH_API_KEY_VERIFY_BEARER",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    monkeypatch.setenv("AUTH_STATIC_TOKENS", tokens_json)
+    for key, value in extra_env.items():
+        monkeypatch.setenv(key, value)
+
+    import sc_keeper.api
+    import sc_keeper.auth
+
+    importlib.reload(sc_keeper.auth)
+    importlib.reload(sc_keeper.api)
+
+    return sc_keeper.api.app
+
+
 def _create_mock_json_response(payload, status_code=200):
     mock_response = Mock()
     mock_response.json.return_value = payload

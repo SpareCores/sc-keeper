@@ -1,10 +1,12 @@
 import importlib
+from json import dumps as json_dumps
 from unittest.mock import Mock
 
 from conftest import (
     create_app_with_api_key_auth,
     create_app_with_auth,
     create_app_with_jwt_auth,
+    create_app_with_static_tokens,
     mock_api_key_verify,
     mock_auth_http,
     mock_token_introspection,
@@ -227,6 +229,7 @@ def test_auth_no_verification_enabled(monkeypatch):
         "AUTH_JWT_PUBLIC_KEY",
         "AUTH_API_KEY_VERIFY_URL",
         "AUTH_API_KEY_VERIFY_BEARER",
+        "AUTH_STATIC_TOKENS",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -427,3 +430,54 @@ def test_auth_dispatch_failed_jwt_then_introspect(monkeypatch, jwt_keypair):
     response = client.get("/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     assert response.json()["user_id"] == "fallback_user"
+
+
+def test_auth_static_tokens_only(monkeypatch):
+    """Static allowlist works when it is the only configured method."""
+    tokens = json_dumps(
+        [
+            {
+                "token": "mig_abc",
+                "subject": "user_123",
+                "api_credits_per_minute": 200,
+            }
+        ]
+    )
+    app = create_app_with_static_tokens(monkeypatch, tokens)
+    client = TestClient(app)
+
+    response = client.get("/me", headers={"Authorization": "Bearer mig_abc"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["user_id"] == "user_123"
+    assert data["api_credits_per_minute"] == 200
+
+    response = client.get(
+        "/healthcheck", headers={"Authorization": "Bearer unknown_token"}
+    )
+    assert response.status_code == 401
+
+
+def test_auth_static_tokens_last_resort(monkeypatch):
+    """A listed static token authenticates after other methods return None."""
+    introspection_url = "http://test-auth-server.com/introspect"
+    monkeypatch.setenv("AUTH_TOKEN_INTROSPECTION_URL", introspection_url)
+    monkeypatch.setenv("AUTH_CLIENT_ID", "test_client")
+    monkeypatch.setenv("AUTH_CLIENT_SECRET", "test_secret")
+    monkeypatch.setenv(
+        "AUTH_STATIC_TOKENS",
+        json_dumps([{"token": "mig_listed", "subject": "static_user"}]),
+    )
+
+    import sc_keeper.api
+    import sc_keeper.auth
+
+    importlib.reload(sc_keeper.auth)
+    importlib.reload(sc_keeper.api)
+    client = TestClient(sc_keeper.api.app)
+
+    with mock_token_introspection({"active": False}) as mock_client:
+        response = client.get("/me", headers={"Authorization": "Bearer mig_listed"})
+        assert response.status_code == 200
+        assert response.json()["user_id"] == "static_user"
+        assert mock_client.post_call_count == 1

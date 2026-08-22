@@ -49,7 +49,7 @@ Furthermore, the number of concurrent heavy jobs can be limited to avoid overloa
 - `HEAVY_JOBS_MAX_CONCURRENT` - Maximum number of concurrent heavy jobs (default: `2`)
 - `HEAVY_JOBS_ACQUIRE_TIMEOUT_SEC` - Timeout in seconds for acquiring a heavy job permit (default: `2.0`)
 
-Authentication supports three independent Bearer verification methods. Token
+Authentication supports four independent Bearer verification methods. Token
 validation is enabled when any method group is fully configured.
 
 | Method | Standard | Env vars (enable group) |
@@ -57,17 +57,18 @@ validation is enabled when any method group is fully configured.
 | Token introspection | [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662) | `AUTH_TOKEN_INTROSPECTION_URL` (+ `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`) |
 | JWT Bearer | [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519) + JWKS | `AUTH_JWT_JWKS_URL` or `AUTH_JWT_PUBLIC_KEY` |
 | API key verify | Vendor-specific (generic, configurable) | `AUTH_API_KEY_VERIFY_URL` (+ `AUTH_API_KEY_VERIFY_BEARER`) |
+| Static token allowlist | Local exact-match table | `AUTH_STATIC_TOKENS` |
 
 When several methods are enabled, optional per-method regexes route tokens
 sequentially: methods whose regex matches the Bearer token are tried first
 (API key, then JWT, then introspection), then methods with no regex in the same
-order.
+order. The static token allowlist always runs last.
 
 Example regexes scenario:
 
 - API keys: `^ak_` (e.g. Clerk)
 - JWTs: `^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$`
-- Introspection: omitted so it runs last as a catchall
+- Introspection: omitted so it runs as a catchall (before the static allowlist)
 
 ### Token introspection (RFC 7662; e.g. ZITADEL)
 
@@ -98,6 +99,12 @@ Session JWTs use the default rate limiter (per-user credit override is not suppo
 - `AUTH_API_KEY_VERIFY_CLAIMS_FIELD` - Response field holding claims (default: `claims`), from which the optional `api_credits_per_minute` claim is read to determine rate limit override
 - `AUTH_API_KEY_TOKEN_REGEX` - Optional Python regex (`search`) on the raw Bearer token
 
+### Static token allowlist
+
+- `AUTH_STATIC_TOKENS` - JSON array of `{token, subject, api_credits_per_minute?}` objects
+
+Example: `[{"token": "foo", "subject": "FOO", "api_credits_per_minute": 42}, {"token": "bar", "subject": "BAR"}]`
+
 ### Shared cache
 
 - `AUTH_TOKEN_CACHE_SALT` - Salt for token hashing
@@ -107,8 +114,8 @@ Session JWTs use the default rate limiter (per-user credit override is not suppo
 
 When authentication is enabled, clients can include a Bearer token in the
 `Authorization` header. Authenticated users' credit limits are determined by
-their `api_credits_per_minute` claim when provided (introspection and API-key
-methods); JWT session tokens use the default credit limit.
+their `api_credits_per_minute` claim when provided (introspection, API-key,
+and static-token methods). JWT session tokens use the default credit limit.
 
 ## Useful debug links
 

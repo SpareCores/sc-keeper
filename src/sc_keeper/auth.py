@@ -39,6 +39,9 @@ class User(BaseModel):
     api_credits_per_minute: Optional[int] = None
 
 
+_static_tokens: dict[str, User] = {}
+
+
 # L1 (in-memory, per-process) cache for token validation results
 _token_cache_l1: OrderedDict[str, tuple[Optional[User], float]] = OrderedDict()
 _token_cache_l1_lock = Lock()
@@ -67,6 +70,10 @@ def _api_key_enabled() -> bool:
     return bool(environ.get("AUTH_API_KEY_VERIFY_URL"))
 
 
+def _static_tokens_enabled() -> bool:
+    return bool(environ.get("AUTH_STATIC_TOKENS"))
+
+
 def _require_jwt_deps() -> None:
     try:
         import jwt  # noqa: F401
@@ -77,9 +84,44 @@ def _require_jwt_deps() -> None:
         ) from exc
 
 
+def _load_static_tokens() -> dict[str, User]:
+    """Parse AUTH_STATIC_TOKENS JSON into a token → User map."""
+    raw = environ.get("AUTH_STATIC_TOKENS")
+    if not raw:
+        return {}
+
+    try:
+        entries = json_loads(raw)
+    except Exception as exc:
+        raise ValueError(f"AUTH_STATIC_TOKENS must be valid JSON: {exc}") from exc
+
+    if not isinstance(entries, list):
+        raise ValueError("AUTH_STATIC_TOKENS must be a JSON array")
+
+    tokens: dict[str, User] = {}
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise ValueError(f"AUTH_STATIC_TOKENS[{i}] must be an object")
+        token = entry.get("token")
+        subject = entry.get("subject")
+        if not token or not subject:
+            raise ValueError(
+                f"AUTH_STATIC_TOKENS[{i}] requires non-empty 'token' and 'subject'"
+            )
+        if token in tokens:
+            raise ValueError(f"AUTH_STATIC_TOKENS has duplicate token at index {i}")
+        # provider subject: not necessarily a user id, might be organization id etc.
+        tokens[token] = User(
+            user_id=subject,
+            api_credits_per_minute=entry.get("api_credits_per_minute"),
+            token_source="static_token",
+        )
+    return tokens
+
+
 def validate_auth_config() -> None:
     """Validate auth env vars and compile optional token regexes. Call at startup."""
-    global _introspection_regex, _jwt_regex, _api_key_regex
+    global _introspection_regex, _jwt_regex, _api_key_regex, _static_tokens
 
     missing_vars = []
     if _introspection_enabled():
@@ -104,10 +146,17 @@ def validate_auth_config() -> None:
     except re.error as exc:
         raise ValueError(f"Invalid auth token regex: {exc}") from exc
 
+    _static_tokens = _load_static_tokens()
+
 
 def token_verification_enabled() -> bool:
     """Check if any Bearer token verification method is enabled."""
-    return _introspection_enabled() or _jwt_enabled() or _api_key_enabled()
+    return (
+        _introspection_enabled()
+        or _jwt_enabled()
+        or _api_key_enabled()
+        or _static_tokens_enabled()
+    )
 
 
 def _get_token_cache_key(token: str) -> str:
@@ -389,10 +438,18 @@ async def _verify_api_key(token: str) -> Optional[User]:
         return None
 
 
+async def _verify_static_token(token: str) -> Optional[User]:
+    """Verify a Bearer token against the static allowlist."""
+    user = _static_tokens.get(token)
+    if user is None:
+        return None
+    return user.model_copy()
+
+
 def _verification_candidates(
     token: str,
 ) -> list[Callable[[str], Awaitable[Optional[User]]]]:
-    """Build ordered verifier list: regex matches first (C, B, A), then catchalls."""
+    """Build ordered verifier list: regex matches, then catchalls, then static tokens."""
     verifiers: list[tuple[Optional[re.Pattern[str]], bool, Callable]] = [
         (_api_key_regex, _api_key_enabled(), _verify_api_key),
         (_jwt_regex, _jwt_enabled(), _verify_jwt),
@@ -406,6 +463,8 @@ def _verification_candidates(
     for regex, enabled, verify_fn in verifiers:
         if enabled and regex is None:
             candidates.append(verify_fn)
+    if _static_tokens_enabled():
+        candidates.append(_verify_static_token)
     return candidates
 
 
@@ -413,9 +472,9 @@ async def verify_token(token: str) -> Optional[User]:
     """
     Verify a Bearer token using enabled verification methods with two-tier caching.
 
-    Supports RFC 7662 introspection, JWT Bearer validation (JWKS/static key), and
-    remote opaque API-key verification. Methods are tried sequentially until one
-    succeeds.
+    Supports RFC 7662 introspection, JWT Bearer validation (JWKS/static key),
+    remote opaque API-key verification, and a static token allowlist. Methods
+    are tried sequentially until one succeeds.
     """
     if not token_verification_enabled():
         return None
