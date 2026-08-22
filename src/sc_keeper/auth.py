@@ -27,7 +27,9 @@ _api_key_regex: Optional[re.Pattern[str]] = None
 
 _jwks_keys: dict[str, Any] = {}
 _jwks_url: Optional[str] = None
+_jwks_fetched_at: float = 0.0
 _jwks_lock = Lock()
+_jwks_cache_ttl = int(environ.get("AUTH_JWT_JWKS_CACHE_TTL_SECONDS", "300"))
 
 
 class User(BaseModel):
@@ -298,9 +300,9 @@ async def _verify_introspection(token: str) -> Optional[User]:
         return None
 
 
-async def _load_jwks_keys(force_refresh: bool = False) -> dict[str, Any]:
-    """Load JWKS keys keyed by kid, refetching on rotation when requested."""
-    global _jwks_keys, _jwks_url
+async def _load_jwks_keys() -> dict[str, Any]:
+    """Load JWKS keys keyed by kid, refreshing from the endpoint on a TTL."""
+    global _jwks_keys, _jwks_url, _jwks_fetched_at
 
     from jwt import PyJWK
 
@@ -309,13 +311,25 @@ async def _load_jwks_keys(force_refresh: bool = False) -> dict[str, Any]:
         return {}
 
     with _jwks_lock:
-        if not force_refresh and _jwks_url == jwks_url and _jwks_keys:
+        if (
+            _jwks_url == jwks_url
+            and _jwks_keys
+            and time.time() - _jwks_fetched_at < _jwks_cache_ttl
+        ):
             return _jwks_keys
 
-    async with httpx.AsyncClient(timeout=5.0) as client:
-        response = await client.get(jwks_url)
-        response.raise_for_status()
-        jwks = response.json()
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(jwks_url)
+            response.raise_for_status()
+            jwks = response.json()
+    except Exception:
+        # serve the stale cache on a failed refresh
+        with _jwks_lock:
+            if _jwks_url == jwks_url and _jwks_keys:
+                logger.warning("Failed to refresh JWKS, serving cached keys")
+                return _jwks_keys
+        raise
 
     keys: dict[str, Any] = {}
     for key_data in jwks.get("keys", []):
@@ -327,6 +341,7 @@ async def _load_jwks_keys(force_refresh: bool = False) -> dict[str, Any]:
     with _jwks_lock:
         _jwks_keys = keys
         _jwks_url = jwks_url
+        _jwks_fetched_at = time.time()
         return _jwks_keys
 
 
@@ -357,8 +372,6 @@ async def _verify_jwt(token: str) -> Optional[User]:
                 return None
 
             keys = await _load_jwks_keys()
-            if kid not in keys:
-                keys = await _load_jwks_keys(force_refresh=True)
             jwk = keys.get(kid)
             if jwk is None:
                 logger.warning("JWT kid not found in JWKS")

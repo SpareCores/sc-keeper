@@ -87,6 +87,7 @@ Example regexes scenario:
 - `AUTH_JWT_AUDIENCE` - Optional `aud` check (comma-separated)
 - `AUTH_JWT_AUTHORIZED_PARTIES` - Optional `azp` allowlist (comma-separated frontend origins)
 - `AUTH_JWT_TOKEN_REGEX` - Optional Python regex (`search`) on the raw Bearer token
+- `AUTH_JWT_JWKS_CACHE_TTL_SECONDS` - How long a fetched JWKS is cached before refresh (default: `300`)
 
 Session JWTs use the default rate limiter (per-user credit override is not supported).
 

@@ -395,6 +395,53 @@ def test_auth_jwt_jwks_verify(monkeypatch, jwt_keypair):
         assert response.json()["user_id"] == "jwks_user"
 
 
+def test_auth_jwt_unknown_kid_no_refetch(monkeypatch, jwt_keypair):
+    """An unknown kid must not trigger a JWKS refetch (TTL cache only)."""
+    import json
+
+    import jwt
+    from jwt.algorithms import RSAAlgorithm
+
+    private_key, _ = jwt_keypair
+    public_jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
+    public_jwk["kid"] = "kid-1"
+
+    for var in (
+        "AUTH_TOKEN_INTROSPECTION_URL",
+        "AUTH_CLIENT_ID",
+        "AUTH_CLIENT_SECRET",
+        "AUTH_API_KEY_VERIFY_URL",
+        "AUTH_API_KEY_VERIFY_BEARER",
+        "AUTH_JWT_PUBLIC_KEY",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    monkeypatch.setenv("AUTH_JWT_JWKS_URL", "http://test/.well-known/jwks.json")
+
+    import sc_keeper.api
+    import sc_keeper.auth
+
+    importlib.reload(sc_keeper.auth)
+    importlib.reload(sc_keeper.api)
+    client = TestClient(sc_keeper.api.app)
+
+    with mock_auth_http(jwks_data={"keys": [public_jwk]}) as mock_client:
+        # different tokens to bypass the token cache, each with an unknown kid
+        for i in range(3):
+            token = jwt.encode(
+                {"sub": f"attacker_{i}"},
+                private_key,
+                algorithm="RS256",
+                headers={"kid": f"unknown-kid-{i}"},
+            )
+            response = client.get(
+                "/healthcheck", headers={"Authorization": f"Bearer {token}"}
+            )
+            assert response.status_code == 401
+        # only the initial load, no per-request refetch
+        assert mock_client.jwks_calls == 1
+
+
 def test_auth_dispatch_failed_jwt_then_introspect(monkeypatch, jwt_keypair):
     """A JWT regex match that fails JWKS should still fall through to introspection."""
     import jwt
