@@ -16,6 +16,7 @@ class CacheHeaderMiddleware(BaseHTTPMiddleware):
         if (
             getattr(request.state, "auth_required", False)
             or request.url.path in ["/healthcheck"]
+            or request.url.path.startswith("/mcp")
             or "/ai/assist" in request.url.path
             or response.status_code in [429, 500, 502, 503, 504]
         ):

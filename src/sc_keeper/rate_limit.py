@@ -24,6 +24,7 @@ CUSTOM_RATE_LIMIT_COSTS: dict[str, int] = {
     "/servers": 3,
     "/databases": 3,
     "/server_prices": 5,
+    "/mcp": 5,
     "/table/server_prices": 10,
     "/table/database_price": 10,
     "/benchmark_score_stats": 10,

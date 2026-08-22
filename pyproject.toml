@@ -42,7 +42,8 @@ issues = "https://github.com/SpareCores/sc-keeper/issues"
 testing = ["pytest"]
 apm = ["sentry-sdk[fastapi]"]
 security = ["redis", "common-expression-language"]
-all = ["sparecores-keeper[testing]", "sparecores-keeper[apm]", "sparecores-keeper[security]"]
+mcp = ["mcp>=1.10"]
+all = ["sparecores-keeper[testing]", "sparecores-keeper[apm]", "sparecores-keeper[security]", "sparecores-keeper[mcp]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
