@@ -32,6 +32,13 @@ from sc_crawler.tables import (
 from sqlalchemy.orm import aliased, contains_eager
 from sqlmodel import Session, String, case, func, or_, select
 
+from . import parameters as options
+from . import routers
+from .auth import AuthGuardMiddleware, AuthMiddleware
+from .cache import CacheHeaderMiddleware
+from .crawler_extend import calculate_tiered_price
+from .currency import currency_converter
+from .database import get_db
 from .helpers import (
     _MONTHLY_PRICE_NDIGITS,
     _PRICE_NDIGITS,
@@ -42,15 +49,6 @@ from .helpers import (
     update_server_price_currency,
     vendor_region_filter,
 )
-
-# ruff: noqa: E402
-from . import parameters as options
-from . import routers
-from .auth import AuthGuardMiddleware, AuthMiddleware
-from .cache import CacheHeaderMiddleware
-from .crawler_extend import calculate_tiered_price
-from .currency import currency_converter
-from .database import get_db
 from .limits import heavy_job_dep
 from .logger import LogMiddleware
 from .queries import (
