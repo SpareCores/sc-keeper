@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager, suppress
 from importlib.metadata import version
-from logging import getLogger
 from os import environ
 from textwrap import dedent
 from typing import List
@@ -43,19 +42,6 @@ from .helpers import (
     update_server_price_currency,
     vendor_region_filter,
 )
-
-# early validation (before DB imports) of environment variables
-logger = getLogger(__name__)
-if environ.get("AUTH_TOKEN_INTROSPECTION_URL"):
-    missing_vars = [
-        var for var in ["AUTH_CLIENT_ID", "AUTH_CLIENT_SECRET"] if not environ.get(var)
-    ]
-    if missing_vars:
-        logger.error("Invalid environment variable configuration")
-        raise ValueError(
-            f"The following environment variables are required when "
-            f"AUTH_TOKEN_INTROSPECTION_URL is set: {', '.join(missing_vars)}"
-        )
 
 # ruff: noqa: E402
 from . import parameters as options

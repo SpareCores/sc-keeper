@@ -1,12 +1,13 @@
 import hashlib
 import logging
+import re
 import time
 from collections import OrderedDict
 from json import dumps as json_dumps
 from json import loads as json_loads
 from os import environ
 from threading import Lock
-from typing import Optional
+from typing import Any, Awaitable, Callable, Optional
 
 import httpx
 from fastapi import HTTPException, Request, Response, Security, status
@@ -20,9 +21,17 @@ logger = logging.getLogger(__name__)
 
 security = HTTPBearer(auto_error=False)
 
+_introspection_regex: Optional[re.Pattern[str]] = None
+_jwt_regex: Optional[re.Pattern[str]] = None
+_api_key_regex: Optional[re.Pattern[str]] = None
+
+_jwks_keys: dict[str, Any] = {}
+_jwks_url: Optional[str] = None
+_jwks_lock = Lock()
+
 
 class User(BaseModel):
-    """User object extracted from OAuth 2.0 token introspection."""
+    """User object extracted from a verified Bearer token."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -37,6 +46,68 @@ _token_cache_l1_ttl = int(environ.get("AUTH_TOKEN_CACHE_L1_TTL_SECONDS", "60"))
 _token_cache_l1_max_size = int(environ.get("AUTH_TOKEN_CACHE_L1_MAX_SIZE", "1000"))
 # L2 (redis, shared across workers) cache
 _token_cache_l2_ttl = int(environ.get("AUTH_TOKEN_CACHE_L2_TTL_SECONDS", "300"))
+
+
+def _compile_optional_regex(env_var: str) -> Optional[re.Pattern[str]]:
+    pattern = environ.get(env_var)
+    if not pattern:
+        return None
+    return re.compile(pattern)
+
+
+def _introspection_enabled() -> bool:
+    return bool(environ.get("AUTH_TOKEN_INTROSPECTION_URL"))
+
+
+def _jwt_enabled() -> bool:
+    return bool(environ.get("AUTH_JWT_JWKS_URL") or environ.get("AUTH_JWT_PUBLIC_KEY"))
+
+
+def _api_key_enabled() -> bool:
+    return bool(environ.get("AUTH_API_KEY_VERIFY_URL"))
+
+
+def _require_jwt_deps() -> None:
+    try:
+        import jwt  # noqa: F401
+    except ImportError as exc:
+        raise ImportError(
+            "PyJWT is required for JWT Bearer verification. "
+            "Install with: pip install sparecores-keeper[security]"
+        ) from exc
+
+
+def validate_auth_config() -> None:
+    """Validate auth env vars and compile optional token regexes. Call at startup."""
+    global _introspection_regex, _jwt_regex, _api_key_regex
+
+    missing_vars = []
+    if _introspection_enabled():
+        for var in ("AUTH_CLIENT_ID", "AUTH_CLIENT_SECRET"):
+            if not environ.get(var):
+                missing_vars.append(var)
+    if _api_key_enabled() and not environ.get("AUTH_API_KEY_VERIFY_BEARER"):
+        missing_vars.append("AUTH_API_KEY_VERIFY_BEARER")
+    if missing_vars:
+        raise ValueError(
+            "The following environment variables are required for the enabled "
+            f"auth method(s): {', '.join(missing_vars)}"
+        )
+
+    if _jwt_enabled():
+        _require_jwt_deps()
+
+    try:
+        _introspection_regex = _compile_optional_regex("AUTH_TOKEN_INTROSPECTION_REGEX")
+        _jwt_regex = _compile_optional_regex("AUTH_JWT_TOKEN_REGEX")
+        _api_key_regex = _compile_optional_regex("AUTH_API_KEY_TOKEN_REGEX")
+    except re.error as exc:
+        raise ValueError(f"Invalid auth token regex: {exc}") from exc
+
+
+def token_verification_enabled() -> bool:
+    """Check if any Bearer token verification method is enabled."""
+    return _introspection_enabled() or _jwt_enabled() or _api_key_enabled()
 
 
 def _get_token_cache_key(token: str) -> str:
@@ -90,9 +161,10 @@ def _get_cached_token_user_l2(cache_key: str, redis_client) -> Optional[User]:
     """Get cached token user from L2 (Redis) cache."""
     try:
         cached_data = redis_client.get(f"token:{cache_key}")
-        if cached_data:
-            user_data = json_loads(cached_data)
-            user_data["token_source"] = "l2_cache"
+        if not cached_data:
+            return None
+        user_data = json_loads(cached_data)
+        user_data["token_source"] = "l2_cache"
         return User.model_validate(user_data)
     except Exception as e:
         logger.debug(f"Error reading from Redis cache: {e}")
@@ -108,19 +180,244 @@ def _cache_token_user_l2(cache_key: str, user: User, redis_client) -> None:
         logger.debug(f"Error writing to Redis cache: {e}")
 
 
-def token_verification_enabled() -> bool:
-    """Check if token verification is enabled via env var."""
-    return bool(environ.get("AUTH_TOKEN_INTROSPECTION_URL"))
+async def _verify_introspection(token: str) -> Optional[User]:
+    """Verify token via RFC 7662 token introspection."""
+    api_url = environ.get("AUTH_TOKEN_INTROSPECTION_URL")
+    if not api_url:
+        return None
+
+    try:
+        # RFC 7662 token introspection such as https://zitadel.com/docs/guides/integrate/token-introspection/basic-auth
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                api_url,
+                auth=httpx.BasicAuth(
+                    environ["AUTH_CLIENT_ID"], environ["AUTH_CLIENT_SECRET"]
+                ),
+                data={"token": token},
+            )
+            response.raise_for_status()
+            user_data = response.json()
+
+            if bool(user_data.get("active", False)) is not True:
+                logger.warning("Token is not active")
+                return None
+
+            user_id = user_data.get("sub")
+            if not user_id:
+                logger.warning("No user ID found in introspection response")
+                return None
+
+            rule = environ.get("AUTH_TOKEN_VALIDATION_CEL")
+            if rule:
+                try:
+                    from cel import evaluate
+
+                    token_valid = evaluate(rule, {"claims": user_data})
+                    if not token_valid:
+                        logger.warning("Token validation CEL rule not satisfied")
+                        return None
+                except Exception:
+                    logger.exception("Error evaluating token validation CEL rule")
+                    return None
+
+            user_data_extra = {}
+            extra_fields_cel = environ.get("AUTH_TOKEN_EXTRA_FIELDS_CEL")
+            if extra_fields_cel:
+                try:
+                    from cel import evaluate
+
+                    extra_fields = evaluate(extra_fields_cel, {"claims": user_data})
+                    assert isinstance(
+                        extra_fields,
+                        dict,
+                    ), "Extra token fields CEL expression must return a dict"
+                    user_data_extra.update(**extra_fields)
+                except Exception:
+                    logger.exception(
+                        "Error extracting dict via CEL expression for extra token fields"
+                    )
+
+            return User(
+                user_id=user_id,
+                api_credits_per_minute=user_data.get("api_credits_per_minute"),
+                token_source="oauth2_introspection",
+                **user_data_extra,
+            )
+    except Exception:
+        logger.exception("Error verifying token via introspection")
+        return None
+
+
+async def _load_jwks_keys(force_refresh: bool = False) -> dict[str, Any]:
+    """Load JWKS keys keyed by kid, refetching on rotation when requested."""
+    global _jwks_keys, _jwks_url
+
+    from jwt import PyJWK
+
+    jwks_url = environ.get("AUTH_JWT_JWKS_URL")
+    if not jwks_url:
+        return {}
+
+    with _jwks_lock:
+        if not force_refresh and _jwks_url == jwks_url and _jwks_keys:
+            return _jwks_keys
+
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        response = await client.get(jwks_url)
+        response.raise_for_status()
+        jwks = response.json()
+
+    keys: dict[str, Any] = {}
+    for key_data in jwks.get("keys", []):
+        kid = key_data.get("kid")
+        if not kid:
+            continue
+        keys[kid] = PyJWK(key_data)
+
+    with _jwks_lock:
+        _jwks_keys = keys
+        _jwks_url = jwks_url
+        return _jwks_keys
+
+
+async def _verify_jwt(token: str) -> Optional[User]:
+    """Verify a signed JWT via JWKS or a static public key."""
+    if not _jwt_enabled():
+        return None
+
+    import jwt
+
+    decode_kwargs: dict[str, Any] = {"algorithms": ["RS256", "ES256"]}
+    issuer = environ.get("AUTH_JWT_ISSUER")
+    if issuer:
+        decode_kwargs["issuer"] = issuer
+    audience = environ.get("AUTH_JWT_AUDIENCE")
+    if audience:
+        decode_kwargs["audience"] = [part.strip() for part in audience.split(",")]
+
+    try:
+        public_key = environ.get("AUTH_JWT_PUBLIC_KEY")
+        if public_key:
+            signing_key = public_key
+        else:
+            header = jwt.get_unverified_header(token)
+            kid = header.get("kid")
+            if not kid:
+                logger.warning("JWT missing kid header")
+                return None
+
+            keys = await _load_jwks_keys()
+            if kid not in keys:
+                keys = await _load_jwks_keys(force_refresh=True)
+            jwk = keys.get(kid)
+            if jwk is None:
+                logger.warning("JWT kid not found in JWKS")
+                return None
+            signing_key = jwk.key
+
+        payload = jwt.decode(token, signing_key, **decode_kwargs)
+
+        authorized_parties = environ.get("AUTH_JWT_AUTHORIZED_PARTIES")
+        if authorized_parties:
+            allowed = {part.strip() for part in authorized_parties.split(",")}
+            azp = payload.get("azp")
+            if azp not in allowed:
+                logger.warning("JWT azp not in authorized parties allowlist")
+                return None
+
+        # provider subject: not necessarily a user id, might be organization id etc.
+        user_id = payload.get("sub")
+        if not user_id:
+            logger.warning("No sub claim found in JWT")
+            return None
+
+        return User(
+            user_id=user_id,
+            api_credits_per_minute=None,
+            token_source="jwt_jwks",
+        )
+    except Exception:
+        logger.exception("Error verifying JWT")
+        return None
+
+
+async def _verify_api_key(token: str) -> Optional[User]:
+    """Verify an opaque API key via a remote verify endpoint."""
+    api_url = environ.get("AUTH_API_KEY_VERIFY_URL")
+    if not api_url:
+        return None
+
+    request_field = environ.get("AUTH_API_KEY_VERIFY_REQUEST_FIELD", "secret")
+    subject_field = environ.get("AUTH_API_KEY_VERIFY_SUBJECT_FIELD", "subject")
+    claims_field = environ.get("AUTH_API_KEY_VERIFY_CLAIMS_FIELD", "claims")
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                api_url,
+                headers={
+                    "Authorization": f"Bearer {environ['AUTH_API_KEY_VERIFY_BEARER']}"
+                },
+                json={request_field: token},
+            )
+            if response.status_code >= 400:
+                logger.warning("API key verification rejected")
+                return None
+
+            data = response.json()
+            # provider subject: not necessarily a user id, might be organization id etc.
+            user_id = data.get(subject_field)
+            if not user_id:
+                logger.warning("No subject found in API key verification response")
+                return None
+
+            claims = data.get(claims_field) or {}
+            if not isinstance(claims, dict):
+                logger.warning("API key claims field is not a dict")
+                return None
+
+            claims.pop("user_id", None)
+            claims.pop("token_source", None)
+            return User(
+                user_id=user_id,
+                token_source="api_key_verify",
+                **claims,
+            )
+    except Exception:
+        logger.exception("Error verifying API key")
+        return None
+
+
+def _verification_candidates(
+    token: str,
+) -> list[Callable[[str], Awaitable[Optional[User]]]]:
+    """Build ordered verifier list: regex matches first (C, B, A), then catchalls."""
+    verifiers: list[tuple[Optional[re.Pattern[str]], bool, Callable]] = [
+        (_api_key_regex, _api_key_enabled(), _verify_api_key),
+        (_jwt_regex, _jwt_enabled(), _verify_jwt),
+        (_introspection_regex, _introspection_enabled(), _verify_introspection),
+    ]
+
+    candidates: list[Callable[[str], Awaitable[Optional[User]]]] = []
+    for regex, enabled, verify_fn in verifiers:
+        if enabled and regex is not None and regex.search(token):
+            candidates.append(verify_fn)
+    for regex, enabled, verify_fn in verifiers:
+        if enabled and regex is None:
+            candidates.append(verify_fn)
+    return candidates
 
 
 async def verify_token(token: str) -> Optional[User]:
     """
-    Verify OAuth 2.0 token (access token or PAT) via token introspection API with two-tier caching.
-    Works for both access tokens from frontend (humans) and personal access tokens (service users).
-    Supports any OAuth 2.0-compatible identity provider that implements token introspection.
+    Verify a Bearer token using enabled verification methods with two-tier caching.
+
+    Supports RFC 7662 introspection, JWT Bearer validation (JWKS/static key), and
+    remote opaque API-key verification. Methods are tried sequentially until one
+    succeeds.
     """
-    api_url = environ.get("AUTH_TOKEN_INTROSPECTION_URL")
-    if not api_url:
+    if not token_verification_enabled():
         return None
 
     cache_key = _get_token_cache_key(token)
@@ -142,70 +439,16 @@ async def verify_token(token: str) -> Optional[User]:
         except Exception:
             logger.exception("Error getting cached token user from Redis")
 
-    # all caches missed, validate with token introspection API
-    try:
-        # https://zitadel.com/docs/guides/integrate/token-introspection/basic-auth
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(
-                api_url,
-                auth=httpx.BasicAuth(
-                    environ["AUTH_CLIENT_ID"], environ["AUTH_CLIENT_SECRET"]
-                ),
-                data={"token": token},
-            )
-            response.raise_for_status()
-            user_data = response.json()
-
-            if bool(user_data.get("active", False)) is not True:
-                logger.warning("Token is not active")
-                return None
-
-            user_id = user_data.get("sub")
-            if not user_id:
-                logger.warning("No user ID found in API response")
-                return None
-
-            rule = environ.get("AUTH_TOKEN_VALIDATION_CEL")
-            if rule:
-                try:
-                    from cel import evaluate
-
-                    token_valid = evaluate(rule, {"claims": user_data})
-                    if not token_valid:
-                        logger.warning("Token validation CEL rule not satisfied")
-                        return None
-                except Exception:
-                    logger.exception("Error evaluating token validation CEL rule")
-                    return None
-
-            user_data_extra = {}
-            extra_fields_cel = environ.get("AUTH_TOKEN_EXTRA_FIELDS_CEL")
-            if extra_fields_cel:
-                try:
-                    extra_fields = evaluate(extra_fields_cel, {"claims": user_data})
-                    assert isinstance(
-                        extra_fields,
-                        dict,
-                    ), "Extra token fields CEL expression must return a dict"
-                    user_data_extra.update(**extra_fields)
-                except Exception:
-                    logger.exception(
-                        "Error extracting dict via CEL expression for extra token fields"
-                    )
-
-            user = User(
-                user_id=user_id,
-                api_credits_per_minute=user_data.get("api_credits_per_minute"),
-                token_source="oauth2_introspection",
-                **user_data_extra,
-            )
+    # all caches missed, try enabled verifiers until one returns a User
+    for verify_fn in _verification_candidates(token):
+        user = await verify_fn(token)
+        if user is not None:
             _cache_token_user_l1(cache_key, user)
             if redis_client:
                 _cache_token_user_l2(cache_key, user, redis_client)
             return user
-    except Exception:
-        logger.exception("Error verifying token")
-        return None
+
+    return None
 
 
 async def extract_user_from_request(request) -> Optional[User]:
@@ -272,3 +515,6 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
             )
         response = await call_next(request)
         return response
+
+
+validate_auth_config()

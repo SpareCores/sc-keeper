@@ -49,26 +49,66 @@ Furthermore, the number of concurrent heavy jobs can be limited to avoid overloa
 - `HEAVY_JOBS_MAX_CONCURRENT` - Maximum number of concurrent heavy jobs (default: `2`)
 - `HEAVY_JOBS_ACQUIRE_TIMEOUT_SEC` - Timeout in seconds for acquiring a heavy job permit (default: `2.0`)
 
-Authentication uses OAuth 2.0 token introspection for token validation. Token
-validation is automatically enabled if `AUTH_TOKEN_INTROSPECTION_URL` is set.
-Supports any OAuth 2.0-compatible identity provider that implements token
-introspection (RFC 7662), such as ZITADEL.
+Authentication supports three independent Bearer verification methods. Token
+validation is enabled when any method group is fully configured.
+
+| Method | Standard | Env vars (enable group) |
+|---|---|---|
+| Token introspection | [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662) | `AUTH_TOKEN_INTROSPECTION_URL` (+ `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`) |
+| JWT Bearer | [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519) + JWKS | `AUTH_JWT_JWKS_URL` or `AUTH_JWT_PUBLIC_KEY` |
+| API key verify | Vendor-specific (generic, configurable) | `AUTH_API_KEY_VERIFY_URL` (+ `AUTH_API_KEY_VERIFY_BEARER`) |
+
+When several methods are enabled, optional per-method regexes route tokens
+sequentially: methods whose regex matches the Bearer token are tried first
+(API key, then JWT, then introspection), then methods with no regex in the same
+order.
+
+Example regexes scenario:
+
+- API keys: `^ak_` (e.g. Clerk)
+- JWTs: `^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$`
+- Introspection: omitted so it runs last as a catchall
+
+### Token introspection (RFC 7662; e.g. ZITADEL)
 
 - `AUTH_TOKEN_INTROSPECTION_URL` - Full URL of the token introspection endpoint
-  (required for and enables token validation)
 - `AUTH_CLIENT_ID` - Client ID for token inspection API (basic auth)
 - `AUTH_CLIENT_SECRET` - Client secret for token inspection API (basic auth)
-- `AUTH_TOKEN_VALIDATION_CEL` - Optional CEL rule to evaluate the token introspection response (passed as `{"claims": <token introspection response>}` in the CEL context) for validation (e.g. to enforce tenant-specific scopes or other claims), using [Python CEL](https://python-common-expression-language.readthedocs.io/).
-- `AUTH_TOKEN_EXTRA_FIELDS_CEL` - Another optional CEL expression to extract additional fields from the token introspection response into a dictionary, appended to the `User` object (stored both in `request.state.user` and for logging purposes).
+- `AUTH_TOKEN_INTROSPECTION_REGEX` - Optional Python regex (`search`) on the raw Bearer token
+- `AUTH_TOKEN_VALIDATION_CEL` - Optional CEL rule to evaluate the token introspection response (passed as `{"claims": <token introspection response>}` in the CEL context) for validation (e.g. to enforce tenant-specific scopes or other claims), using [Python CEL](https://python-common-expression-language.readthedocs.io/). Introspection only.
+- `AUTH_TOKEN_EXTRA_FIELDS_CEL` - Another optional CEL expression to extract additional fields from the token introspection response into a dictionary, appended to the `User` object (stored both in `request.state.user` and for logging purposes). Introspection only.
+
+### JWT Bearer (e.g. Clerk session JWT from `session.getToken()`)
+
+- `AUTH_JWT_JWKS_URL` - JWKS endpoint (e.g. `https://<provider-domain>/.well-known/jwks.json`)
+- `AUTH_JWT_PUBLIC_KEY` - The public key in PEM format as an alternative to JWKS
+- `AUTH_JWT_ISSUER` - Optional `iss` check
+- `AUTH_JWT_AUDIENCE` - Optional `aud` check (comma-separated)
+- `AUTH_JWT_AUTHORIZED_PARTIES` - Optional `azp` allowlist (comma-separated frontend origins)
+- `AUTH_JWT_TOKEN_REGEX` - Optional Python regex (`search`) on the raw Bearer token
+
+Session JWTs use the default rate limiter (per-user credit override is not supported).
+
+### Opaque API-key (e.g. Clerk API key)
+
+- `AUTH_API_KEY_VERIFY_URL` - Remote API endpoint to verify the API key via `POST` request with JSON body
+- `AUTH_API_KEY_VERIFY_BEARER` - Bearer token to authenticate against the verify API
+- `AUTH_API_KEY_VERIFY_REQUEST_FIELD` - JSON request field that should hold the Opaque API-key to be verified (default: `secret`)
+- `AUTH_API_KEY_VERIFY_SUBJECT_FIELD` - Response field that should be mapped to `user_id` (default: `subject`)
+- `AUTH_API_KEY_VERIFY_CLAIMS_FIELD` - Response field holding claims (default: `claims`), from which the optional `api_credits_per_minute` claim is read to determine rate limit override
+- `AUTH_API_KEY_TOKEN_REGEX` - Optional Python regex (`search`) on the raw Bearer token
+
+### Shared cache
+
 - `AUTH_TOKEN_CACHE_SALT` - Salt for token hashing
 - `AUTH_TOKEN_CACHE_L1_TTL_SECONDS` - L1 (in-memory) cache TTL in seconds (default: `60`)
 - `AUTH_TOKEN_CACHE_L1_MAX_SIZE` - Maximum size of L1 cache (default: `1000`)
 - `AUTH_TOKEN_CACHE_L2_TTL_SECONDS` - L2 (Redis) cache TTL in seconds (default: `300`)
 
-When authentication is enabled, users can include a Bearer token (access token
-or PAT) in the `Authorization` header. Authenticated users' credit limits are
-determined by their `api_credits_per_minute` field from the identity provider,
-which takes precedence over the default credit limit.
+When authentication is enabled, clients can include a Bearer token in the
+`Authorization` header. Authenticated users' credit limits are determined by
+their `api_credits_per_minute` claim when provided (introspection and API-key
+methods); JWT session tokens use the default credit limit.
 
 ## Useful debug links
 
