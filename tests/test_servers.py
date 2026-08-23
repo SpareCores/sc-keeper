@@ -518,15 +518,18 @@ class TestEdgeCases:
         resp = client.get("/servers", params={"vcpus_min": -1})
         assert resp.status_code == 422
 
-    def test_only_active_true_returns_fewer(self):
-        """only_active=True should return <= results of the default orderable query."""
+    def test_only_active_true_returns_only_active(self):
+        """only_active=True must return only active servers, fewer than orderable."""
         _, orderable_resp = get_servers(limit=1, add_total_count_header=True)
-        _, active_resp = get_servers(
-            only_active=True, limit=1, add_total_count_header=True
+        active, active_resp = get_servers(
+            only_active=True, limit=100, add_total_count_header=True
         )
-        orderable_count = int(orderable_resp.headers.get("x-total-count", 0))
-        active_count = int(active_resp.headers.get("x-total-count", 0))
-        assert active_count <= orderable_count
+        assert active
+        assert all(server["status"] == "active" for server in active)
+        orderable_count = int(orderable_resp.headers["x-total-count"])
+        active_count = int(active_resp.headers["x-total-count"])
+        assert active_count < orderable_count
+        assert orderable_count > 0
 
     def test_extras_filter_out_vendors_without_pricing(self):
         """Vendors with no matching traffic/storage pricing should be excluded from results
