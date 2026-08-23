@@ -179,7 +179,16 @@ only_active = Annotated[
     Optional[bool],
     Query(
         title="Active only",
-        description="Filter for active servers only.",
+        description="Filter for active resources only.",
+        json_schema_extra={"category_id": CommonFilterCategory.BASIC},
+    ),
+]
+
+only_orderable = Annotated[
+    Optional[bool],
+    Query(
+        title="Orderable only",
+        description="Filter for orderable (active or planned for retirement) resources only.",
         json_schema_extra={"category_id": CommonFilterCategory.BASIC},
     ),
 ]

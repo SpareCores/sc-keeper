@@ -139,7 +139,7 @@ def test_server_prices_with_params(params, totals):
 
 
 def test_server_prices_with_inactive():
-    # only_active is set to True by default, so we should find more servers now
+    # only_active is True by default on /server_prices
     params = {"only_active": False}
     response = client.get(
         "/server_prices", params=params | {"add_total_count_header": True}

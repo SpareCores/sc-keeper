@@ -5,6 +5,7 @@ from json import loads as json_loads
 from cachier import cachier
 from fastapi import HTTPException
 from sc_crawler.table_bases import DatabaseBase, ServerBase
+from sc_crawler.table_fields import Status
 from sc_crawler.tables import Database, Server
 from sc_crawler.utils import nesteddefaultdict
 from sqlalchemy.exc import NoResultFound
@@ -18,6 +19,14 @@ from .references import DatabasePKs, ServerPKs
 
 _PRICE_NDIGITS = 4
 _MONTHLY_PRICE_NDIGITS = 2
+
+def status_filter(status_column, only_active: bool | None, only_orderable: bool | None):
+    """Return a SQLAlchemy status filter, or None if neither flag applies."""
+    if only_active:
+        return status_column == Status.ACTIVE
+    if only_orderable:
+        return status_column.in_([s for s in Status if s.is_orderable])
+    return None
 
 
 @cachier(stale_after=timedelta(minutes=10), backend="memory")

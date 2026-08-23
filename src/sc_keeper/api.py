@@ -45,6 +45,7 @@ from .helpers import (
     add_extra_to_price,
     get_sort_key_for_benchmark_configs,
     mapped_class_has_column,
+    status_filter,
     update_database_price_currency,
     update_server_price_currency,
     vendor_region_filter,
@@ -440,7 +441,8 @@ def search_servers(
     memory_min: options.memory_min = None,
     network_speed_baseline_min: options.network_speed_baseline_min = None,
     network_speed_max_min: options.network_speed_max_min = None,
-    only_active: options.only_active = True,
+    only_active: options.only_active = None,
+    only_orderable: options.only_orderable = True,
     vendor: options.vendor = None,
     compliance_framework: options.compliance_framework = None,
     regions: options.regions = None,
@@ -662,8 +664,9 @@ def search_servers(
     if vendor:
         conditions.add(Server.vendor_id.in_(vendor))
 
-    if only_active:
-        conditions.add(Server.status == Status.ACTIVE)
+    server_status = status_filter(Server.status, only_active, only_orderable)
+    if server_status is not None:
+        conditions.add(server_status)
         conditions.add(best_price_ref.isnot(None))
     if best_price_allocation != BestPriceAllocation.ANY:
         conditions.add(best_price_ref.isnot(None))
@@ -711,6 +714,7 @@ def search_servers(
         query = select(func.count()).select_from(Server)
         if (
             only_active
+            or only_orderable
             or benchmark_score_stressng_cpu_min
             or benchmark_score_per_price_stressng_cpu_min
             or benchmark_score_per_price_min
@@ -1043,7 +1047,8 @@ def search_databases(
     custom_extensions: options.database_custom_extensions = None,
     security_features: options.database_security_features = None,
     sla_min: options.database_sla_min = None,
-    only_active: options.only_active = True,
+    only_active: options.only_active = None,
+    only_orderable: options.only_orderable = True,
     vendor: options.vendor = None,
     regions: options.regions = None,
     vendor_regions: options.vendor_regions = None,
@@ -1216,8 +1221,9 @@ def search_databases(
             >= benchmark_score_per_price_min
         )
 
-    if only_active:
-        conditions.add(Database.status == Status.ACTIVE)
+    database_status = status_filter(Database.status, only_active, only_orderable)
+    if database_status is not None:
+        conditions.add(database_status)
         conditions.add(best_price_ref.isnot(None))
     if best_price_allocation != BestDatabasePriceAllocation.ANY:
         conditions.add(best_price_ref.isnot(None))
@@ -1257,6 +1263,7 @@ def search_databases(
         query = select(func.count()).select_from(Database)
         if (
             only_active
+            or only_orderable
             or benchmark_score_per_price_min
             or order_by
             in [

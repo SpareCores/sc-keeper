@@ -519,14 +519,14 @@ class TestEdgeCases:
         assert resp.status_code == 422
 
     def test_only_active_true_returns_fewer(self):
-        """only_active=True should return <= results of unfiltered query."""
-        _, all_resp = get_servers(limit=1, add_total_count_header=True)
+        """only_active=True should return <= results of the default orderable query."""
+        _, orderable_resp = get_servers(limit=1, add_total_count_header=True)
         _, active_resp = get_servers(
             only_active=True, limit=1, add_total_count_header=True
         )
-        all_count = int(all_resp.headers.get("x-total-count", 0))
+        orderable_count = int(orderable_resp.headers.get("x-total-count", 0))
         active_count = int(active_resp.headers.get("x-total-count", 0))
-        assert active_count <= all_count
+        assert active_count <= orderable_count
 
     def test_extras_filter_out_vendors_without_pricing(self):
         """Vendors with no matching traffic/storage pricing should be excluded from results
