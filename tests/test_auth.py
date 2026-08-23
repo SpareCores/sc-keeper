@@ -445,6 +445,64 @@ def test_auth_jwt_unknown_kid_no_refetch(monkeypatch, jwt_keypair):
         assert mock_client.jwks_calls == 1
 
 
+def test_jwks_failed_refresh_throttles_retries(monkeypatch, jwt_keypair):
+    """A failed JWKS refresh must not retry on every request while serving cache."""
+    import asyncio
+    import json
+    from unittest.mock import patch
+
+    import httpx
+    from jwt.algorithms import RSAAlgorithm
+
+    private_key, _ = jwt_keypair
+    public_jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
+    public_jwk["kid"] = "kid-1"
+
+    monkeypatch.setenv("AUTH_JWT_JWKS_URL", "http://test/.well-known/jwks.json")
+    monkeypatch.delenv("AUTH_JWT_PUBLIC_KEY", raising=False)
+
+    import sc_keeper.auth
+
+    importlib.reload(sc_keeper.auth)
+
+    success = Mock()
+    success.json.return_value = {"keys": [public_jwk]}
+    success.raise_for_status = Mock()
+    get_calls = {"n": 0}
+
+    class MockAsyncClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, *args, **kwargs):
+            get_calls["n"] += 1
+            if get_calls["n"] == 1:
+                return success
+            raise httpx.ConnectError("jwks down")
+
+    async def run():
+        with patch("sc_keeper.auth.httpx.AsyncClient", return_value=MockAsyncClient()):
+            keys1 = await sc_keeper.auth._load_jwks_keys()
+            assert "kid-1" in keys1
+            assert get_calls["n"] == 1
+
+            # expire the TTL so the next call attempts a refresh
+            sc_keeper.auth._jwks_fetched_at = 0.0
+            keys2 = await sc_keeper.auth._load_jwks_keys()
+            assert "kid-1" in keys2
+            assert get_calls["n"] == 2
+
+            # still within the post-failure throttle window: no extra fetch
+            keys3 = await sc_keeper.auth._load_jwks_keys()
+            assert "kid-1" in keys3
+            assert get_calls["n"] == 2
+
+    asyncio.run(run())
+
+
 def test_auth_dispatch_failed_jwt_then_introspect(monkeypatch, jwt_keypair):
     """A JWT regex match that fails JWKS should still fall through to introspection."""
     import jwt

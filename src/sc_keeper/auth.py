@@ -324,9 +324,11 @@ async def _load_jwks_keys() -> dict[str, Any]:
             response.raise_for_status()
             jwks = response.json()
     except Exception:
-        # serve the stale cache on a failed refresh
+        # serve the stale cache on a failed refresh, but stamp the cache time so
+        # the next requests wait out the TTL instead of hammering a down endpoint
         with _jwks_lock:
             if _jwks_url == jwks_url and _jwks_keys:
+                _jwks_fetched_at = time.time()
                 logger.warning("Failed to refresh JWKS, serving cached keys")
                 return _jwks_keys
         raise
