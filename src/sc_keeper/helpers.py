@@ -20,6 +20,7 @@ from .references import DatabasePKs, ServerPKs
 _PRICE_NDIGITS = 4
 _MONTHLY_PRICE_NDIGITS = 2
 
+
 def status_filter(status_column, only_active: bool | None, only_orderable: bool | None):
     """Return a SQLAlchemy status filter, or None if neither flag applies."""
     if only_active:
