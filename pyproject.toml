@@ -41,7 +41,7 @@ issues = "https://github.com/SpareCores/sc-keeper/issues"
 [project.optional-dependencies]
 testing = ["pytest"]
 apm = ["sentry-sdk[fastapi]"]
-security = ["redis", "common-expression-language"]
+security = ["redis", "common-expression-language", "PyJWT[crypto]"]
 all = ["sparecores-keeper[testing]", "sparecores-keeper[apm]", "sparecores-keeper[security]"]
 
 [tool.setuptools.packages.find]

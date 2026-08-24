@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager, suppress
 from importlib.metadata import version
-from logging import getLogger
 from os import environ
 from textwrap import dedent
 from typing import List
@@ -33,31 +32,6 @@ from sc_crawler.tables import (
 from sqlalchemy.orm import aliased, contains_eager
 from sqlmodel import Session, String, case, func, or_, select
 
-from .helpers import (
-    _MONTHLY_PRICE_NDIGITS,
-    _PRICE_NDIGITS,
-    add_extra_to_price,
-    get_sort_key_for_benchmark_configs,
-    mapped_class_has_column,
-    update_database_price_currency,
-    update_server_price_currency,
-    vendor_region_filter,
-)
-
-# early validation (before DB imports) of environment variables
-logger = getLogger(__name__)
-if environ.get("AUTH_TOKEN_INTROSPECTION_URL"):
-    missing_vars = [
-        var for var in ["AUTH_CLIENT_ID", "AUTH_CLIENT_SECRET"] if not environ.get(var)
-    ]
-    if missing_vars:
-        logger.error("Invalid environment variable configuration")
-        raise ValueError(
-            f"The following environment variables are required when "
-            f"AUTH_TOKEN_INTROSPECTION_URL is set: {', '.join(missing_vars)}"
-        )
-
-# ruff: noqa: E402
 from . import parameters as options
 from . import routers
 from .auth import AuthGuardMiddleware, AuthMiddleware
@@ -65,6 +39,17 @@ from .cache import CacheHeaderMiddleware
 from .crawler_extend import calculate_tiered_price
 from .currency import currency_converter
 from .database import get_db
+from .helpers import (
+    _MONTHLY_PRICE_NDIGITS,
+    _PRICE_NDIGITS,
+    add_extra_to_price,
+    get_sort_key_for_benchmark_configs,
+    mapped_class_has_column,
+    status_filter,
+    update_database_price_currency,
+    update_server_price_currency,
+    vendor_region_filter,
+)
 from .limits import heavy_job_dep
 from .logger import LogMiddleware
 from .queries import (
@@ -456,7 +441,8 @@ def search_servers(
     memory_min: options.memory_min = None,
     network_speed_baseline_min: options.network_speed_baseline_min = None,
     network_speed_max_min: options.network_speed_max_min = None,
-    only_active: options.only_active = True,
+    only_active: options.only_active = None,
+    only_orderable: options.only_orderable = True,
     vendor: options.vendor = None,
     compliance_framework: options.compliance_framework = None,
     regions: options.regions = None,
@@ -678,8 +664,9 @@ def search_servers(
     if vendor:
         conditions.add(Server.vendor_id.in_(vendor))
 
-    if only_active:
-        conditions.add(Server.status == Status.ACTIVE)
+    server_status = status_filter(Server.status, only_active, only_orderable)
+    if server_status is not None:
+        conditions.add(server_status)
         conditions.add(best_price_ref.isnot(None))
     if best_price_allocation != BestPriceAllocation.ANY:
         conditions.add(best_price_ref.isnot(None))
@@ -727,6 +714,7 @@ def search_servers(
         query = select(func.count()).select_from(Server)
         if (
             only_active
+            or only_orderable
             or benchmark_score_stressng_cpu_min
             or benchmark_score_per_price_stressng_cpu_min
             or benchmark_score_per_price_min
@@ -1059,7 +1047,8 @@ def search_databases(
     custom_extensions: options.database_custom_extensions = None,
     security_features: options.database_security_features = None,
     sla_min: options.database_sla_min = None,
-    only_active: options.only_active = True,
+    only_active: options.only_active = None,
+    only_orderable: options.only_orderable = True,
     vendor: options.vendor = None,
     regions: options.regions = None,
     vendor_regions: options.vendor_regions = None,
@@ -1232,8 +1221,9 @@ def search_databases(
             >= benchmark_score_per_price_min
         )
 
-    if only_active:
-        conditions.add(Database.status == Status.ACTIVE)
+    database_status = status_filter(Database.status, only_active, only_orderable)
+    if database_status is not None:
+        conditions.add(database_status)
         conditions.add(best_price_ref.isnot(None))
     if best_price_allocation != BestDatabasePriceAllocation.ANY:
         conditions.add(best_price_ref.isnot(None))
@@ -1273,6 +1263,7 @@ def search_databases(
         query = select(func.count()).select_from(Database)
         if (
             only_active
+            or only_orderable
             or benchmark_score_per_price_min
             or order_by
             in [
