@@ -86,6 +86,42 @@ def _require_jwt_deps() -> None:
         ) from exc
 
 
+def _extra_claims_from_mapping(
+    source: dict[str, Any],
+    mapping: list[tuple[str, str]],
+) -> dict[str, Any]:
+    """Copy selected claim names from source onto a User kwargs dict.
+
+    Each mapping entry is (source_key, dest_key). Missing source keys are skipped.
+    """
+    extras: dict[str, Any] = {}
+    for source_key, dest_key in mapping:
+        if source_key in source and source[source_key] is not None:
+            extras[dest_key] = source[source_key]
+    return extras
+
+
+def _parse_extra_claims_mapping(env_var: str) -> list[tuple[str, str]]:
+    """Parse comma-separated claim names, optionally `source:dest` renames."""
+    raw = environ.get(env_var, "")
+    mapping: list[tuple[str, str]] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" in part:
+            source_key, dest_key = part.split(":", 1)
+            source_key, dest_key = source_key.strip(), dest_key.strip()
+            if not source_key or not dest_key:
+                raise ValueError(
+                    f"{env_var} entry {part!r} must be 'claim' or 'source:dest'"
+                )
+            mapping.append((source_key, dest_key))
+        else:
+            mapping.append((part, part))
+    return mapping
+
+
 def _load_static_tokens() -> dict[str, User]:
     """Parse AUTH_STATIC_TOKENS JSON into a token → User map."""
     raw = environ.get("AUTH_STATIC_TOKENS")
@@ -112,18 +148,27 @@ def _load_static_tokens() -> dict[str, User]:
             )
         if token in tokens:
             raise ValueError(f"AUTH_STATIC_TOKENS has duplicate token at index {i}")
+        extras = {
+            key: value
+            for key, value in entry.items()
+            if key not in ("token", "subject", "user_id", "token_source")
+        }
         # provider subject: not necessarily a user id, might be organization id etc.
         tokens[token] = User(
             user_id=subject,
-            api_credits_per_minute=entry.get("api_credits_per_minute"),
             token_source="static_token",
+            **extras,
         )
     return tokens
+
+
+_jwt_extra_claims: list[tuple[str, str]] = []
 
 
 def validate_auth_config() -> None:
     """Validate auth env vars and compile optional token regexes. Call at startup."""
     global _introspection_regex, _jwt_regex, _api_key_regex, _static_tokens
+    global _jwt_extra_claims
 
     missing_vars = []
     if _introspection_enabled():
@@ -148,6 +193,7 @@ def validate_auth_config() -> None:
     except re.error as exc:
         raise ValueError(f"Invalid auth token regex: {exc}") from exc
 
+    _jwt_extra_claims = _parse_extra_claims_mapping("AUTH_JWT_EXTRA_CLAIMS")
     _static_tokens = _load_static_tokens()
 
 
@@ -396,10 +442,15 @@ async def _verify_jwt(token: str) -> Optional[User]:
             logger.warning("No sub claim found in JWT")
             return None
 
+        extras = _extra_claims_from_mapping(payload, _jwt_extra_claims)
+        extras.pop("user_id", None)
+        extras.pop("token_source", None)
+        extras.pop("api_credits_per_minute", None)
         return User(
             user_id=user_id,
             api_credits_per_minute=None,
             token_source="jwt_jwks",
+            **extras,
         )
     except Exception:
         logger.exception("Error verifying JWT")

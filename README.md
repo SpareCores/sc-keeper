@@ -88,6 +88,7 @@ Example regexes scenario:
 - `AUTH_JWT_AUTHORIZED_PARTIES` - Optional `azp` allowlist (comma-separated frontend origins)
 - `AUTH_JWT_TOKEN_REGEX` - Optional Python regex (`search`) on the raw Bearer token
 - `AUTH_JWT_JWKS_CACHE_TTL_SECONDS` - How long a fetched JWKS is cached before refresh (default: `300`)
+- `AUTH_JWT_EXTRA_CLAIMS` - Optional comma-separated JWT claim names to copy onto the `User` object (e.g. `org_id`, or `org_id:organization_id` to rename). Missing claims are skipped.
 
 Session JWTs use the default rate limiter (per-user credit override is not supported).
 
@@ -97,14 +98,14 @@ Session JWTs use the default rate limiter (per-user credit override is not suppo
 - `AUTH_API_KEY_VERIFY_BEARER` - Bearer token to authenticate against the verify API
 - `AUTH_API_KEY_VERIFY_REQUEST_FIELD` - JSON request field that should hold the Opaque API-key to be verified (default: `secret`)
 - `AUTH_API_KEY_VERIFY_SUBJECT_FIELD` - Response field that should be mapped to `user_id` (default: `subject`)
-- `AUTH_API_KEY_VERIFY_CLAIMS_FIELD` - Response field holding claims (default: `claims`), from which the optional `api_credits_per_minute` claim is read to determine rate limit override
+- `AUTH_API_KEY_VERIFY_CLAIMS_FIELD` - Response field holding claims (default: `claims`), from which all non-reserved keys (including e.g. the optional `api_credits_per_minute`) are copied onto the `User` object.
 - `AUTH_API_KEY_TOKEN_REGEX` - Optional Python regex (`search`) on the raw Bearer token
 
 ### Static token allowlist
 
-- `AUTH_STATIC_TOKENS` - JSON array of `{token, subject, api_credits_per_minute?}` objects
+- `AUTH_STATIC_TOKENS` - JSON array of objects. Required keys: `token`, `subject`. Any other keys (including the optional `api_credits_per_minute`) are copied onto the `User` object.
 
-Example: `[{"token": "foo", "subject": "FOO", "api_credits_per_minute": 42}, {"token": "bar", "subject": "BAR"}]`
+Example: `[{"token": "foo", "subject": "FOO", "api_credits_per_minute": 42, "organization_id": "ORG"}, {"token": "bar", "subject": "BAR"}]`
 
 ### Shared cache
 

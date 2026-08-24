@@ -275,20 +275,34 @@ def test_auth_api_key_verify(monkeypatch):
 
 def test_auth_jwt_verify(monkeypatch, jwt_keypair):
     """Test JWT Bearer verification with a static public key."""
+    import asyncio
+
     import jwt
 
     private_key, public_pem = jwt_keypair
     monkeypatch.setenv("AUTH_JWT_TOKEN_REGEX", r"^eyJ")
+    monkeypatch.setenv("AUTH_JWT_EXTRA_CLAIMS", "org_id:organization_id,sid")
     app = create_app_with_jwt_auth(monkeypatch, public_pem)
     client = TestClient(app)
 
-    token = jwt.encode({"sub": "user_jwt"}, private_key, algorithm="RS256")
+    token = jwt.encode(
+        {"sub": "user_jwt", "org_id": "org_42", "sid": "sess_1"},
+        private_key,
+        algorithm="RS256",
+    )
     response = client.get("/healthcheck", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
 
     response = client.get("/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     assert response.json()["user_id"] == "user_jwt"
+
+    import sc_keeper.auth
+
+    user = asyncio.run(sc_keeper.auth.verify_token(token))
+    assert user is not None
+    assert user.model_dump()["organization_id"] == "org_42"
+    assert user.model_dump()["sid"] == "sess_1"
 
 
 def test_auth_dispatch_api_key_regex_short_circuit(monkeypatch):
@@ -542,12 +556,15 @@ def test_auth_dispatch_failed_jwt_then_introspect(monkeypatch, jwt_keypair):
 
 def test_auth_static_tokens_only(monkeypatch):
     """Static allowlist works when it is the only configured method."""
+    import asyncio
+
     tokens = json_dumps(
         [
             {
                 "token": "mig_abc",
                 "subject": "user_123",
                 "api_credits_per_minute": 200,
+                "organization_id": "org_mig",
             }
         ]
     )
@@ -559,6 +576,12 @@ def test_auth_static_tokens_only(monkeypatch):
     data = response.json()
     assert data["user_id"] == "user_123"
     assert data["api_credits_per_minute"] == 200
+
+    import sc_keeper.auth
+
+    user = asyncio.run(sc_keeper.auth.verify_token("mig_abc"))
+    assert user is not None
+    assert user.model_dump()["organization_id"] == "org_mig"
 
     response = client.get(
         "/healthcheck", headers={"Authorization": "Bearer unknown_token"}
