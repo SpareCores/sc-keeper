@@ -359,11 +359,11 @@ async def redoc_html():
 # - last added runs first on the request
 # - then last added runs last on the response
 
-# CORS: allows all origins, without spec headers and without auth
+# CORS: allows all origins; Sentry headers + Authorization header required for the Angular app
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_headers=["sentry-trace", "baggage", "x-application-id"],
+    allow_headers=["Authorization", "sentry-trace", "baggage", "x-application-id"],
     expose_headers=["X-Total-Count"],
 )
 
