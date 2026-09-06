@@ -499,18 +499,20 @@ def test_jwks_failed_refresh_throttles_retries(monkeypatch, jwt_keypair):
 
     async def run():
         with patch("sc_keeper.auth.httpx.AsyncClient", return_value=MockAsyncClient()):
-            keys1 = await sc_keeper.auth._load_jwks_keys()
+            jwks_url = "http://test/.well-known/jwks.json"
+            keys1 = await sc_keeper.auth._load_jwks_keys(jwks_url)
             assert "kid-1" in keys1
             assert get_calls["n"] == 1
 
             # expire the TTL so the next call attempts a refresh
-            sc_keeper.auth._jwks_fetched_at = 0.0
-            keys2 = await sc_keeper.auth._load_jwks_keys()
+            cached_keys, _ = sc_keeper.auth._jwks_cache[jwks_url]
+            sc_keeper.auth._jwks_cache[jwks_url] = (cached_keys, 0.0)
+            keys2 = await sc_keeper.auth._load_jwks_keys(jwks_url)
             assert "kid-1" in keys2
             assert get_calls["n"] == 2
 
             # still within the post-failure throttle window: no extra fetch
-            keys3 = await sc_keeper.auth._load_jwks_keys()
+            keys3 = await sc_keeper.auth._load_jwks_keys(jwks_url)
             assert "kid-1" in keys3
             assert get_calls["n"] == 2
 
@@ -587,6 +589,180 @@ def test_auth_static_tokens_only(monkeypatch):
         "/healthcheck", headers={"Authorization": "Bearer unknown_token"}
     )
     assert response.status_code == 401
+
+
+def _second_rsa_keypair():
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+def test_auth_jwt_multiple_jwks_urls_fallback(monkeypatch, jwt_keypair):
+    """JWKS URLs are tried in order until the kid verifies."""
+    import json
+
+    import jwt
+    from jwt.algorithms import RSAAlgorithm
+
+    private_key, _ = jwt_keypair
+    other_key = _second_rsa_keypair()
+    first_jwk = json.loads(RSAAlgorithm.to_jwk(other_key.public_key()))
+    first_jwk["kid"] = "prod-kid"
+    second_jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
+    second_jwk["kid"] = "staging-kid"
+
+    for var in (
+        "AUTH_TOKEN_INTROSPECTION_URL",
+        "AUTH_CLIENT_ID",
+        "AUTH_CLIENT_SECRET",
+        "AUTH_API_KEY_VERIFY_URL",
+        "AUTH_API_KEY_VERIFY_BEARER",
+        "AUTH_JWT_PUBLIC_KEY",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    prod_url = "http://prod/.well-known/jwks.json"
+    staging_url = "http://staging/.well-known/jwks.json"
+    monkeypatch.setenv("AUTH_JWT_JWKS_URL", f"{prod_url},{staging_url}")
+    monkeypatch.setenv("AUTH_JWT_TOKEN_REGEX", r"^eyJ")
+
+    import sc_keeper.api
+    import sc_keeper.auth
+
+    importlib.reload(sc_keeper.auth)
+    importlib.reload(sc_keeper.api)
+    client = TestClient(sc_keeper.api.app)
+
+    token = jwt.encode(
+        {"sub": "staging_user"},
+        private_key,
+        algorithm="RS256",
+        headers={"kid": "staging-kid"},
+    )
+    with mock_auth_http(
+        jwks_by_url={
+            prod_url: {"keys": [first_jwk]},
+            staging_url: {"keys": [second_jwk]},
+        }
+    ) as mock_client:
+        response = client.get("/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        assert response.json()["user_id"] == "staging_user"
+        assert mock_client.jwks_urls == [prod_url, staging_url]
+
+
+def test_auth_jwt_multiple_jwks_urls_stops_at_first_hit(monkeypatch, jwt_keypair):
+    """Verification stops at the first JWKS URL that can verify the token."""
+    import json
+
+    import jwt
+    from jwt.algorithms import RSAAlgorithm
+
+    private_key, _ = jwt_keypair
+    public_jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
+    public_jwk["kid"] = "prod-kid"
+
+    for var in (
+        "AUTH_TOKEN_INTROSPECTION_URL",
+        "AUTH_CLIENT_ID",
+        "AUTH_CLIENT_SECRET",
+        "AUTH_API_KEY_VERIFY_URL",
+        "AUTH_API_KEY_VERIFY_BEARER",
+        "AUTH_JWT_PUBLIC_KEY",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    prod_url = "http://prod/.well-known/jwks.json"
+    staging_url = "http://staging/.well-known/jwks.json"
+    monkeypatch.setenv("AUTH_JWT_JWKS_URL", f"{prod_url},{staging_url}")
+    monkeypatch.setenv("AUTH_JWT_TOKEN_REGEX", r"^eyJ")
+
+    import sc_keeper.api
+    import sc_keeper.auth
+
+    importlib.reload(sc_keeper.auth)
+    importlib.reload(sc_keeper.api)
+    client = TestClient(sc_keeper.api.app)
+
+    token = jwt.encode(
+        {"sub": "prod_user"},
+        private_key,
+        algorithm="RS256",
+        headers={"kid": "prod-kid"},
+    )
+    with mock_auth_http(
+        jwks_by_url={
+            prod_url: {"keys": [public_jwk]},
+            staging_url: {"keys": []},
+        }
+    ) as mock_client:
+        response = client.get("/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        assert response.json()["user_id"] == "prod_user"
+        assert mock_client.jwks_urls == [prod_url]
+
+
+def test_auth_jwt_authorized_parties_exact_and_regex(monkeypatch, jwt_keypair):
+    """azp allowlist accepts exact origins and regex entries such as staging hosts."""
+    import jwt
+
+    private_key, public_pem = jwt_keypair
+    monkeypatch.setenv(
+        "AUTH_JWT_AUTHORIZED_PARTIES",
+        r"https://sparecores.com,https://sc-www-[0-9]+\.onrender\.com",
+    )
+    app = create_app_with_jwt_auth(monkeypatch, public_pem)
+    client = TestClient(app)
+
+    exact_token = jwt.encode(
+        {"sub": "exact_user", "azp": "https://sparecores.com"},
+        private_key,
+        algorithm="RS256",
+    )
+    response = client.get("/me", headers={"Authorization": f"Bearer {exact_token}"})
+    assert response.status_code == 200
+    assert response.json()["user_id"] == "exact_user"
+
+    staging_token = jwt.encode(
+        {"sub": "staging_user", "azp": "https://sc-www-267.onrender.com"},
+        private_key,
+        algorithm="RS256",
+    )
+    response = client.get("/me", headers={"Authorization": f"Bearer {staging_token}"})
+    assert response.status_code == 200
+    assert response.json()["user_id"] == "staging_user"
+
+    rejected = jwt.encode(
+        {"sub": "bad_user", "azp": "https://sc-www-abc.onrender.com"},
+        private_key,
+        algorithm="RS256",
+    )
+    response = client.get(
+        "/healthcheck", headers={"Authorization": f"Bearer {rejected}"}
+    )
+    assert response.status_code == 401
+
+    # hostname dots in a literal entry must not be treated as regex wildcards
+    wildcard = jwt.encode(
+        {"sub": "wild_user", "azp": "https://sparecoresXcom"},
+        private_key,
+        algorithm="RS256",
+    )
+    response = client.get(
+        "/healthcheck", headers={"Authorization": f"Bearer {wildcard}"}
+    )
+    assert response.status_code == 401
+
+
+def test_auth_jwt_authorized_parties_invalid_regex(monkeypatch):
+    """Invalid azp regex is rejected when parsing the allowlist."""
+    import pytest
+
+    import sc_keeper.auth
+
+    monkeypatch.setenv("AUTH_JWT_AUTHORIZED_PARTIES", "[unterminated")
+    with pytest.raises(ValueError, match="AUTH_JWT_AUTHORIZED_PARTIES"):
+        sc_keeper.auth._parse_authorized_parties()
 
 
 def test_auth_static_tokens_last_resort(monkeypatch):

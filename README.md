@@ -81,11 +81,11 @@ Example regexes scenario:
 
 ### JWT Bearer (e.g. Clerk session JWT from `session.getToken()`)
 
-- `AUTH_JWT_JWKS_URL` - JWKS endpoint (e.g. `https://<provider-domain>/.well-known/jwks.json`)
+- `AUTH_JWT_JWKS_URL` - JWKS endpoint(s), comma-separated. Tried in order until verification succeeds (e.g. prod and staging Clerk: `https://<prod>/.well-known/jwks.json,https://<staging>/.well-known/jwks.json`)
 - `AUTH_JWT_PUBLIC_KEY` - The public key in PEM format as an alternative to JWKS
-- `AUTH_JWT_ISSUER` - Optional `iss` check
+- `AUTH_JWT_ISSUER` - Optional `iss` check (comma-separated if multiple issuers)
 - `AUTH_JWT_AUDIENCE` - Optional `aud` check (comma-separated)
-- `AUTH_JWT_AUTHORIZED_PARTIES` - Optional `azp` allowlist (comma-separated frontend origins)
+- `AUTH_JWT_AUTHORIZED_PARTIES` - Optional `azp` allowlist (comma-separated frontend origins). Entries that contain regex metacharacters (`[]()*+?|^${}`) are matched with `re.fullmatch` against the entire claim; other entries are exact strings. Example: `https://sparecores.com,https://sc-www-[0-9]+\.onrender\.com`
 - `AUTH_JWT_TOKEN_REGEX` - Optional Python regex (`search`) on the raw Bearer token
 - `AUTH_JWT_JWKS_CACHE_TTL_SECONDS` - How long a fetched JWKS is cached before refresh (default: `300`)
 - `AUTH_JWT_EXTRA_CLAIMS` - Optional comma-separated JWT claim names to copy onto the `User` object (e.g. `org_id`, or `org_id:organization_id` to rename). Missing claims are skipped.
