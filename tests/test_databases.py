@@ -383,8 +383,20 @@ class TestResponseStructure:
             "price_breakdown",
         ]:
             assert field in row, f"Missing field: {field}"
+        # Scores are only populated when benchmark_id is provided.
         assert "selected_benchmark_score" in row
         assert "selected_benchmark_score_per_price" in row
+        assert row["selected_benchmark_score"] is None
+        assert row["selected_benchmark_score_per_price"] is None
+
+    def test_selected_benchmark_scores_with_benchmark_id(self, seeded_client):
+        data, _ = get_databases(
+            seeded_client,
+            limit=1,
+            benchmark_id="pgbench:heavy_read_only",
+            order_by="selected_benchmark_score",
+        )
+        row = data[0]
         assert row["selected_benchmark_score"] is not None
         assert row["selected_benchmark_score_per_price"] is not None
 

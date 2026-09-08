@@ -1043,7 +1043,7 @@ def search_databases(
     network_speed_max_min: options.network_speed_max_min = None,
     network_storage_speed_baseline_min: options.network_storage_speed_baseline_min = None,
     network_storage_speed_max_min: options.network_storage_speed_max_min = None,
-    benchmark_id: options.benchmark_id = "pgbench:heavy_read_only",
+    benchmark_id: options.benchmark_id = None,
     benchmark_config: options.benchmark_config = None,
     benchmark_score_min: options.database_benchmark_score_min = None,
     benchmark_score_per_price_min: options.database_benchmark_score_per_price_min = None,

@@ -1087,10 +1087,7 @@ database_benchmark_score_min = Annotated[
     Optional[float],
     Query(
         title="Required benchmark score",
-        description=(
-            "Required value of the selected benchmark score "
-            "(default benchmark_id=pgbench:heavy_read_only)."
-        ),
+        description=("Required value of the selected benchmark score."),
         json_schema_extra={
             "category_id": DatabaseFilterCategory.PERFORMANCE,
         },
@@ -1102,8 +1099,7 @@ database_benchmark_score_per_price_min = Annotated[
     Query(
         title="Required benchmark score/price",
         description=(
-            "Required value of the selected benchmark score per USD/hr "
-            "(default benchmark_id=pgbench:heavy_read_only, using the best on-demand price)."
+            "Required value of the selected benchmark score per USD/hr (using the best on-demand price)."
         ),
         json_schema_extra={
             "category_id": DatabaseFilterCategory.PERFORMANCE,
