@@ -30,7 +30,7 @@ from sc_crawler.tables import (
     Zone,
 )
 from sqlalchemy.orm import aliased, contains_eager
-from sqlmodel import Session, String, case, func, or_, select
+from sqlmodel import Session, String, and_, case, func, not_, or_, select
 
 from . import parameters as options
 from . import routers
@@ -433,6 +433,7 @@ def search_servers(
     cpu_l3_cache_min: options.cpu_l3_cache_min = None,
     cpu_l3_cache_total_min: options.cpu_l3_cache_total_min = None,
     hw_virt: options.hw_virt = None,
+    cpu_hyperthreading: options.cpu_hyperthreading = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
     benchmark_id: options.benchmark_id = None,
@@ -597,16 +598,43 @@ def search_servers(
         conditions.add(Server.cpu_family.in_(cpu_family))
     if cpu_allocation:
         conditions.add(Server.cpu_allocation.in_(cpu_allocation))
+    cpu_flag = None
+    if cpu_flags or cpu_hyperthreading is not None:
+        cpu_flag = func.json_each(Server.cpu_flags).table_valued(
+            "value", name="cpu_flag"
+        )
     if cpu_flags:
-        jf = func.json_each(Server.cpu_flags).table_valued("value")
         flag_count = (
             select(func.count())
-            .select_from(jf)
-            .where(jf.c.value.in_([f.value for f in cpu_flags]))
+            .select_from(cpu_flag)
+            .where(cpu_flag.c.value.in_([f.value for f in cpu_flags]))
             .correlate(Server)
             .scalar_subquery()
         )
         conditions.add(flag_count == len(cpu_flags))
+    if cpu_hyperthreading is not None:
+        flags_empty = func.coalesce(func.json_array_length(Server.cpu_flags), 0) == 0
+        has_ht = (
+            select(cpu_flag.c.value)
+            .select_from(cpu_flag)
+            .where(cpu_flag.c.value == "ht")
+            .correlate(Server)
+            .exists()
+        )
+        if cpu_hyperthreading:
+            conditions.add(
+                or_(
+                    and_(not_(flags_empty), has_ht),
+                    and_(flags_empty, Server.vcpus > Server.cpu_cores),
+                )
+            )
+        else:
+            conditions.add(
+                or_(
+                    and_(not_(flags_empty), not_(has_ht)),
+                    and_(flags_empty, Server.vcpus == Server.cpu_cores),
+                )
+            )
     if cpu_speed_min:
         conditions.add(Server.cpu_speed >= cpu_speed_min)
     if cpu_l1d_cache_min:

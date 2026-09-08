@@ -8,6 +8,7 @@ New feature(s):
 - Add `performance` filter category for `/databases` pgbench filters
   (`benchmark_score_min`, `benchmark_score_per_price_min`).
 - Add `cpu_flags` filter to `/servers`.
+- Add `cpu_hyperthreading` filter to `/servers` (`ht` flag, with vCPUs/cores fallback).
 
 ## August 2026
 

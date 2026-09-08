@@ -427,6 +427,19 @@ hw_virt = Annotated[
     ),
 ]
 
+cpu_hyperthreading = Annotated[
+    Optional[bool],
+    Query(
+        title="CPU hyperthreading",
+        description=(
+            'Filter by CPU hyperthreading. Uses the "ht" CPU flag when flags are known, '
+            "otherwise falls back to comparing vCPUs and CPU cores "
+            "(hyperthreaded: vCPUs > cores, non-hyperthreaded: vCPUs == cores)."
+        ),
+        json_schema_extra={"category_id": CommonFilterCategory.PROCESSOR},
+    ),
+]
+
 storage_size = Annotated[
     Optional[float],
     Query(

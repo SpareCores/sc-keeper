@@ -157,6 +157,27 @@ class TestFiltering:
         )
         assert len(both) <= len(one)
 
+    def test_cpu_hyperthreading_filter(self):
+        enabled, _ = get_servers(cpu_hyperthreading=True, limit=25)
+        assert enabled
+        for s in enabled:
+            flags = s.get("cpu_flags") or []
+            if flags:
+                assert "ht" in flags
+            else:
+                assert s["cpu_cores"] is not None
+                assert s["vcpus"] > s["cpu_cores"]
+
+        disabled, _ = get_servers(cpu_hyperthreading=False, limit=25)
+        assert disabled
+        for s in disabled:
+            flags = s.get("cpu_flags") or []
+            if flags:
+                assert "ht" not in flags
+            else:
+                assert s["cpu_cores"] is not None
+                assert s["vcpus"] == s["cpu_cores"]
+
     def test_partial_name_or_id(self):
         data, _ = get_servers(partial_name_or_id="t3", vendor=["aws"], limit=10)
         assert all(
