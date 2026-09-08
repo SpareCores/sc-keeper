@@ -6,22 +6,28 @@ import pytest
 from fastapi.testclient import TestClient
 from sc_crawler.table_fields import (
     Allocation,
+    CpuAllocation,
+    CpuArchitecture,
     DatabaseEngine,
     DatabaseHaLevel,
     DatabaseHaStrategy,
     DatabaseSecurityFeature,
     DatabaseStorageScope,
     DatabaseWireProtocol,
+    HashableDict,
     PriceUnit,
+    ResourceType,
     Status,
 )
 from sc_crawler.tables import (
+    BenchmarkScore,
     Country,
     Database,
     DatabasePrice,
     DatabaseStorage,
     DatabaseStoragePrice,
     Region,
+    Server,
     Vendor,
 )
 from sqlalchemy.pool import StaticPool
@@ -61,6 +67,7 @@ def _make_database(
     vcpus: int = 2,
     memory: int = 4096,
     storage_size: int | None = None,
+    server_id: str | None = None,
     ha: list | None = None,
     ha_strategy: list | None = None,
     storage_extra_min: int | None = 10,
@@ -79,6 +86,7 @@ def _make_database(
         "wire_protocol": DatabaseWireProtocol.POSTGRESQL,
         "engine_versions": ["15", "16"],
         "auto_upgrade_versions": True,
+        "server_id": server_id,
         "vcpus": vcpus,
         "memory_amount": memory,
         "storage_size": storage_size,
@@ -104,12 +112,65 @@ def _make_database(
     }
 
 
+def _make_server(
+    server_id: str,
+    *,
+    architecture: CpuArchitecture = CpuArchitecture.X86_64,
+    allocation: CpuAllocation = CpuAllocation.DEDICATED,
+    network_speed_baseline: float = 1.0,
+    network_speed_max: float = 5.0,
+    network_storage_speed_baseline: float = 1.0,
+    network_storage_speed_max: float = 5.0,
+):
+    return {
+        "vendor_id": "test",
+        "server_id": server_id,
+        "name": server_id,
+        "api_reference": server_id,
+        "display_name": server_id,
+        "description": f"Test server {server_id}",
+        "family": "general",
+        "vcpus": 2,
+        "memory_amount": 4096,
+        "cpu_allocation": allocation,
+        "cpu_architecture": architecture,
+        "network_speed_baseline": network_speed_baseline,
+        "network_speed_max": network_speed_max,
+        "network_storage_speed_baseline": network_storage_speed_baseline,
+        "network_storage_speed_max": network_storage_speed_max,
+        "status": Status.ACTIVE,
+        "observed_at": NOW,
+    }
+
+
+_SERVERS = [
+    _make_server(
+        "srv-x86",
+        architecture=CpuArchitecture.X86_64,
+        allocation=CpuAllocation.DEDICATED,
+        network_speed_baseline=5.0,
+        network_speed_max=10.0,
+        network_storage_speed_baseline=4.0,
+        network_storage_speed_max=8.0,
+    ),
+    _make_server(
+        "srv-arm",
+        architecture=CpuArchitecture.ARM64,
+        allocation=CpuAllocation.SHARED,
+        network_speed_baseline=1.0,
+        network_speed_max=2.0,
+        network_storage_speed_baseline=0.5,
+        network_storage_speed_max=1.0,
+    ),
+]
+
 _DATABASES = [
     _make_database(
         "db-small",
         vcpus=2,
         memory=4096,
         storage_size=100,
+        server_id="srv-x86",
         storage_extra_min=5,
         storage_extra_max=50,
     ),
@@ -118,6 +179,7 @@ _DATABASES = [
         vcpus=8,
         memory=32768,
         storage_size=None,
+        server_id="srv-arm",
         ha=[DatabaseHaLevel.MULTI_REGION, DatabaseHaLevel.MULTI_ZONE],
         ha_strategy=[DatabaseHaStrategy.MULTI_MASTER],
         max_read_replicas=15,
@@ -169,8 +231,37 @@ def _seed_db(session: Session):
     session.add(Region(**REGION_DATA))
     session.flush()
 
+    for row in _SERVERS:
+        session.add(Server(**row))
+    session.flush()
+
     for row in _DATABASES:
         session.add(Database(**row))
+
+    session.add(
+        BenchmarkScore(
+            vendor_id="test",
+            resource_type=ResourceType.DATABASE,
+            resource_id="db-large",
+            benchmark_id="pgbench:heavy_read_only",
+            config=HashableDict(),
+            score=1000,
+            status=Status.ACTIVE,
+            observed_at=NOW,
+        )
+    )
+    session.add(
+        BenchmarkScore(
+            vendor_id="test",
+            resource_type=ResourceType.DATABASE,
+            resource_id="db-small",
+            benchmark_id="pgbench:heavy_read_only",
+            config=HashableDict(),
+            score=100,
+            status=Status.ACTIVE,
+            observed_at=NOW,
+        )
+    )
 
     for database_id, price_rows in _PRICES.items():
         for price_row in price_rows:
@@ -293,9 +384,9 @@ class TestResponseStructure:
         ]:
             assert field in row, f"Missing field: {field}"
         assert "selected_benchmark_score" in row
-        assert row["selected_benchmark_score"] is None
         assert "selected_benchmark_score_per_price" in row
-        assert row["selected_benchmark_score_per_price"] is None
+        assert row["selected_benchmark_score"] is not None
+        assert row["selected_benchmark_score_per_price"] is not None
 
     def test_order_by_min_price_asc(self, seeded_client):
         data, _ = get_databases(seeded_client, order_by="min_price", order_dir="asc")
@@ -341,6 +432,53 @@ class TestFiltersAndPricing:
         data, _ = get_databases(seeded_client, vcpus_min=8)
         assert len(data) == 1
         assert data[0]["database_id"] == "db-large"
+
+    def test_architecture_filter_via_identified_server(self, seeded_client):
+        data, _ = get_databases(seeded_client, architecture=["arm64"])
+        assert len(data) == 1
+        assert data[0]["database_id"] == "db-large"
+        assert data[0]["server_id"] == "srv-arm"
+        # Response shape stays DatabasePKs; no extra server fields.
+        assert "cpu_architecture" not in data[0]
+
+    def test_cpu_allocation_filter_via_identified_server(self, seeded_client):
+        data, _ = get_databases(seeded_client, cpu_allocation=["Dedicated"])
+        assert len(data) == 1
+        assert data[0]["database_id"] == "db-small"
+
+    def test_network_filters_via_identified_server(self, seeded_client):
+        data, _ = get_databases(
+            seeded_client,
+            network_speed_baseline_min=4,
+            network_speed_max_min=8,
+            network_storage_speed_baseline_min=3,
+            network_storage_speed_max_min=7,
+        )
+        assert len(data) == 1
+        assert data[0]["database_id"] == "db-small"
+
+    def test_benchmark_score_min_filter(self, seeded_client):
+        data, _ = get_databases(
+            seeded_client,
+            benchmark_id="pgbench:heavy_read_only",
+            benchmark_score_min=500,
+            order_by="selected_benchmark_score",
+        )
+        assert len(data) == 1
+        assert data[0]["database_id"] == "db-large"
+        assert data[0]["selected_benchmark_score"] == 1000
+
+    def test_benchmark_score_per_price_min_filter(self, seeded_client):
+        # db-large: 1000 / 0.50 = 2000; db-small: 100 / 0.10 = 1000
+        data, _ = get_databases(
+            seeded_client,
+            benchmark_id="pgbench:heavy_read_only",
+            benchmark_score_per_price_min=1500,
+            order_by="selected_benchmark_score_per_price",
+        )
+        assert len(data) == 1
+        assert data[0]["database_id"] == "db-large"
+        assert data[0]["selected_benchmark_score_per_price"] == 2000
 
     def test_storage_size_filter(self, seeded_client):
         data, _ = get_databases(seeded_client, storage_size=50)

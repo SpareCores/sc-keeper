@@ -1,3 +1,13 @@
+## September 2026
+
+New feature(s):
+
+- Add `architecture`, `cpu_allocation`, `network_speed_baseline_min`, `network_speed_max_min`,
+  `network_storage_speed_baseline_min`, and `network_storage_speed_max_min` filters to
+  `/databases` (matched via identified `Database.server_id`).
+- Add `performance` filter category for `/databases` pgbench filters
+  (`benchmark_score_min`, `benchmark_score_per_price_min`).
+
 ## August 2026
 
 New feature(s):

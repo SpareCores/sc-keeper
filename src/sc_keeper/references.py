@@ -313,6 +313,7 @@ class DatabaseFilterCategory(Enum):
 
     ENGINE = "engine"
     FEATURES = "features"
+    PERFORMANCE = "performance"
 
 
 class BenchmarkConfig(BaseModel):
