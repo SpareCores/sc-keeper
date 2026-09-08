@@ -422,6 +422,7 @@ def search_servers(
     cpu_manufacturer: options.cpu_manufacturer = None,
     cpu_family: options.cpu_family = None,
     cpu_allocation: options.cpu_allocation = None,
+    cpu_flags: options.cpu_flags = None,
     cpu_speed_min: options.cpu_speed_min = None,
     cpu_l1d_cache_min: options.cpu_l1d_cache_min = None,
     cpu_l1d_cache_total_min: options.cpu_l1d_cache_total_min = None,
@@ -596,6 +597,16 @@ def search_servers(
         conditions.add(Server.cpu_family.in_(cpu_family))
     if cpu_allocation:
         conditions.add(Server.cpu_allocation.in_(cpu_allocation))
+    if cpu_flags:
+        jf = func.json_each(Server.cpu_flags).table_valued("value")
+        flag_count = (
+            select(func.count())
+            .select_from(jf)
+            .where(jf.c.value.in_([f.value for f in cpu_flags]))
+            .correlate(Server)
+            .scalar_subquery()
+        )
+        conditions.add(flag_count == len(cpu_flags))
     if cpu_speed_min:
         conditions.add(Server.cpu_speed >= cpu_speed_min)
     if cpu_l1d_cache_min:

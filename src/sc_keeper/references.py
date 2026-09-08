@@ -25,7 +25,7 @@ from sc_crawler.tables import (
     Server,
     Vendor,
 )
-from sqlmodel import distinct, not_, select, text
+from sqlmodel import distinct, func, not_, select, text
 
 from .database import session
 
@@ -77,6 +77,23 @@ with session.sessionmaker as db:
             for m in db.exec(
                 select(distinct(Server.cpu_family))
                 .where(Server.cpu_family.isnot(None))
+                .where(Server.status == Status.ACTIVE)
+                .order_by(text("1"))
+            ).all()
+        },
+    )
+    CpuFlags = StrEnum(
+        "CpuFlags",
+        {
+            m: m
+            for m in db.exec(
+                select(
+                    distinct(
+                        func.json_each(Server.cpu_flags)
+                        .table_valued("value", joins_implicitly=True)
+                        .c.value
+                    )
+                )
                 .where(Server.status == Status.ACTIVE)
                 .order_by(text("1"))
             ).all()

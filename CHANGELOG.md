@@ -7,6 +7,7 @@ New feature(s):
   `/databases` (matched via identified `Database.server_id`).
 - Add `performance` filter category for `/databases` pgbench filters
   (`benchmark_score_min`, `benchmark_score_per_price_min`).
+- Add `cpu_flags` filter to `/servers`.
 
 ## August 2026
 

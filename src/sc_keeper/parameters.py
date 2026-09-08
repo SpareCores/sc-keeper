@@ -22,6 +22,7 @@ from .references import (
     ComplianceFrameworks,
     Countries,
     CpuFamilies,
+    CpuFlags,
     CpuL1CacheSnapPoints,
     CpuL1CacheTotalSnapPoints,
     CpuL2CacheSnapPoints,
@@ -133,6 +134,18 @@ cpu_family = Annotated[
         json_schema_extra={
             "category_id": CommonFilterCategory.PROCESSOR,
             "enum": [e.value for e in CpuFamilies],
+        },
+    ),
+]
+
+cpu_flags = Annotated[
+    Optional[List[CpuFlags]],
+    Query(
+        title="CPU flags",
+        description="Required CPU flags.",
+        json_schema_extra={
+            "category_id": CommonFilterCategory.PROCESSOR,
+            "enum": [e.value for e in CpuFlags],
         },
     ),
 ]
