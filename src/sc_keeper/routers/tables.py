@@ -14,6 +14,7 @@ from sc_crawler.tables import (
     ServerPrice,
     Storage,
     Vendor,
+    VendorComplianceLink,
     Zone,
 )
 from sqlmodel import Session, select
@@ -45,6 +46,14 @@ def table_compliance_frameworks(
 ) -> List[ComplianceFramework]:
     """Return the ComplianceFramework table as-is, without filtering options or relationships resolved."""
     return db.exec(select(ComplianceFramework)).all()
+
+
+@router.get("/vendor_compliance_link")
+def table_vendor_compliance_link(
+    db: Session = Depends(get_db),
+) -> List[VendorComplianceLink]:
+    """Return the VendorComplianceLink table as-is, without filtering options or relationships resolved."""
+    return db.exec(select(VendorComplianceLink)).all()
 
 
 @router.get("/vendor")

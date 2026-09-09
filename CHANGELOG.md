@@ -9,6 +9,7 @@ New feature(s):
   (`benchmark_score_min`, `benchmark_score_per_price_min`).
 - Add `cpu_flags` filter to `/servers`.
 - Add `cpu_hyperthreading` filter to `/servers` (`ht` flag, with vCPUs/cores fallback).
+- Add `/table/vendor_compliance_link` dump for vendor / compliance framework mapping.
 
 ## August 2026
 
