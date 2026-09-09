@@ -25,11 +25,17 @@ _introspection_regex: Optional[re.Pattern[str]] = None
 _jwt_regex: Optional[re.Pattern[str]] = None
 _api_key_regex: Optional[re.Pattern[str]] = None
 
-_jwks_keys: dict[str, Any] = {}
-_jwks_url: Optional[str] = None
-_jwks_fetched_at: float = 0.0
+# per-JWKS-URL cache: url → (keys-by-kid, fetched_at)
+_jwks_cache: dict[str, tuple[dict[str, Any], float]] = {}
 _jwks_lock = Lock()
 _jwks_cache_ttl = int(environ.get("AUTH_JWT_JWKS_CACHE_TTL_SECONDS", "300"))
+
+# AUTH_JWT_AUTHORIZED_PARTIES: exact azp strings and compiled regexes
+_azp_exact: set[str] = set()
+_azp_regexes: list[re.Pattern[str]] = []
+# treat an allowlist entry as regex if it contains metacharacters other than '.'
+# (dots appear in every hostname and must stay exact-match)
+_AZP_REGEX_HINT = re.compile(r"[\\[\]()*+?|^${}]")
 
 
 class User(BaseModel):
@@ -101,14 +107,23 @@ def _extra_claims_from_mapping(
     return extras
 
 
-def _parse_extra_claims_mapping(env_var: str) -> list[tuple[str, str]]:
-    """Parse comma-separated claim names, optionally `source:dest` renames."""
+def _csv_env(env_var: str) -> list[str]:
+    """Split a comma-separated env var, stripping blanks and de-duplicating."""
     raw = environ.get(env_var, "")
-    mapping: list[tuple[str, str]] = []
+    items: list[str] = []
+    seen: set[str] = set()
     for part in raw.split(","):
         part = part.strip()
-        if not part:
-            continue
+        if part and part not in seen:
+            seen.add(part)
+            items.append(part)
+    return items
+
+
+def _parse_extra_claims_mapping(env_var: str) -> list[tuple[str, str]]:
+    """Parse comma-separated claim names, optionally `source:dest` renames."""
+    mapping: list[tuple[str, str]] = []
+    for part in _csv_env(env_var):
         if ":" in part:
             source_key, dest_key = part.split(":", 1)
             source_key, dest_key = source_key.strip(), dest_key.strip()
@@ -120,6 +135,34 @@ def _parse_extra_claims_mapping(env_var: str) -> list[tuple[str, str]]:
         else:
             mapping.append((part, part))
     return mapping
+
+
+def _parse_authorized_parties() -> tuple[set[str], list[re.Pattern[str]]]:
+    """Parse AUTH_JWT_AUTHORIZED_PARTIES into exact strings and regexes."""
+    exact: set[str] = set()
+    regexes: list[re.Pattern[str]] = []
+    for part in _csv_env("AUTH_JWT_AUTHORIZED_PARTIES"):
+        if _AZP_REGEX_HINT.search(part):
+            try:
+                regexes.append(re.compile(part))
+            except re.error as exc:
+                raise ValueError(
+                    f"Invalid AUTH_JWT_AUTHORIZED_PARTIES regex {part!r}: {exc}"
+                ) from exc
+        else:
+            exact.add(part)
+    return exact, regexes
+
+
+def _authorized_party_allowed(azp: Optional[str]) -> bool:
+    """Return True if azp is allowed, or if no allowlist is configured."""
+    if not _azp_exact and not _azp_regexes:
+        return True
+    if azp is None:
+        return False
+    if azp in _azp_exact:
+        return True
+    return any(pattern.fullmatch(azp) for pattern in _azp_regexes)
 
 
 def _load_static_tokens() -> dict[str, User]:
@@ -168,7 +211,7 @@ _jwt_extra_claims: list[tuple[str, str]] = []
 def validate_auth_config() -> None:
     """Validate auth env vars and compile optional token regexes. Call at startup."""
     global _introspection_regex, _jwt_regex, _api_key_regex, _static_tokens
-    global _jwt_extra_claims
+    global _jwt_extra_claims, _azp_exact, _azp_regexes
 
     missing_vars = []
     if _introspection_enabled():
@@ -193,6 +236,7 @@ def validate_auth_config() -> None:
     except re.error as exc:
         raise ValueError(f"Invalid auth token regex: {exc}") from exc
 
+    _azp_exact, _azp_regexes = _parse_authorized_parties()
     _jwt_extra_claims = _parse_extra_claims_mapping("AUTH_JWT_EXTRA_CLAIMS")
     _static_tokens = _load_static_tokens()
 
@@ -346,23 +390,18 @@ async def _verify_introspection(token: str) -> Optional[User]:
         return None
 
 
-async def _load_jwks_keys() -> dict[str, Any]:
-    """Load JWKS keys keyed by kid, refreshing from the endpoint on a TTL."""
-    global _jwks_keys, _jwks_url, _jwks_fetched_at
-
+async def _load_jwks_keys(jwks_url: str) -> dict[str, Any]:
+    """Load JWKS keys keyed by kid for one endpoint, refreshing on a TTL."""
     from jwt import PyJWK
 
-    jwks_url = environ.get("AUTH_JWT_JWKS_URL")
-    if not jwks_url:
-        return {}
-
     with _jwks_lock:
+        cached = _jwks_cache.get(jwks_url)
         if (
-            _jwks_url == jwks_url
-            and _jwks_keys
-            and time.time() - _jwks_fetched_at < _jwks_cache_ttl
+            cached is not None
+            and cached[0]
+            and time.time() - cached[1] < _jwks_cache_ttl
         ):
-            return _jwks_keys
+            return cached[0]
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -373,10 +412,13 @@ async def _load_jwks_keys() -> dict[str, Any]:
         # serve the stale cache on a failed refresh, but stamp the cache time so
         # the next requests wait out the TTL instead of hammering a down endpoint
         with _jwks_lock:
-            if _jwks_url == jwks_url and _jwks_keys:
-                _jwks_fetched_at = time.time()
-                logger.warning("Failed to refresh JWKS, serving cached keys")
-                return _jwks_keys
+            cached = _jwks_cache.get(jwks_url)
+            if cached is not None and cached[0]:
+                _jwks_cache[jwks_url] = (cached[0], time.time())
+                logger.warning(
+                    "Failed to refresh JWKS from %s, serving cached keys", jwks_url
+                )
+                return cached[0]
         raise
 
     keys: dict[str, Any] = {}
@@ -387,10 +429,49 @@ async def _load_jwks_keys() -> dict[str, Any]:
         keys[kid] = PyJWK(key_data)
 
     with _jwks_lock:
-        _jwks_keys = keys
-        _jwks_url = jwks_url
-        _jwks_fetched_at = time.time()
-        return _jwks_keys
+        _jwks_cache[jwks_url] = (keys, time.time())
+        return keys
+
+
+async def _decode_jwt_payload(
+    token: str, decode_kwargs: dict[str, Any]
+) -> Optional[dict[str, Any]]:
+    """Decode and verify a JWT via static public key or JWKS URL(s) in order."""
+    import jwt
+
+    public_key = environ.get("AUTH_JWT_PUBLIC_KEY")
+    if public_key:
+        return jwt.decode(token, public_key, **decode_kwargs)
+
+    header = jwt.get_unverified_header(token)
+    kid = header.get("kid")
+    if not kid:
+        logger.warning("JWT missing kid header")
+        return None
+
+    kid_seen = False
+    for jwks_url in _csv_env("AUTH_JWT_JWKS_URL"):
+        try:
+            keys = await _load_jwks_keys(jwks_url)
+        except Exception:
+            logger.exception("Error loading JWKS from %s", jwks_url)
+            continue
+
+        jwk = keys.get(kid)
+        if jwk is None:
+            continue
+        kid_seen = True
+        try:
+            return jwt.decode(token, jwk.key, **decode_kwargs)
+        except Exception:
+            logger.debug("JWT decode failed against JWKS %s", jwks_url, exc_info=True)
+            continue
+
+    if kid_seen:
+        logger.warning("JWT verification failed against all JWKS endpoints")
+    else:
+        logger.warning("JWT kid not found in JWKS")
+    return None
 
 
 async def _verify_jwt(token: str) -> Optional[User]:
@@ -398,43 +479,22 @@ async def _verify_jwt(token: str) -> Optional[User]:
     if not _jwt_enabled():
         return None
 
-    import jwt
-
     decode_kwargs: dict[str, Any] = {"algorithms": ["RS256", "ES256"]}
-    issuer = environ.get("AUTH_JWT_ISSUER")
-    if issuer:
-        decode_kwargs["issuer"] = issuer
-    audience = environ.get("AUTH_JWT_AUDIENCE")
-    if audience:
-        decode_kwargs["audience"] = [part.strip() for part in audience.split(",")]
+    issuers = _csv_env("AUTH_JWT_ISSUER")
+    if issuers:
+        decode_kwargs["issuer"] = issuers if len(issuers) > 1 else issuers[0]
+    audiences = _csv_env("AUTH_JWT_AUDIENCE")
+    if audiences:
+        decode_kwargs["audience"] = audiences
 
     try:
-        public_key = environ.get("AUTH_JWT_PUBLIC_KEY")
-        if public_key:
-            signing_key = public_key
-        else:
-            header = jwt.get_unverified_header(token)
-            kid = header.get("kid")
-            if not kid:
-                logger.warning("JWT missing kid header")
-                return None
+        payload = await _decode_jwt_payload(token, decode_kwargs)
+        if payload is None:
+            return None
 
-            keys = await _load_jwks_keys()
-            jwk = keys.get(kid)
-            if jwk is None:
-                logger.warning("JWT kid not found in JWKS")
-                return None
-            signing_key = jwk.key
-
-        payload = jwt.decode(token, signing_key, **decode_kwargs)
-
-        authorized_parties = environ.get("AUTH_JWT_AUTHORIZED_PARTIES")
-        if authorized_parties:
-            allowed = {part.strip() for part in authorized_parties.split(",")}
-            azp = payload.get("azp")
-            if azp not in allowed:
-                logger.warning("JWT azp not in authorized parties allowlist")
-                return None
+        if not _authorized_party_allowed(payload.get("azp")):
+            logger.warning("JWT azp not in authorized parties allowlist")
+            return None
 
         # provider subject: not necessarily a user id, might be organization id etc.
         user_id = payload.get("sub")

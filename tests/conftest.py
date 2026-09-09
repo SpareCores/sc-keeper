@@ -189,6 +189,7 @@ def mock_auth_http(
     api_key_status=200,
     api_key_exception=None,
     jwks_data=None,
+    jwks_by_url=None,
 ):
     """Mock httpx for introspection, API-key verify, and JWKS fetch."""
     introspection_response = (
@@ -208,6 +209,7 @@ def mock_auth_http(
             self.introspection_calls = 0
             self.api_key_calls = 0
             self.jwks_calls = 0
+            self.jwks_urls: list[str] = []
 
         async def __aenter__(self):
             return self
@@ -215,9 +217,12 @@ def mock_auth_http(
         async def __aexit__(self, *args):
             return None
 
-        async def get(self, *args, **kwargs):
+        async def get(self, url, *args, **kwargs):
             self.get_call_count += 1
             self.jwks_calls += 1
+            self.jwks_urls.append(url)
+            if jwks_by_url is not None:
+                return _create_mock_json_response(jwks_by_url.get(url, {"keys": []}))
             return jwks_response
 
         async def post(self, *args, **kwargs):
