@@ -148,6 +148,9 @@ class TestFiltering:
         assert one
         assert all(flag_a in (s.get("cpu_flags") or []) for s in one)
 
+        dup, _ = get_servers(cpu_flags=[flag_a, flag_a], limit=25)
+        assert {s["server_id"] for s in dup} == {s["server_id"] for s in one}
+
         both, _ = get_servers(cpu_flags=[flag_a, flag_b], limit=25)
         assert both
         assert all(

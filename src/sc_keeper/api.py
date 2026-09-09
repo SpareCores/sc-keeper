@@ -604,14 +604,15 @@ def search_servers(
             "value", name="cpu_flag"
         )
     if cpu_flags:
+        requested_flags = list(dict.fromkeys(f.value for f in cpu_flags))
         flag_count = (
             select(func.count())
             .select_from(cpu_flag)
-            .where(cpu_flag.c.value.in_([f.value for f in cpu_flags]))
+            .where(cpu_flag.c.value.in_(requested_flags))
             .correlate(Server)
             .scalar_subquery()
         )
-        conditions.add(flag_count == len(cpu_flags))
+        conditions.add(flag_count == len(requested_flags))
     if cpu_hyperthreading is not None:
         flags_empty = func.coalesce(func.json_array_length(Server.cpu_flags), 0) == 0
         has_ht = (
