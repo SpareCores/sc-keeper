@@ -138,6 +138,49 @@ class TestFiltering:
         data, _ = get_servers(architecture="arm64", limit=10)
         assert all(s["cpu_architecture"] == "arm64" for s in data)
 
+    def test_cpu_flags_filter(self):
+        data, _ = get_servers(limit=50, order_by="vcpus")
+        sample = next((s for s in data if len(s.get("cpu_flags") or []) >= 2), None)
+        assert sample is not None, "expected at least one server with 2+ cpu_flags"
+        flag_a, flag_b = sample["cpu_flags"][:2]
+
+        one, _ = get_servers(cpu_flags=[flag_a], limit=25)
+        assert one
+        assert all(flag_a in (s.get("cpu_flags") or []) for s in one)
+
+        dup, _ = get_servers(cpu_flags=[flag_a, flag_a], limit=25)
+        assert {s["server_id"] for s in dup} == {s["server_id"] for s in one}
+
+        both, _ = get_servers(cpu_flags=[flag_a, flag_b], limit=25)
+        assert both
+        assert all(
+            flag_a in (s.get("cpu_flags") or [])
+            and flag_b in (s.get("cpu_flags") or [])
+            for s in both
+        )
+        assert len(both) <= len(one)
+
+    def test_cpu_hyperthreading_filter(self):
+        enabled, _ = get_servers(cpu_hyperthreading=True, limit=25)
+        assert enabled
+        for s in enabled:
+            flags = s.get("cpu_flags") or []
+            if flags:
+                assert "ht" in flags
+            else:
+                assert s["cpu_cores"] is not None
+                assert s["vcpus"] > s["cpu_cores"]
+
+        disabled, _ = get_servers(cpu_hyperthreading=False, limit=25)
+        assert disabled
+        for s in disabled:
+            flags = s.get("cpu_flags") or []
+            if flags:
+                assert "ht" not in flags
+            else:
+                assert s["cpu_cores"] is not None
+                assert s["vcpus"] == s["cpu_cores"]
+
     def test_partial_name_or_id(self):
         data, _ = get_servers(partial_name_or_id="t3", vendor=["aws"], limit=10)
         assert all(

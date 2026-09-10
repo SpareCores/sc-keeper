@@ -30,7 +30,7 @@ from sc_crawler.tables import (
     Zone,
 )
 from sqlalchemy.orm import aliased, contains_eager
-from sqlmodel import Session, String, case, func, or_, select
+from sqlmodel import Session, String, and_, case, func, not_, or_, select
 
 from . import parameters as options
 from . import routers
@@ -432,6 +432,8 @@ def search_servers(
     cpu_l3_cache_min: options.cpu_l3_cache_min = None,
     cpu_l3_cache_total_min: options.cpu_l3_cache_total_min = None,
     hw_virt: options.hw_virt = None,
+    cpu_hyperthreading: options.cpu_hyperthreading = None,
+    cpu_flags: options.cpu_flags = None,
     benchmark_score_stressng_cpu_min: options.benchmark_score_stressng_cpu_min = None,
     benchmark_score_per_price_stressng_cpu_min: options.benchmark_score_per_price_stressng_cpu_min = None,
     benchmark_id: options.benchmark_id = None,
@@ -596,6 +598,44 @@ def search_servers(
         conditions.add(Server.cpu_family.in_(cpu_family))
     if cpu_allocation:
         conditions.add(Server.cpu_allocation.in_(cpu_allocation))
+    cpu_flag = None
+    if cpu_flags or cpu_hyperthreading is not None:
+        cpu_flag = func.json_each(Server.cpu_flags).table_valued(
+            "value", name="cpu_flag"
+        )
+    if cpu_flags:
+        requested_flags = list(dict.fromkeys(f.value for f in cpu_flags))
+        flag_count = (
+            select(func.count())
+            .select_from(cpu_flag)
+            .where(cpu_flag.c.value.in_(requested_flags))
+            .correlate(Server)
+            .scalar_subquery()
+        )
+        conditions.add(flag_count == len(requested_flags))
+    if cpu_hyperthreading is not None:
+        flags_empty = func.coalesce(func.json_array_length(Server.cpu_flags), 0) == 0
+        has_ht = (
+            select(cpu_flag.c.value)
+            .select_from(cpu_flag)
+            .where(cpu_flag.c.value == "ht")
+            .correlate(Server)
+            .exists()
+        )
+        if cpu_hyperthreading:
+            conditions.add(
+                or_(
+                    and_(not_(flags_empty), has_ht),
+                    and_(flags_empty, Server.vcpus > Server.cpu_cores),
+                )
+            )
+        else:
+            conditions.add(
+                or_(
+                    and_(not_(flags_empty), not_(has_ht)),
+                    and_(flags_empty, Server.vcpus == Server.cpu_cores),
+                )
+            )
     if cpu_speed_min:
         conditions.add(Server.cpu_speed >= cpu_speed_min)
     if cpu_l1d_cache_min:
@@ -1025,11 +1065,17 @@ def search_databases(
     engine_version: options.database_engine_version = None,
     vcpus_min: options.vcpus_min = 1,
     vcpus_max: options.vcpus_max = None,
+    architecture: options.architecture = None,
+    cpu_allocation: options.cpu_allocation = None,
     memory_min: options.memory_min = None,
-    benchmark_id: options.benchmark_id = "pgbench:heavy_read_only",
+    network_speed_baseline_min: options.network_speed_baseline_min = None,
+    network_speed_max_min: options.network_speed_max_min = None,
+    network_storage_speed_baseline_min: options.network_storage_speed_baseline_min = None,
+    network_storage_speed_max_min: options.network_storage_speed_max_min = None,
+    benchmark_id: options.benchmark_id = None,
     benchmark_config: options.benchmark_config = None,
-    benchmark_score_min: options.benchmark_score_min = None,
-    benchmark_score_per_price_min: options.benchmark_score_per_price_min = None,
+    benchmark_score_min: options.database_benchmark_score_min = None,
+    benchmark_score_per_price_min: options.database_benchmark_score_per_price_min = None,
     ha: options.database_ha = None,
     ha_strategy: options.database_ha_strategy = None,
     max_read_replicas_min: options.database_max_read_replicas_min = None,
@@ -1149,8 +1195,24 @@ def search_databases(
         conditions.add(Database.vcpus >= vcpus_min)
     if vcpus_max:
         conditions.add(Database.vcpus <= vcpus_max)
+    if architecture:
+        conditions.add(Server.cpu_architecture.in_(architecture))
+    if cpu_allocation:
+        conditions.add(Server.cpu_allocation.in_(cpu_allocation))
     if memory_min:
         conditions.add(Database.memory_amount >= memory_min * 1024)
+    if network_speed_baseline_min:
+        conditions.add(Server.network_speed_baseline >= network_speed_baseline_min)
+    if network_speed_max_min:
+        conditions.add(Server.network_speed_max >= network_speed_max_min)
+    if network_storage_speed_baseline_min:
+        conditions.add(
+            Server.network_storage_speed_baseline >= network_storage_speed_baseline_min
+        )
+    if network_storage_speed_max_min:
+        conditions.add(
+            Server.network_storage_speed_max >= network_storage_speed_max_min
+        )
     if ha:
         jh = func.json_each(Database.ha).table_valued("value")
         ha_count = (
@@ -1259,8 +1321,23 @@ def search_databases(
         "selected_benchmark_score_per_price": _live_price_order_min_price,
     }
 
+    needs_server_join = bool(
+        architecture
+        or cpu_allocation
+        or network_speed_baseline_min
+        or network_speed_max_min
+        or network_storage_speed_baseline_min
+        or network_storage_speed_max_min
+    )
+
     if add_total_count_header:
         query = select(func.count()).select_from(Database)
+        if needs_server_join:
+            query = query.join(
+                Server,
+                (Database.vendor_id == Server.vendor_id)
+                & (Database.server_id == Server.server_id),
+            )
         if (
             only_active
             or only_orderable
@@ -1328,6 +1405,12 @@ def search_databases(
 
     query = select(*select_cols)
     query = query.join(Database.vendor)
+    if needs_server_join:
+        query = query.join(
+            Server,
+            (Database.vendor_id == Server.vendor_id)
+            & (Database.server_id == Server.server_id),
+        )
     query = query.join(
         DatabaseExtra,
         (Database.vendor_id == DatabaseExtra.vendor_id)
