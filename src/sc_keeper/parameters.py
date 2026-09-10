@@ -430,11 +430,10 @@ hw_virt = Annotated[
 cpu_hyperthreading = Annotated[
     Optional[bool],
     Query(
-        title="CPU hyperthreading",
+        title="Hyperthreading",
         description=(
-            'Filter by CPU hyperthreading. Uses the "ht" CPU flag when flags are known, '
-            "otherwise falls back to comparing vCPUs and CPU cores "
-            "(hyperthreaded: vCPUs > cores, non-hyperthreaded: vCPUs == cores)."
+            'Whether CPU hyperthreading is enabled or not. Calculated based on the "ht" CPU flag, '
+            "with a fallback to comparing the number of vCPUs with physical CPU cores."
         ),
         json_schema_extra={"category_id": CommonFilterCategory.PROCESSOR},
     ),
