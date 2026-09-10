@@ -281,7 +281,7 @@ network_speed_baseline_min = Annotated[
         title="Required baseline network speed",
         description="Required baseline network speed in Gbps.",
         json_schema_extra={
-            "category_id": ServerFilterCategory.TRAFFIC,
+            "category_id": CommonFilterCategory.TRAFFIC,
             "enum": [e.value for e in NetworkSpeedSnapPoints],
             "unit": "Gbps",
         },
@@ -294,7 +294,7 @@ network_speed_max_min = Annotated[
         title="Required maximum network speed",
         description="Required maximum network speed in Gbps.",
         json_schema_extra={
-            "category_id": ServerFilterCategory.TRAFFIC,
+            "category_id": CommonFilterCategory.TRAFFIC,
             "enum": [e.value for e in NetworkSpeedSnapPoints],
             "unit": "Gbps",
         },
@@ -472,7 +472,7 @@ network_storage_speed_baseline_min = Annotated[
         title="Required baseline network storage speed",
         description="Required baseline network storage speed in Gbps.",
         json_schema_extra={
-            "category_id": ServerFilterCategory.TRAFFIC,
+            "category_id": CommonFilterCategory.TRAFFIC,
             "enum": [e.value for e in NetworkStorageSpeedSnapPoints],
             "unit": "Gbps",
         },
@@ -485,7 +485,7 @@ network_storage_speed_max_min = Annotated[
         title="Required maximum network storage speed",
         description="Required maximum network storage speed in Gbps.",
         json_schema_extra={
-            "category_id": ServerFilterCategory.TRAFFIC,
+            "category_id": CommonFilterCategory.TRAFFIC,
             "enum": [e.value for e in NetworkStorageSpeedSnapPoints],
             "unit": "Gbps",
         },
@@ -501,7 +501,7 @@ monthly_inbound_traffic = Annotated[
             "The cheapest available inbound traffic price for the vendor is used."
         ),
         json_schema_extra={
-            "category_id": ServerFilterCategory.TRAFFIC,
+            "category_id": CommonFilterCategory.TRAFFIC,
             "unit": "GB",
             "step": 1,
         },
@@ -517,7 +517,7 @@ monthly_outbound_traffic = Annotated[
             "The cheapest available outbound traffic price for the vendor is used."
         ),
         json_schema_extra={
-            "category_id": ServerFilterCategory.TRAFFIC,
+            "category_id": CommonFilterCategory.TRAFFIC,
             "unit": "GB",
             "step": 1,
         },
@@ -563,7 +563,7 @@ direction = Annotated[
         title="Direction",
         description="Direction of the Internet traffic.",
         json_schema_extra={
-            "category_id": ServerFilterCategory.TRAFFIC,
+            "category_id": CommonFilterCategory.TRAFFIC,
             "enum": [e.value for e in TrafficDirection],
         },
     ),
@@ -575,7 +575,7 @@ monthly_traffic = Annotated[
         title="Monthly overall traffic",
         description="Overall amount of monthly traffic (GBs).",
         json_schema_extra={
-            "category_id": ServerFilterCategory.TRAFFIC,
+            "category_id": CommonFilterCategory.TRAFFIC,
             "unit": "GB",
             "step": 1,
         },
@@ -677,7 +677,7 @@ benchmark_score_stressng_cpu_min = Annotated[
         title="Required SCore",
         description="Required stress-ng div16 CPU workload score.",
         json_schema_extra={
-            "category_id": ServerFilterCategory.PERFORMANCE,
+            "category_id": CommonFilterCategory.PERFORMANCE,
         },
     ),
 ]
@@ -689,7 +689,7 @@ benchmark_score_per_price_stressng_cpu_min = Annotated[
         title="Required $Core",
         description="Required stress-ng div16 CPU workload score per USD/hr (using the best ondemand or spot price of all zones).",
         json_schema_extra={
-            "category_id": ServerFilterCategory.PERFORMANCE,
+            "category_id": CommonFilterCategory.PERFORMANCE,
             "unit": "/USD",
         },
     ),
@@ -719,7 +719,7 @@ benchmark_score_min = Annotated[
         title="Required benchmark score",
         description="Required value of the selected benchmark score.",
         json_schema_extra={
-            "category_id": ServerFilterCategory.PERFORMANCE,
+            "category_id": CommonFilterCategory.PERFORMANCE,
         },
     ),
 ]
@@ -731,7 +731,7 @@ benchmark_score_per_price_min = Annotated[
         title="Required benchmark score/price",
         description="Required value of the selected benchmark score per USD/hr (using the best ondemand or spot price of all zones).",
         json_schema_extra={
-            "category_id": ServerFilterCategory.PERFORMANCE,
+            "category_id": CommonFilterCategory.PERFORMANCE,
             "unit": "/USD",
         },
     ),
@@ -1102,7 +1102,7 @@ database_benchmark_score_min = Annotated[
         title="Required benchmark score",
         description=("Required value of the selected benchmark score."),
         json_schema_extra={
-            "category_id": DatabaseFilterCategory.PERFORMANCE,
+            "category_id": CommonFilterCategory.PERFORMANCE,
         },
     ),
 ]
@@ -1115,7 +1115,7 @@ database_benchmark_score_per_price_min = Annotated[
             "Required value of the selected benchmark score per USD/hr (using the best on-demand price)."
         ),
         json_schema_extra={
-            "category_id": DatabaseFilterCategory.PERFORMANCE,
+            "category_id": CommonFilterCategory.PERFORMANCE,
             "unit": "/USD",
         },
     ),

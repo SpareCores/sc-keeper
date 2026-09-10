@@ -314,6 +314,8 @@ class CommonFilterCategory(Enum):
     MEMORY = "memory"
     STORAGE = "storage"
     PROCESSOR = "processor"
+    TRAFFIC = "traffic"
+    PERFORMANCE = "performance"
 
 
 class ServerFilterCategory(Enum):
@@ -321,8 +323,6 @@ class ServerFilterCategory(Enum):
 
     CPU_CACHE = "cpu_cache"
     GPU = "gpu"
-    TRAFFIC = "traffic"
-    PERFORMANCE = "performance"
 
 
 class DatabaseFilterCategory(Enum):
@@ -330,7 +330,6 @@ class DatabaseFilterCategory(Enum):
 
     ENGINE = "engine"
     FEATURES = "features"
-    PERFORMANCE = "performance"
 
 
 class BenchmarkConfig(BaseModel):
