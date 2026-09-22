@@ -17,6 +17,7 @@ TABLE_DUMPS = [
     ("benchmark", "benchmark_id"),
     ("country", "country_id"),
     ("compliance_framework", "compliance_framework_id"),
+    ("vendor_compliance_link", "compliance_framework_id"),
     ("vendor", "vendor_id"),
     ("region", "region_id"),
     ("zone", "zone_id"),
