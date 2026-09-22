@@ -30,7 +30,7 @@ from sc_crawler.tables import (
     Zone,
 )
 from sqlalchemy.orm import aliased, contains_eager
-from sqlmodel import Session, String, and_, case, func, not_, or_, select
+from sqlmodel import Session, String, case, func, or_, select
 
 from . import parameters as options
 from . import routers
@@ -598,12 +598,10 @@ def search_servers(
         conditions.add(Server.cpu_family.in_(cpu_family))
     if cpu_allocation:
         conditions.add(Server.cpu_allocation.in_(cpu_allocation))
-    cpu_flag = None
-    if cpu_flags or cpu_hyperthreading is not None:
+    if cpu_flags:
         cpu_flag = func.json_each(Server.cpu_flags).table_valued(
             "value", name="cpu_flag"
         )
-    if cpu_flags:
         requested_flags = list(dict.fromkeys(f.value for f in cpu_flags))
         flag_count = (
             select(func.count())
@@ -614,28 +612,10 @@ def search_servers(
         )
         conditions.add(flag_count == len(requested_flags))
     if cpu_hyperthreading is not None:
-        flags_empty = func.coalesce(func.json_array_length(Server.cpu_flags), 0) == 0
-        has_ht = (
-            select(cpu_flag.c.value)
-            .select_from(cpu_flag)
-            .where(cpu_flag.c.value == "ht")
-            .correlate(Server)
-            .exists()
-        )
         if cpu_hyperthreading:
-            conditions.add(
-                or_(
-                    and_(not_(flags_empty), has_ht),
-                    and_(flags_empty, Server.vcpus > Server.cpu_cores),
-                )
-            )
+            conditions.add(Server.vcpus > Server.cpu_cores)
         else:
-            conditions.add(
-                or_(
-                    and_(not_(flags_empty), not_(has_ht)),
-                    and_(flags_empty, Server.vcpus == Server.cpu_cores),
-                )
-            )
+            conditions.add(Server.vcpus == Server.cpu_cores)
     if cpu_speed_min:
         conditions.add(Server.cpu_speed >= cpu_speed_min)
     if cpu_l1d_cache_min:

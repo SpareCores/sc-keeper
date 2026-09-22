@@ -432,8 +432,8 @@ cpu_hyperthreading = Annotated[
     Query(
         title="Hyperthreading",
         description=(
-            'Whether CPU hyperthreading is enabled or not. Calculated based on the "ht" CPU flag, '
-            "with a fallback to comparing the number of vCPUs with physical CPU cores."
+            "Whether CPU hyperthreading is enabled or not. "
+            "Determined by comparing the number of vCPUs with physical CPU cores."
         ),
         json_schema_extra={"category_id": CommonFilterCategory.PROCESSOR},
     ),

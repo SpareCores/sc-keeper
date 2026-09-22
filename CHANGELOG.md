@@ -6,7 +6,7 @@ New feature(s):
   `network_storage_speed_baseline_min`, and `network_storage_speed_max_min` filters to
   `/databases` (matched via identified `Database.server_id`).
 - Add `cpu_flags` filter to `/servers`.
-- Add `cpu_hyperthreading` filter to `/servers` (`ht` flag, with vCPUs/cores fallback).
+- Add `cpu_hyperthreading` filter to `/servers` (vCPUs > CPU cores).
 - Add `/table/vendor_compliance_link` dump for vendor / compliance framework mapping.
 
 ## August 2026
