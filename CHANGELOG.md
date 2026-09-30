@@ -8,6 +8,7 @@ New feature(s):
 - Add `cpu_flags` filter to `/servers`.
 - Add `cpu_hyperthreading` filter to `/servers` (vCPUs > CPU cores).
 - Add `/table/vendor_compliance_link` dump for vendor / compliance framework mapping.
+- Add `storage_count_min` filter to `/servers` for minimum bundled storage count.
 
 ## August 2026
 
