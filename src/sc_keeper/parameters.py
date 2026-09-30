@@ -442,7 +442,7 @@ cpu_hyperthreading = Annotated[
 storage_size = Annotated[
     Optional[float],
     Query(
-        title="Required local storage size",
+        title="Required bundled storage size",
         description="Required amount of built-in local (SSD, HDD, NVMe) server storage in GBs.",
         json_schema_extra={
             "category_id": CommonFilterCategory.STORAGE,
@@ -456,11 +456,22 @@ storage_size = Annotated[
 storage_type = Annotated[
     Optional[List[StorageType]],
     Query(
-        title="Local storage type",
+        title="Bundled storage type",
         description="Storage type of the server's built-in local storage (e.g. HDD, SSD, NVMe).",
         json_schema_extra={
             "category_id": CommonFilterCategory.STORAGE,
             "enum": [e.value for e in StorageType],
+        },
+    ),
+]
+
+storage_count_min = Annotated[
+    Optional[int],
+    Query(
+        title="Required bundled storage count",
+        description="Required number of bundled storage devices.",
+        json_schema_extra={
+            "category_id": CommonFilterCategory.STORAGE,
         },
     ),
 ]

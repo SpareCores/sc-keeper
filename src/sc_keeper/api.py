@@ -452,6 +452,7 @@ def search_servers(
     countries: options.countries = None,
     storage_size: options.storage_size = None,
     storage_type: options.storage_type = None,
+    storage_count_min: options.storage_count_min = None,
     network_storage_speed_baseline_min: options.network_storage_speed_baseline_min = None,
     network_storage_speed_max_min: options.network_storage_speed_max_min = None,
     monthly_inbound_traffic: options.monthly_inbound_traffic = 0,
@@ -681,6 +682,8 @@ def search_servers(
         conditions.add(Server.gpu_model.in_(gpu_model))
     if storage_type:
         conditions.add(Server.storage_type.in_(storage_type))
+    if storage_count_min:
+        conditions.add(func.json_array_length(Server.storages) >= storage_count_min)
     if vendor:
         conditions.add(Server.vendor_id.in_(vendor))
 
