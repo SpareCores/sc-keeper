@@ -398,6 +398,7 @@ app.include_router(routers.table_metadata.router)
 app.include_router(routers.server.router, tags=["Server Details"])
 app.include_router(routers.database.router, tags=["Database Details"])
 app.include_router(routers.ai.router, prefix="/ai", tags=["AI"])
+app.include_router(routers.inspector.router, prefix="/inspector", tags=["Inspector"])
 
 
 @app.get("/regions", tags=["Query Resources"])

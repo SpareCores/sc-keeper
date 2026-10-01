@@ -1130,3 +1130,8 @@ database_benchmark_score_per_price_min = Annotated[
         },
     ),
 ]
+
+inspector_tasks = Annotated[
+    List[str],
+    Query(description="Inspector task names to evaluate."),
+]
