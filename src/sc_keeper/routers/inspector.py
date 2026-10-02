@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Dict, List
 
 from fastapi import (
@@ -35,12 +36,14 @@ def server_task_block_reason_codes(
 def task_block_reason_codes(
     tasks: options.inspector_tasks,
     db: Session = Depends(get_db),
-) -> Dict[str, InspectorTaskBlockReasonCodesResponse]:
-    """Return block reason codes for every active server's inspector tasks keyed by vendor ID and server API reference."""
+) -> Dict[str, Dict[str, InspectorTaskBlockReasonCodesResponse]]:
+    """Return block reason codes for every active server, nested by vendor ID then server API reference."""
     server_rows = db.exec(select(Server).where(Server.status == Status.ACTIVE)).all()
-    return {
-        f"{server.vendor_id}/{server.api_reference}": server.check_inspector_task_block_reasons(
-            tasks
+    by_vendor: Dict[str, Dict[str, InspectorTaskBlockReasonCodesResponse]] = (
+        defaultdict(dict)
+    )
+    for server in server_rows:
+        by_vendor[server.vendor_id][server.api_reference] = (
+            server.check_inspector_task_block_reasons(tasks)
         )
-        for server in server_rows
-    }
+    return by_vendor
