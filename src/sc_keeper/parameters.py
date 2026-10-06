@@ -175,11 +175,72 @@ memory_min = Annotated[
     ),
 ]
 
+memory_max = Annotated[
+    Optional[float],
+    Query(
+        title="Maximum memory",
+        description="Maximum amount of memory in GBs.",
+        ge=0,
+        json_schema_extra={
+            "category_id": CommonFilterCategory.MEMORY,
+            "unit": "GB",
+            "step": 0.1,
+        },
+    ),
+]
+
+memory_per_vcpu_min = Annotated[
+    Optional[float],
+    Query(
+        title="Minimum memory per vCPU",
+        description="Minimum amount of memory (GBs) per virtual CPU.",
+        ge=0,
+        json_schema_extra={
+            "category_id": CommonFilterCategory.MEMORY,
+            "unit": "GB/vCPU",
+            "step": 0.1,
+        },
+    ),
+]
+
+memory_per_vcpu_max = Annotated[
+    Optional[float],
+    Query(
+        title="Maximum memory per vCPU",
+        description="Maximum amount of memory (GBs) per virtual CPU.",
+        ge=0,
+        json_schema_extra={
+            "category_id": CommonFilterCategory.MEMORY,
+            "unit": "GB/vCPU",
+            "step": 0.1,
+        },
+    ),
+]
+
 price_max = Annotated[
     Optional[float],
     Query(
         title="Maximum price",
         description="Maximum price (USD/hr).",
+        json_schema_extra={
+            "category_id": CommonFilterCategory.PRICE,
+            "step": 0.0001,
+        },
+    ),
+]
+
+
+best_price_max = Annotated[
+    Optional[float],
+    Query(
+        title="Maximum price",
+        description=(
+            "Maximum best price of the server in the requested currency, "
+            "using the price allocation selected via best_price_allocation "
+            "(hourly price, or monthly price when MONTHLY is selected), "
+            "including the optional extra traffic and storage costs."
+        ),
+        ge=0,
         json_schema_extra={
             "category_id": CommonFilterCategory.PRICE,
             "step": 0.0001,
@@ -617,6 +678,19 @@ gpu_min = Annotated[
     ),
 ]
 
+gpu_max = Annotated[
+    Optional[float],
+    Query(
+        title="Maximum GPU count",
+        description="Maximum number of GPUs. Set to 0 to search for servers without GPUs.",
+        ge=0,
+        json_schema_extra={
+            "category_id": ServerFilterCategory.GPU,
+            "unit": "GPUs",
+        },
+    ),
+]
+
 gpu_memory_min = Annotated[
     Optional[float],
     Query(
@@ -730,6 +804,31 @@ benchmark_score_min = Annotated[
         description="Required value of the selected benchmark score.",
         json_schema_extra={
             "category_id": CommonFilterCategory.PERFORMANCE,
+        },
+    ),
+]
+
+
+benchmark_score_max = Annotated[
+    Optional[float],
+    Query(
+        title="Maximum benchmark score",
+        description="Maximum value of the selected benchmark score, e.g. for benchmarks where lower is better.",
+        json_schema_extra={
+            "category_id": CommonFilterCategory.PERFORMANCE,
+        },
+    ),
+]
+
+
+benchmark_score_per_vcpu_min = Annotated[
+    Optional[float],
+    Query(
+        title="Required benchmark score/vCPU",
+        description="Required value of the selected benchmark score divided by the number of virtual CPUs.",
+        json_schema_extra={
+            "category_id": CommonFilterCategory.PERFORMANCE,
+            "unit": "/vCPU",
         },
     ),
 ]
