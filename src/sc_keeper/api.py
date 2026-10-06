@@ -6,7 +6,6 @@ from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.docs import get_redoc_html
 from sc_crawler.table_fields import ResourceType, Status, TrafficDirection
 from sc_crawler.tables import (
@@ -378,8 +377,8 @@ rate_limiter = create_rate_limiter()
 if rate_limiter:
     app.add_middleware(RateLimitMiddleware, default_limiter=rate_limiter)
 
-# response handler: aggressive compression
-app.add_middleware(GZipMiddleware, minimum_size=100)
+# Compression is handled by CloudFront (compress=True). Origin gzip would
+# create separate Accept-Encoding cache variants that can diverge.
 
 # logging: need to run ASAP for the request (after auth),
 # and as late as possible for the response (to log e.g. rate-limit params and results)
