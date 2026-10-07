@@ -280,9 +280,20 @@ class TestBenchmarkFilters:
         "param",
         ["benchmark_score_max", "benchmark_score_per_vcpu_min"],
     )
-    def test_benchmark_id_required(self, param):
-        resp = client.get("/servers", params={param: 1})
+    @pytest.mark.parametrize("value", [0, 1])
+    def test_benchmark_id_required(self, param, value):
+        resp = client.get("/servers", params={param: value})
         assert resp.status_code == 400
+
+    def test_benchmark_score_per_vcpu_min_zero(self):
+        """Zero is a valid lower bound: drops servers without benchmark score."""
+        data, _ = get_servers(
+            benchmark_id=self.benchmark_id,
+            benchmark_score_per_vcpu_min=0,
+            limit=10000,
+        )
+        assert data
+        assert all(s["selected_benchmark_score"] is not None for s in data)
 
     def test_total_count_header(self):
         _, all_resp = get_servers(
@@ -740,6 +751,22 @@ class TestPagination:
         _, resp = get_servers(limit=5, add_total_count_header=True)
         assert "x-total-count" in resp.headers
         assert int(resp.headers["x-total-count"]) > 0
+
+    @pytest.mark.parametrize(
+        "allocation", ["ANY", "SPOT_ONLY", "ONDEMAND_ONLY", "MONTHLY"]
+    )
+    def test_total_count_matches_rows(self, allocation):
+        """Total count must not be inflated by a missing join (cartesian product)."""
+        data, resp = get_servers(
+            only_active=False,
+            only_orderable=False,
+            best_price_allocation=allocation,
+            order_by="vcpus",
+            limit=-1,
+            add_total_count_header=True,
+        )
+        assert data
+        assert int(resp.headers["x-total-count"]) == len(data)
 
     def test_no_total_count_by_default(self):
         _, resp = get_servers(limit=5)

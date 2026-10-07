@@ -781,6 +781,7 @@ def search_servers(
             or benchmark_score_per_price_stressng_cpu_min
             or benchmark_score_per_price_min
             or price_max is not None
+            or best_price_allocation != BestPriceAllocation.ANY
             or (
                 order_by
                 in [
