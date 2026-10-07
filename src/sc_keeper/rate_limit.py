@@ -240,7 +240,9 @@ class RedisRateLimiter(RateLimiter):
         limit = credits_per_minute or self.credits_per_minute
         now = time()
         window_start = now - self.window_seconds
-        request_id = kwargs.get("request_id", str(uuid4()))
+        # fall back to a random id also when request_id is explicitly None, otherwise
+        # all such requests would share the same sorted set member and overwrite each other
+        request_id = kwargs.get("request_id") or str(uuid4())
         member_id = f"{request_id}:{credit_cost}"
         redis_key = f"ratelimit:{key}"
 

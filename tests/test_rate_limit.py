@@ -430,6 +430,15 @@ def test_limiter_same_request_id_different_cost(limiter):
     )
 
 
+def test_limiter_request_id_none(limiter):
+    """Test that requests without request_id (explicit None) are all counted."""
+    results = [
+        limiter.is_allowed("ip:1.2.3.4", credit_cost=3, request_id=None)
+        for _ in range(4)
+    ]
+    assert [r[:2] for r in results] == [(True, 7), (True, 4), (True, 1), (False, 1)]
+
+
 @pytest.mark.parametrize(
     "path, cost", [("/healthcheck", 1), ("/table/server_prices", 10)]
 )
