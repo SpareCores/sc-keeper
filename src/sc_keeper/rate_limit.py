@@ -375,12 +375,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # apply penalty for 401 unauthorized responses
         if response.status_code == status.HTTP_401_UNAUTHORIZED:
-            # record penalty credits by calling is_allowed with high limit to ensure it always passes
+            # record penalty credits by calling is_allowed with high limit to ensure it always passes;
+            # use a distinct request_id, otherwise the Redis sorted set member could collide
+            # with the original request's member (when credit_cost == UNAUTHORIZED_PENALTY_CREDITS)
             self.default_limiter.is_allowed(
                 rate_limit_key,
                 credits_per_minute=credits_per_minute + UNAUTHORIZED_PENALTY_CREDITS,
                 credit_cost=UNAUTHORIZED_PENALTY_CREDITS,
-                request_id=get_request_id(),
+                request_id=f"{request_id}:penalty",
             )
             # update credit cost to include penalty
             credit_cost += UNAUTHORIZED_PENALTY_CREDITS
