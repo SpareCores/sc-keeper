@@ -270,7 +270,7 @@ class RedisRateLimiter(RateLimiter):
 
 
 def _get_rate_limit_response_data(
-    credits_per_minute: int, credit_cost: int = 1, retry_after: Optional[int] = 1
+    credits_per_minute: int, credit_cost: int, retry_after: Optional[int]
 ) -> dict:
     """Get rate limit response data (status, headers, content) for reuse.
 
