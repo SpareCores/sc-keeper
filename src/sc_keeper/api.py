@@ -301,7 +301,8 @@ app = FastAPI(
     - Status code returned in case of rate limit exceeded: 429, with a
       `Retry-After` header indicating the number of seconds to wait. If the
       cost of a single request is higher than the credit limit, the 429
-      response has no `Retry-After` header, as retrying will never succeed.
+      response has no `Retry-After` (nor `X-RateLimit-Remaining`) header, as
+      retrying will never succeed.
 
     Furthermore, the number of concurrent heavy requests per worker might be
     also limited to avoid overloading the serving cluster or database; in such
@@ -363,9 +364,6 @@ async def redoc_html():
 # - last added runs first on the request
 # - then last added runs last on the response
 
-# response handler: set cache control header
-app.add_middleware(CacheHeaderMiddleware)
-
 # auth guard: return 401 early (but after logging and rate-limiting) if token was provided but validation failed
 app.add_middleware(AuthGuardMiddleware)
 
@@ -394,6 +392,10 @@ app.add_middleware(
         "X-RateLimit-Remaining",
     ],
 )
+
+# response handler: set cache control header; needs to wrap CORSMiddleware, RateLimitMiddleware
+# and AuthGuardMiddleware so that early responses (preflight, 401, 429) also get the header
+app.add_middleware(CacheHeaderMiddleware)
 
 # logging: need to run ASAP for the request (after auth),
 # and as late as possible for the response (to log e.g. rate-limit params and results)

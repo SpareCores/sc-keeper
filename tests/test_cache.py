@@ -58,6 +58,29 @@ def _never_affordable(client):
     return client.get("/table/server_prices")
 
 
+def _cors_preflight(client):
+    """200 returned early by CORSMiddleware."""
+    return client.options(
+        "/servers",
+        headers={
+            "Origin": "https://example.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+
+def _cors_preflight_disallowed(client):
+    """400 returned early by CORSMiddleware for a disallowed request header."""
+    return client.options(
+        "/servers",
+        headers={
+            "Origin": "https://example.com",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "X-Not-Allowed",
+        },
+    )
+
+
 def _too_many_heavy_jobs(client):
     """503 raised by the concurrency limiter of heavy endpoints."""
 
@@ -78,6 +101,8 @@ def _too_many_heavy_jobs(client):
         (_invalid_token, 401, NO_STORE),
         (_rate_limited, 429, NO_STORE),
         (_never_affordable, 429, NO_STORE),
+        (_cors_preflight, 200, PUBLIC),
+        (_cors_preflight_disallowed, 400, NO_STORE),
         (_too_many_heavy_jobs, 503, NO_STORE),
     ],
     ids=lambda x: x.__name__.strip("_") if callable(x) else None,

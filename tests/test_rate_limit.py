@@ -275,6 +275,40 @@ def test_rate_limit_cors_preflight_logged_but_not_charged(
     assert int(response.headers["X-RateLimit-Remaining"]) == 9
 
 
+def test_rate_limit_cors_preflight_with_invalid_token(monkeypatch):
+    """Test that preflights are answered without token verification or 401 penalty.
+
+    Relies on CORSMiddleware sitting between AuthMiddleware (which skips token
+    verification for preflights) and AuthGuardMiddleware (which would return 401).
+    """
+    from conftest import create_app_with_auth, mock_token_introspection
+
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "1")
+    monkeypatch.setenv("RATE_LIMIT_BACKEND", "memory")
+    monkeypatch.setenv("RATE_LIMIT_CREDITS_PER_MINUTE", "10")
+    monkeypatch.delenv("RATE_LIMIT_DEFAULT_CREDIT_COST", raising=False)
+    import sc_keeper.rate_limit
+
+    importlib.reload(sc_keeper.rate_limit)
+    client = TestClient(
+        create_app_with_auth(monkeypatch, "http://test-auth-server.com/introspect")
+    )
+    with mock_token_introspection({"active": False}):
+        response = client.options(
+            "/healthcheck",
+            headers={
+                "Origin": "https://sparecores.com",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "Authorization",
+                "Authorization": "Bearer bad",
+            },
+        )
+    assert response.status_code == 200
+    assert response.headers["Access-Control-Allow-Origin"] == "*"
+    response = client.get("/healthcheck")
+    assert int(response.headers["X-RateLimit-Remaining"]) == 9
+
+
 # ---------------------------------------------------------------------------
 # Limiter backends: the same scenarios run against the in-memory limiter and
 # the Redis limiter (Lua script executed by fakeredis) to keep them in sync
@@ -478,3 +512,52 @@ def test_rate_limit_401_penalty_charged(limiter, path, cost):
     # check the credits actually recorded by the backend
     _, remaining, _ = limiter.is_allowed("ip:1.2.3.4", credit_cost=1, request_id="x")
     assert remaining == 100 - cost - UNAUTHORIZED_PENALTY_CREDITS - 1
+
+
+def test_limiter_record_ignores_limit(limiter):
+    """Test that recorded credits are stored even beyond the limit."""
+    assert limiter.is_allowed("ip:1.2.3.4", credit_cost=10, request_id="a")[0]
+    limiter.record("ip:1.2.3.4", credit_cost=10, request_id="a:penalty")
+    limiter.record("ip:1.2.3.4", credit_cost=10, request_id="b:penalty")
+    # 30 credits used out of 20
+    assert limiter.is_allowed(
+        "ip:1.2.3.4", credits_per_minute=20, credit_cost=1, request_id="c"
+    ) == (False, 0, 60)
+    assert limiter.is_allowed(
+        "ip:1.2.3.4", credits_per_minute=40, credit_cost=1, request_id="d"
+    ) == (True, 9, 0)
+
+
+def test_limiter_record_request_id_none(limiter):
+    """Test that recorded credits without request_id (explicit None) are all counted."""
+    for _ in range(3):
+        limiter.record("ip:1.2.3.4", credit_cost=2, request_id=None)
+    assert limiter.is_allowed("ip:1.2.3.4", credit_cost=1, request_id="x") == (
+        True,
+        3,
+        0,
+    )
+
+
+def test_rate_limit_401_penalty_without_request_id(limiter):
+    """Test that each 401 penalty is charged when no request_id is set."""
+    from starlette.applications import Starlette
+    from starlette.responses import Response as StarletteResponse
+    from starlette.routing import Route
+
+    from sc_keeper.rate_limit import UNAUTHORIZED_PENALTY_CREDITS, RateLimitMiddleware
+
+    async def unauthorized(request):
+        return StarletteResponse(status_code=401)
+
+    limiter.credits_per_minute = 100
+    app = Starlette(routes=[Route("/healthcheck", unauthorized)])
+    # no LogMiddleware: request_id is None
+    app.add_middleware(RateLimitMiddleware, default_limiter=limiter)
+
+    client = TestClient(app)
+    for _ in range(3):
+        response = client.get("/healthcheck", headers={"X-Forwarded-For": "1.2.3.4"})
+        assert response.status_code == 401
+    _, remaining, _ = limiter.is_allowed("ip:1.2.3.4", credit_cost=1, request_id="x")
+    assert remaining == 100 - 3 * (1 + UNAUTHORIZED_PENALTY_CREDITS) - 1

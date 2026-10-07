@@ -153,6 +153,17 @@ class InMemoryRateLimiter(RateLimiter):
 
         return True, remaining, 0
 
+    def record(self, key: str, credit_cost: int, **kwargs) -> None:
+        """Record credit consumption without checking the limit (e.g. for penalties).
+
+        Args:
+            key: The rate limit key (e.g., "user:123" or "ip:127.0.0.1")
+            credit_cost: The credits to record
+            **kwargs: Additional optional parameters (e.g., request_id, unused in in-memory implementation)
+        """
+        with self._lock:
+            self.windows[key].append((time(), credit_cost))
+
 
 class RedisRateLimiter(RateLimiter):
     """Redis-based rate limiter using sliding window with credit-based tracking."""
@@ -213,9 +224,17 @@ class RedisRateLimiter(RateLimiter):
     def __init__(self, credits_per_minute: int):
         redis_client = get_redis_client()
         self.credits_per_minute = credits_per_minute
+        self._redis_client = redis_client
         self._rate_limiter = redis_client.register_script(self.RATE_LIMIT_SCRIPT)
         # fallback to in-memory limiter when Redis fails
         self._fallback_limiter = InMemoryRateLimiter(credits_per_minute)
+
+    @staticmethod
+    def _member_id(request_id: Optional[str], credit_cost: int) -> str:
+        """Sorted set member storing the credit cost, unique per request."""
+        # fall back to a random id also when request_id is explicitly None, otherwise
+        # all such requests would share the same sorted set member and overwrite each other
+        return f"{request_id or uuid4()}:{credit_cost}"
 
     def is_allowed(
         self,
@@ -239,10 +258,7 @@ class RedisRateLimiter(RateLimiter):
         limit = credits_per_minute or self.credits_per_minute
         now = time()
         window_start = now - self.window_seconds
-        # fall back to a random id also when request_id is explicitly None, otherwise
-        # all such requests would share the same sorted set member and overwrite each other
-        request_id = kwargs.get("request_id") or str(uuid4())
-        member_id = f"{request_id}:{credit_cost}"
+        member_id = self._member_id(kwargs.get("request_id"), credit_cost)
         redis_key = f"ratelimit:{key}"
 
         try:
@@ -267,6 +283,27 @@ class RedisRateLimiter(RateLimiter):
                 key, credits_per_minute, credit_cost, **kwargs
             )
 
+    def record(self, key: str, credit_cost: int, **kwargs) -> None:
+        """Record credit consumption without checking the limit (e.g. for penalties).
+
+        Args:
+            key: The rate limit key (e.g., "user:123" or "ip:127.0.0.1")
+            credit_cost: The credits to record
+            **kwargs: Additional optional parameters (e.g., request_id for uniqueness)
+        """
+        member_id = self._member_id(kwargs.get("request_id"), credit_cost)
+        redis_key = f"ratelimit:{key}"
+        try:
+            pipe = self._redis_client.pipeline()
+            pipe.zadd(redis_key, {member_id: time()})
+            pipe.expire(redis_key, self.window_seconds)
+            pipe.execute()
+        except Exception:
+            logger.exception(
+                "Failed to record credits in Redis, falling back to in-memory limiter"
+            )
+            self._fallback_limiter.record(key, credit_cost, **kwargs)
+
 
 def _get_rate_limit_response_data(
     credits_per_minute: int,
@@ -284,9 +321,6 @@ def _get_rate_limit_response_data(
             will never succeed (credit_cost > credits_per_minute).
     """
     headers = {
-        # per-client response, must not be cached (CacheHeaderMiddleware does not
-        # see this response as RateLimitMiddleware returns early)
-        "Cache-Control": "private, no-store",
         "X-RateLimit-Limit": str(credits_per_minute),
         "X-RateLimit-Cost": str(credit_cost),
     }
@@ -387,14 +421,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # apply penalty for 401 unauthorized responses
         if response.status_code == status.HTTP_401_UNAUTHORIZED:
-            # record penalty credits by calling is_allowed with high limit to ensure it always passes;
+            # always record the penalty, even if it exceeds the limit (e.g. concurrent requests);
             # use a distinct request_id, otherwise the Redis sorted set member could collide
             # with the original request's member (when credit_cost == UNAUTHORIZED_PENALTY_CREDITS)
-            self.default_limiter.is_allowed(
+            self.default_limiter.record(
                 rate_limit_key,
-                credits_per_minute=credits_per_minute + UNAUTHORIZED_PENALTY_CREDITS,
                 credit_cost=UNAUTHORIZED_PENALTY_CREDITS,
-                request_id=f"{request_id}:penalty",
+                request_id=f"{request_id}:penalty" if request_id else None,
             )
             # update credit cost to include penalty
             credit_cost += UNAUTHORIZED_PENALTY_CREDITS
