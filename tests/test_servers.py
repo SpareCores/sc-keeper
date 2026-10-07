@@ -1,5 +1,6 @@
 """Unit tests for /servers endpoint focusing on response data correctness."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from sc_keeper.api import app
@@ -187,6 +188,45 @@ class TestFiltering:
         data, _ = get_servers(gpu_min=1, limit=10, order_by="vcpus")
         assert all(s["gpu_count"] >= 1 for s in data)
 
+    def test_gpu_max(self):
+        data, _ = get_servers(gpu_min=1, gpu_max=2, limit=10, order_by="vcpus")
+        assert data
+        assert all(1 <= s["gpu_count"] <= 2 for s in data)
+
+    def test_gpu_max_zero(self):
+        data, _ = get_servers(
+            gpu_max=0, limit=25, order_by="gpu_count", order_dir="desc"
+        )
+        assert data
+        assert all(s["gpu_count"] == 0 for s in data)
+
+    def test_memory_max(self):
+        data, _ = get_servers(
+            memory_max=4, limit=10, order_by="memory_amount", order_dir="desc"
+        )
+        assert data
+        assert all(s["memory_amount"] <= 4 * 1024 for s in data)
+
+    def test_memory_range(self):
+        data, _ = get_servers(memory_min=8, memory_max=16, limit=25)
+        assert data
+        assert all(8 * 1024 <= s["memory_amount"] <= 16 * 1024 for s in data)
+
+    def test_memory_per_vcpu_min(self):
+        data, _ = get_servers(memory_per_vcpu_min=8, limit=25)
+        assert data
+        assert all(s["memory_amount"] / s["vcpus"] >= 8 * 1024 for s in data)
+
+    def test_memory_per_vcpu_max(self):
+        data, _ = get_servers(memory_per_vcpu_max=2, limit=25)
+        assert data
+        assert all(s["memory_amount"] / s["vcpus"] <= 2 * 1024 for s in data)
+
+    def test_memory_per_vcpu_range(self):
+        data, _ = get_servers(memory_per_vcpu_min=4, memory_per_vcpu_max=4, limit=25)
+        assert data
+        assert all(s["memory_amount"] == 4 * 1024 * s["vcpus"] for s in data)
+
     def test_countries_filter(self):
         """Country filter should reduce the result set compared to unfiltered."""
         _, baseline = get_servers(vendor=["aws"], limit=1, add_total_count_header=True)
@@ -195,6 +235,121 @@ class TestFiltering:
         )
         assert int(filtered.headers["x-total-count"]) < int(
             baseline.headers["x-total-count"]
+        )
+
+
+# ---------------------------------------------------------------------------
+# Selected benchmark filters
+# ---------------------------------------------------------------------------
+
+
+class TestBenchmarkFilters:
+    benchmark_id = "stress_ng:bestn"
+
+    def test_benchmark_score_max(self):
+        data, _ = get_servers(
+            benchmark_id=self.benchmark_id,
+            benchmark_score_max=5000,
+            order_by="selected_benchmark_score",
+            order_dir="desc",
+            limit=25,
+        )
+        assert data
+        assert all(s["selected_benchmark_score"] <= 5000 for s in data)
+
+    def test_benchmark_score_range(self):
+        data, _ = get_servers(
+            benchmark_id=self.benchmark_id,
+            benchmark_score_min=2000,
+            benchmark_score_max=5000,
+            limit=25,
+        )
+        assert data
+        assert all(2000 <= s["selected_benchmark_score"] <= 5000 for s in data)
+
+    def test_benchmark_score_per_vcpu_min(self):
+        data, _ = get_servers(
+            benchmark_id=self.benchmark_id,
+            benchmark_score_per_vcpu_min=1000,
+            limit=25,
+        )
+        assert data
+        assert all(s["selected_benchmark_score"] / s["vcpus"] >= 1000 for s in data)
+
+    @pytest.mark.parametrize(
+        "param",
+        ["benchmark_score_max", "benchmark_score_per_vcpu_min"],
+    )
+    @pytest.mark.parametrize("value", [0, 1])
+    def test_benchmark_id_required(self, param, value):
+        resp = client.get("/servers", params={param: value})
+        assert resp.status_code == 400
+
+    def test_benchmark_score_per_vcpu_min_zero(self):
+        """Zero is a valid lower bound: drops servers without benchmark score."""
+        data, _ = get_servers(
+            benchmark_id=self.benchmark_id,
+            benchmark_score_per_vcpu_min=0,
+            limit=10000,
+        )
+        assert data
+        assert all(s["selected_benchmark_score"] is not None for s in data)
+
+    def test_total_count_header(self):
+        _, all_resp = get_servers(
+            benchmark_id=self.benchmark_id, limit=1, add_total_count_header=True
+        )
+        _, filtered = get_servers(
+            benchmark_id=self.benchmark_id,
+            benchmark_score_per_vcpu_min=1000,
+            limit=1,
+            add_total_count_header=True,
+        )
+        assert int(filtered.headers["x-total-count"]) < int(
+            all_resp.headers["x-total-count"]
+        )
+
+
+# ---------------------------------------------------------------------------
+# Price filter
+# ---------------------------------------------------------------------------
+
+
+class TestPriceMax:
+    def test_price_max(self):
+        data, _ = get_servers(price_max=0.1, order_dir="desc", limit=25)
+        assert data
+        assert all(s["min_price"] <= 0.1 for s in data)
+
+    @pytest.mark.parametrize("allocation", ["SPOT_ONLY", "ONDEMAND_ONLY"])
+    def test_price_max_allocation(self, allocation):
+        data, _ = get_servers(
+            price_max=0.1,
+            best_price_allocation=allocation,
+            order_dir="desc",
+            limit=25,
+        )
+        assert data
+        assert all(s["min_price"] <= 0.1 for s in data)
+
+    def test_price_max_monthly(self):
+        data, _ = get_servers(
+            price_max=50, best_price_allocation="MONTHLY", order_dir="desc", limit=25
+        )
+        assert data
+        assert all(s["min_price"] <= 50 for s in data)
+
+    def test_price_max_in_currency(self):
+        data, _ = get_servers(price_max=0.1, currency="EUR", order_dir="desc", limit=25)
+        assert data
+        # allow for rounding after currency conversion
+        assert all(s["min_price"] <= 0.1 + 1e-4 for s in data)
+
+    def test_price_max_total_count(self):
+        _, all_resp = get_servers(limit=1, add_total_count_header=True)
+        _, filtered = get_servers(price_max=0.1, limit=1, add_total_count_header=True)
+        assert int(filtered.headers["x-total-count"]) < int(
+            all_resp.headers["x-total-count"]
         )
 
 
@@ -596,6 +751,22 @@ class TestPagination:
         _, resp = get_servers(limit=5, add_total_count_header=True)
         assert "x-total-count" in resp.headers
         assert int(resp.headers["x-total-count"]) > 0
+
+    @pytest.mark.parametrize(
+        "allocation", ["ANY", "SPOT_ONLY", "ONDEMAND_ONLY", "MONTHLY"]
+    )
+    def test_total_count_matches_rows(self, allocation):
+        """Total count must not be inflated by a missing join (cartesian product)."""
+        data, resp = get_servers(
+            only_active=False,
+            only_orderable=False,
+            best_price_allocation=allocation,
+            order_by="vcpus",
+            limit=-1,
+            add_total_count_header=True,
+        )
+        assert data
+        assert int(resp.headers["x-total-count"]) == len(data)
 
     def test_no_total_count_by_default(self):
         _, resp = get_servers(limit=5)

@@ -439,8 +439,13 @@ def search_servers(
     benchmark_id: options.benchmark_id = None,
     benchmark_config: options.benchmark_config = None,
     benchmark_score_min: options.benchmark_score_min = None,
+    benchmark_score_max: options.benchmark_score_max = None,
     benchmark_score_per_price_min: options.benchmark_score_per_price_min = None,
+    benchmark_score_per_vcpu_min: options.benchmark_score_per_vcpu_min = None,
     memory_min: options.memory_min = None,
+    memory_max: options.memory_max = None,
+    memory_per_vcpu_min: options.memory_per_vcpu_min = None,
+    memory_per_vcpu_max: options.memory_per_vcpu_max = None,
     network_speed_baseline_min: options.network_speed_baseline_min = None,
     network_speed_max_min: options.network_speed_max_min = None,
     only_active: options.only_active = None,
@@ -460,11 +465,13 @@ def search_servers(
     extra_storage_size: options.extra_storage_size = 0,
     extra_storage_type: options.extra_storage_type = None,
     gpu_min: options.gpu_min = None,
+    gpu_max: options.gpu_max = None,
     gpu_memory_min: options.gpu_memory_min = None,
     gpu_memory_total: options.gpu_memory_total = None,
     gpu_manufacturer: options.gpu_manufacturer = None,
     gpu_family: options.gpu_family = None,
     gpu_model: options.gpu_model = None,
+    price_max: options.best_price_max = None,
     currency: options.currency = "USD",
     best_price_allocation: options.best_price_allocation = BestPriceAllocation.ANY,
     limit: options.limit = 25,
@@ -494,10 +501,16 @@ def search_servers(
 
     # extra lookups
     benchmark_query = gen_benchmark_query(benchmark_id, benchmark_config)
-    if (benchmark_score_min or benchmark_score_per_price_min) and not benchmark_id:
+    benchmark_filtered = (
+        benchmark_score_min
+        or benchmark_score_max is not None
+        or benchmark_score_per_price_min
+        or benchmark_score_per_vcpu_min is not None
+    )
+    if benchmark_filtered and not benchmark_id:
         raise HTTPException(
             status_code=400,
-            detail="benchmark_id is required when filtering by benchmark_score or benchmark_score_per_price",
+            detail="benchmark_id is required when filtering by benchmark_score, benchmark_score_per_price or benchmark_score_per_vcpu",
         )
     if (
         order_by in ["selected_benchmark_score", "selected_benchmark_score_per_price"]
@@ -647,13 +660,31 @@ def search_servers(
         )
     if benchmark_score_min:
         conditions.add(benchmark_query.c.benchmark_score >= benchmark_score_min)
+    if benchmark_score_max is not None:
+        conditions.add(benchmark_query.c.benchmark_score <= benchmark_score_max)
     if benchmark_score_per_price_min:
         conditions.add(
             (benchmark_query.c.benchmark_score / best_price_ref)
             >= benchmark_score_per_price_min
         )
+    if benchmark_score_per_vcpu_min is not None:
+        conditions.add(
+            (benchmark_query.c.benchmark_score / Server.vcpus)
+            >= benchmark_score_per_vcpu_min
+        )
+    # memory is stored in MiB, filters are in GB
     if memory_min:
         conditions.add(Server.memory_amount >= memory_min * 1024)
+    if memory_max:
+        conditions.add(Server.memory_amount <= memory_max * 1024)
+    if memory_per_vcpu_min:
+        conditions.add(
+            Server.memory_amount >= memory_per_vcpu_min * 1024 * Server.vcpus
+        )
+    if memory_per_vcpu_max:
+        conditions.add(
+            Server.memory_amount <= memory_per_vcpu_max * 1024 * Server.vcpus
+        )
     if network_speed_baseline_min:
         conditions.add(Server.network_speed_baseline >= network_speed_baseline_min)
     if network_speed_max_min:
@@ -670,6 +701,9 @@ def search_servers(
         )
     if gpu_min:
         conditions.add(Server.gpu_count >= gpu_min)
+    # 0 is a valid value to search for servers without GPUs
+    if gpu_max is not None:
+        conditions.add(Server.gpu_count <= gpu_max)
     if gpu_memory_min:
         conditions.add(Server.gpu_memory_min >= gpu_memory_min * 1024)
     if gpu_memory_total:
@@ -686,6 +720,11 @@ def search_servers(
         conditions.add(func.json_array_length(Server.storages) >= storage_count_min)
     if vendor:
         conditions.add(Server.vendor_id.in_(vendor))
+    # best_price_ref is in USD, while price_max is in the requested currency
+    if price_max is not None:
+        conditions.add(
+            best_price_ref <= currency_converter.convert(price_max, currency, "USD")
+        )
 
     server_status = status_filter(Server.status, only_active, only_orderable)
     if server_status is not None:
@@ -741,6 +780,8 @@ def search_servers(
             or benchmark_score_stressng_cpu_min
             or benchmark_score_per_price_stressng_cpu_min
             or benchmark_score_per_price_min
+            or price_max is not None
+            or best_price_allocation != BestPriceAllocation.ANY
             or (
                 order_by
                 in [
@@ -758,7 +799,7 @@ def search_servers(
                 & (Server.server_id == ServerExtra.server_id),
                 isouter=True,
             )
-        if (benchmark_score_min or benchmark_score_per_price_min) or (
+        if benchmark_filtered or (
             order_by
             in ["selected_benchmark_score", "selected_benchmark_score_per_price"]
         ):
