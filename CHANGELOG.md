@@ -7,11 +7,16 @@ New feature(s):
 - Add `/inspector/task_block_reason_codes` and
   `/inspector/server/{vendor}/{server}/task_block_reason_codes` endpoints to look up why
   inspector tasks are blocked.
+- Add `Retry-After` header to 429 responses and expose it, along with the `X-RateLimit-*`
+  headers, to browsers via CORS.
 
 Fix(es):
 
 - Fix inflated `X-Total-Count` header for `/servers` when using a non-default
   `best_price_allocation` without filtering for orderable servers.
+- Include CORS headers in early 401 and 429 responses so that browsers can read them.
+- Do not charge rate-limit credits or verify tokens for CORS preflight requests.
+- Fix 401 penalty not being charged by the Redis rate limiter for endpoints costing 10 credits.
 
 Housekeeping:
 
