@@ -173,10 +173,12 @@ class RedisRateLimiter(RateLimiter):
 
     -- get all current entries (oldest first) as flat list of member, score
     local entries = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
-    -- calculate total credits consumed
+    -- calculate total credits consumed, keeping the parsed costs for reuse
+    local costs = {}
     local total_credits = 0
     for i = 1, #entries, 2 do
         local cost = tonumber(string.match(entries[i], ':(%d+)$')) or 0
+        costs[#costs + 1] = cost
         total_credits = total_credits + cost
     end
 
@@ -186,10 +188,10 @@ class RedisRateLimiter(RateLimiter):
         -- (keep in sync with RateLimiter._retry_after)
         local retry_after = window_seconds
         local credits_left = total_credits
-        for i = 1, #entries, 2 do
-            credits_left = credits_left - (tonumber(string.match(entries[i], ':(%d+)$')) or 0)
+        for j, cost in ipairs(costs) do
+            credits_left = credits_left - cost
             if credits_left + credit_cost <= limit then
-                local ts = tonumber(entries[i + 1])
+                local ts = tonumber(entries[2 * j])
                 -- clamp to the window length as entries might have been
                 -- recorded by other workers with clock skew
                 retry_after = math.min(
