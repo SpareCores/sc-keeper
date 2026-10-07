@@ -1,3 +1,22 @@
+## October 2026
+
+New feature(s):
+
+- Add `memory_max`, `memory_per_vcpu_min`, `memory_per_vcpu_max`, `gpu_max`, `price_max`,
+  `benchmark_score_max`, and `benchmark_score_per_vcpu_min` filters to `/servers`.
+- Add `/inspector/task_block_reason_codes` and
+  `/inspector/server/{vendor}/{server}/task_block_reason_codes` endpoints to look up why
+  inspector tasks are blocked.
+
+Fix(es):
+
+- Fix inflated `X-Total-Count` header for `/servers` when using a non-default
+  `best_price_allocation` without filtering for orderable servers.
+
+Housekeeping:
+
+- Stop gzip compression at the origin and let CloudFront compress responses.
+
 ## September 2026
 
 New feature(s):
