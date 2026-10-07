@@ -1,5 +1,6 @@
 """Cache-Control headers, including responses returned early by middlewares."""
 
+import importlib
 from unittest.mock import patch
 
 import pytest
@@ -18,6 +19,10 @@ def client(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_BACKEND", "memory")
     monkeypatch.setenv("RATE_LIMIT_CREDITS_PER_MINUTE", "5")
     monkeypatch.delenv("RATE_LIMIT_DEFAULT_CREDIT_COST", raising=False)
+    # DEFAULT_CREDIT_COST is read at import time
+    import sc_keeper.rate_limit
+
+    importlib.reload(sc_keeper.rate_limit)
     app = create_app_with_auth(monkeypatch, "http://test-auth-server.com/introspect")
     return TestClient(app)
 

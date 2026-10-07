@@ -358,6 +358,9 @@ def limiter(request, monkeypatch, clock):
         def is_allowed(self, *args, **kwargs):
             raise AssertionError("Redis rate limiter fell back to in-memory")
 
+        def record(self, *args, **kwargs):
+            raise AssertionError("Redis rate limiter fell back to in-memory")
+
     redis_limiter._fallback_limiter = NoFallback()
     return redis_limiter
 

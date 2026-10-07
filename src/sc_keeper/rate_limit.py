@@ -39,6 +39,20 @@ class RateLimiter:
     window_seconds: int = 60
     """The sliding window's length (in seconds) used for credit tracking."""
 
+    def is_allowed(
+        self,
+        key: str,
+        credits_per_minute: Optional[int] = None,
+        credit_cost: int = 1,
+        **kwargs,
+    ) -> tuple[bool, int, int]:
+        """Check and record credit consumption if within the limit."""
+        raise NotImplementedError
+
+    def record(self, key: str, credit_cost: int, **kwargs) -> None:
+        """Record credit consumption without checking the limit (e.g. for penalties)."""
+        raise NotImplementedError
+
     @staticmethod
     def _retry_after(
         entries: list[tuple[float, int]],
