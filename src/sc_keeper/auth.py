@@ -708,6 +708,9 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content='{"detail":"Invalid or expired token"}',
                 headers={
+                    # per-client response, must not be cached (CacheHeaderMiddleware does not
+                    # see this response as AuthGuardMiddleware returns early)
+                    "Cache-Control": "private, no-store",
                     "Content-Type": "application/json",
                     "WWW-Authenticate": "Bearer",
                 },
