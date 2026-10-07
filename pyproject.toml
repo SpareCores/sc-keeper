@@ -39,7 +39,7 @@ repository = "https://github.com/SpareCores/sc-keeper"
 issues = "https://github.com/SpareCores/sc-keeper/issues"
 
 [project.optional-dependencies]
-testing = ["pytest"]
+testing = ["pytest", "fakeredis[lua]"]
 apm = ["sentry-sdk[fastapi]"]
 security = ["redis", "common-expression-language", "PyJWT[crypto]"]
 all = ["sparecores-keeper[testing]", "sparecores-keeper[apm]", "sparecores-keeper[security]"]
