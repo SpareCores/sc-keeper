@@ -299,14 +299,18 @@ app = FastAPI(
     - Tracking: per authenticated user or IP address
     - Headers: `X-RateLimit-Limit`, `X-RateLimit-Cost`, `X-RateLimit-Remaining`
     - Status code returned in case of rate limit exceeded: 429, with a
-      `Retry-After` header indicating the number of seconds to wait
+      `Retry-After` header indicating the number of seconds to wait. If the
+      cost of a single request is higher than the credit limit, the 429
+      response has no `Retry-After` header, as retrying will never succeed.
 
     Furthermore, the number of concurrent heavy requests per worker might be
     also limited to avoid overloading the serving cluster or database; in such
     case, a 503 response will be returned.
 
     Temporary errors (such as 429 or 503 status codes) should be retried with
-    exponential backoff.
+    exponential backoff, waiting at least the number of seconds in the
+    `Retry-After` header when present. A 429 without `Retry-After` should not
+    be retried.
 
     The default limits are intended to support exploration and prototyping. If
     you are building something larger, we are glad to help you scale access

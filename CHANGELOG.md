@@ -17,6 +17,8 @@ Fix(es):
 - Include CORS headers in early 401 and 429 responses so that browsers can read them.
 - Do not charge rate-limit credits or verify tokens for CORS preflight requests.
 - Fix 401 penalty not being charged by the Redis rate limiter for endpoints costing 10 credits.
+- Return 429 without `Retry-After` when a single request costs more than the credit limit,
+  as retrying will never succeed.
 
 Housekeeping:
 

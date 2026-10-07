@@ -193,8 +193,6 @@ def test_retry_after_waits_for_enough_credits():
     assert RateLimiter._retry_after(entries, 10, 10, 5, now, 60) == 30
     # need 1: dropping the first entry is enough
     assert RateLimiter._retry_after(entries, 10, 10, 1, now, 60) == 10
-    # can never be afforded
-    assert RateLimiter._retry_after(entries, 10, 10, 11, now, 60) == 60
     # clamped to the window length (e.g. clock skew between workers)
     assert RateLimiter._retry_after([(now + 5, 10)], 10, 10, 1, now, 60) == 60
     # at least 1 second
@@ -220,6 +218,10 @@ def test_rate_limit_never_affordable_has_no_retry_after(monkeypatch, caplog):
         r.rate_limit for r in caplog.records if getattr(r, "event", None) == "response"
     ]
     assert logged[-1]["retry_after"] is None
+    # rejected without consulting (and charging) the limiter
+    response = client.get("/healthcheck")
+    assert response.status_code == 200
+    assert response.headers["X-RateLimit-Remaining"] == "1"
 
 
 def test_rate_limit_retry_after_logged(client_with_rate_limit, caplog):
@@ -383,8 +385,6 @@ def test_limiter_custom_credits_per_minute(limiter):
         (1, (False, 0, 10)),
         # all credits needed: wait for all entries to expire
         (10, (False, 0, 50)),
-        # can never be afforded
-        (11, (False, 0, 60)),
     ],
 )
 def test_limiter_retry_after(limiter, clock, credit_cost, expected):

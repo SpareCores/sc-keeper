@@ -51,6 +51,8 @@ class RateLimiter:
         """Seconds until enough credits expire from the window to afford credit_cost.
 
         Keep in sync with the Lua implementation in RedisRateLimiter.
+        Requests that can never be afforded (credit_cost > limit) are rejected by
+        RateLimitMiddleware before calling the limiter.
 
         Args:
             entries: (timestamp, credits) pairs in the current window, oldest first
@@ -61,11 +63,8 @@ class RateLimiter:
             window_seconds: The sliding window's length (in seconds)
 
         Returns:
-            int: Seconds to wait (between 1 and the window length), or the full
-                window length if the request can never be afforded (credit_cost > limit).
+            int: Seconds to wait (between 1 and the window length).
         """
-        if credit_cost > limit:
-            return window_seconds
         for timestamp, credits in entries:
             total_credits -= credits
             if total_credits + credit_cost <= limit:
@@ -186,20 +185,18 @@ class RedisRateLimiter(RateLimiter):
         -- find when enough of the oldest entries expire to afford this request
         -- (keep in sync with RateLimiter._retry_after)
         local retry_after = window_seconds
-        if credit_cost <= limit then
-            local credits_left = total_credits
-            for i = 1, #entries, 2 do
-                credits_left = credits_left - (tonumber(string.match(entries[i], ':(%d+)$')) or 0)
-                if credits_left + credit_cost <= limit then
-                    local ts = tonumber(entries[i + 1])
-                    -- clamp to the window length as entries might have been
-                    -- recorded by other workers with clock skew
-                    retry_after = math.min(
-                        window_seconds,
-                        math.max(1, math.ceil(ts + window_seconds - now))
-                    )
-                    break
-                end
+        local credits_left = total_credits
+        for i = 1, #entries, 2 do
+            credits_left = credits_left - (tonumber(string.match(entries[i], ':(%d+)$')) or 0)
+            if credits_left + credit_cost <= limit then
+                local ts = tonumber(entries[i + 1])
+                -- clamp to the window length as entries might have been
+                -- recorded by other workers with clock skew
+                retry_after = math.min(
+                    window_seconds,
+                    math.max(1, math.ceil(ts + window_seconds - now))
+                )
+                break
             end
         end
         return {0, math.max(0, limit - total_credits), retry_after}
@@ -270,13 +267,17 @@ class RedisRateLimiter(RateLimiter):
 
 
 def _get_rate_limit_response_data(
-    credits_per_minute: int, credit_cost: int, retry_after: Optional[int]
+    credits_per_minute: int,
+    credit_cost: int,
+    remaining_credits: Optional[int],
+    retry_after: Optional[int],
 ) -> dict:
     """Get rate limit response data (status, headers, content) for reuse.
 
     Args:
         credits_per_minute: The credits per minute limit
         credit_cost: The credit cost of the request
+        remaining_credits: Remaining credits, or None if not known
         retry_after: Seconds to wait before retrying, or None if retrying
             will never succeed (credit_cost > credits_per_minute).
     """
@@ -284,6 +285,8 @@ def _get_rate_limit_response_data(
         "X-RateLimit-Limit": str(credits_per_minute),
         "X-RateLimit-Cost": str(credit_cost),
     }
+    if remaining_credits is not None:
+        headers["X-RateLimit-Remaining"] = str(remaining_credits)
     if retry_after is None:
         content = (
             f"Rate limit exceeded: request cost ({credit_cost} credits) is higher "
@@ -346,9 +349,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # check rate limit
         rate_limit_key = get_rate_limit_key(request)
         request_id = get_request_id()
-        allowed, remaining_credits, retry_after = self.default_limiter.is_allowed(
-            rate_limit_key, credits_per_minute, credit_cost, request_id=request_id
-        )
+        if credit_cost > credits_per_minute:
+            # the request can never be afforded: reject without consulting the
+            # limiter, and without Retry-After as there is no point in retrying
+            allowed, remaining_credits, retry_after = False, None, None
+        else:
+            allowed, remaining_credits, retry_after = self.default_limiter.is_allowed(
+                rate_limit_key, credits_per_minute, credit_cost, request_id=request_id
+            )
 
         # store credit info in request.state for logging by LogMiddleware
         request.state.rate_limit = {
@@ -358,19 +366,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         }
 
         if not allowed:
-            # no point in retrying if the request can never be afforded
-            if credit_cost > credits_per_minute:
-                retry_after = None
             request.state.rate_limit["retry_after"] = retry_after
             data = _get_rate_limit_response_data(
-                credits_per_minute, credit_cost, retry_after
+                credits_per_minute, credit_cost, remaining_credits, retry_after
             )
             response = Response(
                 content=data["content"],
                 status_code=data["status_code"],
             )
             response.headers.update(data["headers"])
-            response.headers["X-RateLimit-Remaining"] = str(remaining_credits)
             return response
 
         response: Response = await call_next(request)
