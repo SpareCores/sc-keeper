@@ -505,7 +505,7 @@ def search_servers(
         benchmark_score_min
         or benchmark_score_max is not None
         or benchmark_score_per_price_min
-        or benchmark_score_per_vcpu_min
+        or benchmark_score_per_vcpu_min is not None
     )
     if benchmark_filtered and not benchmark_id:
         raise HTTPException(
@@ -667,7 +667,7 @@ def search_servers(
             (benchmark_query.c.benchmark_score / best_price_ref)
             >= benchmark_score_per_price_min
         )
-    if benchmark_score_per_vcpu_min:
+    if benchmark_score_per_vcpu_min is not None:
         conditions.add(
             (benchmark_query.c.benchmark_score / Server.vcpus)
             >= benchmark_score_per_vcpu_min
