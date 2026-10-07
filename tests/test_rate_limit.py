@@ -165,3 +165,104 @@ def test_rate_limit_remaining_decreases(client_with_rate_limit):
             remaining = int(response.headers["X-RateLimit-Remaining"])
             remaining_credits.append(remaining)
     assert remaining_credits == [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+
+
+def test_rate_limit_retry_after(client_with_rate_limit):
+    """Test that 429 responses include a Retry-After header exposed via CORS."""
+    origin = {"Origin": "https://sparecores.com"}
+    for _ in range(10):
+        response = client_with_rate_limit.get("/healthcheck", headers=origin)
+        assert response.status_code == 200
+    response = client_with_rate_limit.get("/healthcheck", headers=origin)
+    assert response.status_code == 429
+    assert 1 <= int(response.headers["Retry-After"]) <= 60
+    # CORS headers must be present on the early 429 response for browsers
+    assert response.headers["Access-Control-Allow-Origin"] == "*"
+    exposed = response.headers["Access-Control-Expose-Headers"].lower()
+    assert "retry-after" in exposed
+    assert "x-ratelimit-remaining" in exposed
+
+
+def test_retry_after_waits_for_enough_credits():
+    """Test that Retry-After accounts for the credit cost of the rejected request."""
+    from sc_keeper.rate_limit import RateLimiter
+
+    now = 1000.0
+    entries = [(now - 50, 2), (now - 30, 3), (now - 10, 5)]
+    # 10 used, need 5: dropping the first two entries (5 credits) is enough
+    assert RateLimiter._retry_after(entries, 10, 10, 5, now, 60) == 30
+    # need 1: dropping the first entry is enough
+    assert RateLimiter._retry_after(entries, 10, 10, 1, now, 60) == 10
+    # can never be afforded
+    assert RateLimiter._retry_after(entries, 10, 10, 11, now, 60) == 60
+    # clamped to the window length (e.g. clock skew between workers)
+    assert RateLimiter._retry_after([(now + 5, 10)], 10, 10, 1, now, 60) == 60
+    # at least 1 second
+    assert RateLimiter._retry_after([(now - 59.9, 10)], 10, 10, 1, now, 60) == 1
+
+
+def test_rate_limit_never_affordable_has_no_retry_after(monkeypatch, caplog):
+    """Test that 429 has no Retry-After when the request costs more than the limit."""
+    app = _create_app_with_env(
+        monkeypatch,
+        RATE_LIMIT_ENABLED="1",
+        RATE_LIMIT_BACKEND="memory",
+        RATE_LIMIT_CREDITS_PER_MINUTE="2",
+    )
+    client = TestClient(app)
+    with caplog.at_level("INFO"):
+        # /servers costs 3 credits
+        response = client.get("/servers", params={"limit": 1})
+    assert response.status_code == 429
+    assert "Retry-After" not in response.headers
+    assert "higher than the credit limit" in response.text
+    logged = [
+        r.rate_limit for r in caplog.records if getattr(r, "event", None) == "response"
+    ]
+    assert logged[-1]["retry_after"] is None
+
+
+def test_rate_limit_retry_after_logged(client_with_rate_limit, caplog):
+    """Test that the Retry-After value sent to the client is logged."""
+    for _ in range(10):
+        client_with_rate_limit.get("/healthcheck")
+    with caplog.at_level("INFO"):
+        response = client_with_rate_limit.get("/healthcheck")
+    assert response.status_code == 429
+    logged = [
+        r.rate_limit for r in caplog.records if getattr(r, "event", None) == "response"
+    ]
+    assert logged[-1]["retry_after"] == int(response.headers["Retry-After"])
+
+
+def test_rate_limit_cors_preflight_logged_but_not_charged(
+    client_with_rate_limit, caplog
+):
+    """Test that CORS preflight requests are logged but cost no credits."""
+    preflight_headers = {
+        "Origin": "https://sparecores.com",
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "Authorization",
+    }
+    with caplog.at_level("INFO"):
+        for _ in range(15):
+            response = client_with_rate_limit.options(
+                "/healthcheck", headers=preflight_headers
+            )
+            assert response.status_code == 200
+            assert response.headers["Access-Control-Allow-Origin"] == "*"
+            # set by LogMiddleware
+            assert "X-Request-ID" in response.headers
+            assert "X-RateLimit-Remaining" not in response.headers
+    preflight_logs = [
+        r
+        for r in caplog.records
+        if getattr(r, "event", None) == "response"
+        and getattr(r, "res", {}).get("status_code") == 200
+        and getattr(r, "req", {}).get("method") == "OPTIONS"
+    ]
+    assert len(preflight_logs) == 15
+    # all credits are still available after more preflights than the limit
+    response = client_with_rate_limit.get("/healthcheck")
+    assert response.status_code == 200
+    assert int(response.headers["X-RateLimit-Remaining"]) == 9

@@ -1,5 +1,6 @@
 import logging
 from collections import defaultdict
+from math import ceil
 from os import environ
 from threading import Lock, Thread
 from time import sleep, time
@@ -38,6 +39,41 @@ class RateLimiter:
     window_seconds: int = 60
     """The sliding window's length (in seconds) used for credit tracking."""
 
+    @staticmethod
+    def _retry_after(
+        entries: list[tuple[float, int]],
+        total_credits: int,
+        limit: int,
+        credit_cost: int,
+        now: float,
+        window_seconds: int,
+    ) -> int:
+        """Seconds until enough credits expire from the window to afford credit_cost.
+
+        Keep in sync with the Lua implementation in RedisRateLimiter.
+
+        Args:
+            entries: (timestamp, credits) pairs in the current window, oldest first
+            total_credits: Sum of credits in entries
+            limit: The credits per minute limit
+            credit_cost: The credit cost of the rejected request
+            now: Current timestamp
+            window_seconds: The sliding window's length (in seconds)
+
+        Returns:
+            int: Seconds to wait (between 1 and the window length), or the full
+                window length if the request can never be afforded (credit_cost > limit).
+        """
+        if credit_cost > limit:
+            return window_seconds
+        for timestamp, credits in entries:
+            total_credits -= credits
+            if total_credits + credit_cost <= limit:
+                # clamp to the window length to be safe from clock skew
+                wait = ceil(timestamp + window_seconds - now)
+                return min(window_seconds, max(1, wait))
+        return window_seconds
+
 
 class InMemoryRateLimiter(RateLimiter):
     """Simple in-memory rate limiter using a sliding window with credit-based tracking."""
@@ -74,7 +110,7 @@ class InMemoryRateLimiter(RateLimiter):
         credits_per_minute: Optional[int] = None,
         credit_cost: int = 1,
         **kwargs,
-    ) -> tuple[bool, int]:
+    ) -> tuple[bool, int, int]:
         """
         Check if request is allowed based on recent credit consumption in the last minute.
 
@@ -85,7 +121,8 @@ class InMemoryRateLimiter(RateLimiter):
             **kwargs: Additional optional parameters (e.g., request_id, unused in in-memory implementation)
 
         Returns:
-            tuple[bool, int]: (allowed, remaining_credits)
+            tuple[bool, int, int]: (allowed, remaining_credits, retry_after_seconds),
+                where retry_after_seconds is 0 when the request is allowed.
         """
         limit = credits_per_minute or self.credits_per_minute
         now = time()
@@ -102,12 +139,20 @@ class InMemoryRateLimiter(RateLimiter):
             total_credits = sum(credits for _, credits in self.windows[key])
             if total_credits + credit_cost > limit:
                 remaining = max(0, limit - total_credits)
-                return False, remaining
+                retry_after = self._retry_after(
+                    self.windows[key],
+                    total_credits,
+                    limit,
+                    credit_cost,
+                    now,
+                    self.window_seconds,
+                )
+                return False, remaining, retry_after
             # record current request's credit consumption
             self.windows[key].append((now, credit_cost))
             remaining = limit - (total_credits + credit_cost)
 
-        return True, remaining
+        return True, remaining, 0
 
 
 class RedisRateLimiter(RateLimiter):
@@ -127,24 +172,43 @@ class RedisRateLimiter(RateLimiter):
     -- drop old entries
     redis.call('ZREMRANGEBYSCORE', key, 0, window_start)
 
-    -- get all current entries
-    local entries = redis.call('ZRANGE', key, 0, -1)
+    -- get all current entries (oldest first) as flat list of member, score
+    local entries = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
     -- calculate total credits consumed
     local total_credits = 0
-    for _, entry in ipairs(entries) do
-        local cost = tonumber(string.match(entry, ':(%d+)$')) or 0
+    for i = 1, #entries, 2 do
+        local cost = tonumber(string.match(entries[i], ':(%d+)$')) or 0
         total_credits = total_credits + cost
     end
 
     -- early return if not enough credits left
     if total_credits + credit_cost > limit then
-        return {0, math.max(0, limit - total_credits)}
+        -- find when enough of the oldest entries expire to afford this request
+        -- (keep in sync with RateLimiter._retry_after)
+        local retry_after = window_seconds
+        if credit_cost <= limit then
+            local credits_left = total_credits
+            for i = 1, #entries, 2 do
+                credits_left = credits_left - (tonumber(string.match(entries[i], ':(%d+)$')) or 0)
+                if credits_left + credit_cost <= limit then
+                    local ts = tonumber(entries[i + 1])
+                    -- clamp to the window length as entries might have been
+                    -- recorded by other workers with clock skew
+                    retry_after = math.min(
+                        window_seconds,
+                        math.max(1, math.ceil(ts + window_seconds - now))
+                    )
+                    break
+                end
+            end
+        end
+        return {0, math.max(0, limit - total_credits), retry_after}
     end
 
     -- record current request's credit consumption
     redis.call('ZADD', key, now, member_id)
     redis.call('EXPIRE', key, window_seconds)
-    return {1, limit - total_credits - credit_cost}
+    return {1, limit - total_credits - credit_cost, 0}
     """
 
     def __init__(self, credits_per_minute: int):
@@ -160,7 +224,7 @@ class RedisRateLimiter(RateLimiter):
         credits_per_minute: Optional[int] = None,
         credit_cost: int = 1,
         **kwargs,
-    ) -> tuple[bool, int]:
+    ) -> tuple[bool, int, int]:
         """Check if request is allowed based on recent credit consumption in the last minute.
 
         Args:
@@ -170,7 +234,8 @@ class RedisRateLimiter(RateLimiter):
             **kwargs: Additional optional parameters (e.g., request_id for uniqueness)
 
         Returns:
-            tuple[bool, int]: (allowed, remaining_credits)
+            tuple[bool, int, int]: (allowed, remaining_credits, retry_after_seconds),
+                where retry_after_seconds is 0 when the request is allowed.
         """
         limit = credits_per_minute or self.credits_per_minute
         now = time()
@@ -191,7 +256,7 @@ class RedisRateLimiter(RateLimiter):
                     self.window_seconds,
                 ],
             )
-            return bool(result[0]), int(result[1])
+            return bool(result[0]), int(result[1]), int(result[2])
         except Exception:
             logger.exception(
                 "Failed to check rate limit with Redis, falling back to in-memory limiter"
@@ -203,16 +268,32 @@ class RedisRateLimiter(RateLimiter):
 
 
 def _get_rate_limit_response_data(
-    credits_per_minute: int, credit_cost: int = 1
+    credits_per_minute: int, credit_cost: int = 1, retry_after: Optional[int] = 1
 ) -> dict:
-    """Get rate limit response data (status, headers, content) for reuse."""
+    """Get rate limit response data (status, headers, content) for reuse.
+
+    Args:
+        credits_per_minute: The credits per minute limit
+        credit_cost: The credit cost of the request
+        retry_after: Seconds to wait before retrying, or None if retrying
+            will never succeed (credit_cost > credits_per_minute).
+    """
+    headers = {
+        "X-RateLimit-Limit": str(credits_per_minute),
+        "X-RateLimit-Cost": str(credit_cost),
+    }
+    if retry_after is None:
+        content = (
+            f"Rate limit exceeded: request cost ({credit_cost} credits) is higher "
+            f"than the credit limit ({credits_per_minute} credits per minute)."
+        )
+    else:
+        content = "Rate limit exceeded."
+        headers["Retry-After"] = str(retry_after)
     return {
         "status_code": status.HTTP_429_TOO_MANY_REQUESTS,
-        "content": "Rate limit exceeded.",
-        "headers": {
-            "X-RateLimit-Limit": str(credits_per_minute),
-            "X-RateLimit-Cost": str(credit_cost),
-        },
+        "content": content,
+        "headers": headers,
     }
 
 
@@ -263,7 +344,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # check rate limit
         rate_limit_key = get_rate_limit_key(request)
         request_id = get_request_id()
-        allowed, remaining_credits = self.default_limiter.is_allowed(
+        allowed, remaining_credits, retry_after = self.default_limiter.is_allowed(
             rate_limit_key, credits_per_minute, credit_cost, request_id=request_id
         )
 
@@ -275,7 +356,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         }
 
         if not allowed:
-            data = _get_rate_limit_response_data(credits_per_minute, credit_cost)
+            # no point in retrying if the request can never be afforded
+            if credit_cost > credits_per_minute:
+                retry_after = None
+            request.state.rate_limit["retry_after"] = retry_after
+            data = _get_rate_limit_response_data(
+                credits_per_minute, credit_cost, retry_after
+            )
             response = Response(
                 content=data["content"],
                 status_code=data["status_code"],
@@ -289,7 +376,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # apply penalty for 401 unauthorized responses
         if response.status_code == status.HTTP_401_UNAUTHORIZED:
             # record penalty credits by calling is_allowed with high limit to ensure it always passes
-            _, _ = self.default_limiter.is_allowed(
+            self.default_limiter.is_allowed(
                 rate_limit_key,
                 credits_per_minute=credits_per_minute + UNAUTHORIZED_PENALTY_CREDITS,
                 credit_cost=UNAUTHORIZED_PENALTY_CREDITS,
