@@ -282,6 +282,9 @@ def _get_rate_limit_response_data(
             will never succeed (credit_cost > credits_per_minute).
     """
     headers = {
+        # per-client response, must not be cached (CacheHeaderMiddleware does not
+        # see this response as RateLimitMiddleware returns early)
+        "Cache-Control": "private, no-store",
         "X-RateLimit-Limit": str(credits_per_minute),
         "X-RateLimit-Cost": str(credit_cost),
     }
@@ -373,6 +376,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             response = Response(
                 content=data["content"],
                 status_code=data["status_code"],
+                media_type="text/plain",
             )
             response.headers.update(data["headers"])
             return response

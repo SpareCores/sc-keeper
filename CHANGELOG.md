@@ -19,6 +19,7 @@ Fix(es):
 - Fix 401 penalty not being charged by the Redis rate limiter for endpoints costing 10 credits.
 - Return 429 without `Retry-After` when a single request costs more than the credit limit,
   as retrying will never succeed.
+- Prevent caching of 429 responses.
 
 Housekeeping:
 

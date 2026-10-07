@@ -176,6 +176,10 @@ def test_rate_limit_retry_after(client_with_rate_limit):
     response = client_with_rate_limit.get("/healthcheck", headers=origin)
     assert response.status_code == 429
     assert 1 <= int(response.headers["Retry-After"]) <= 60
+    assert response.headers["X-RateLimit-Remaining"] == "0"
+    # per-client response, must not be cached by CDN/proxies
+    assert response.headers["Cache-Control"] == "private, no-store"
+    assert response.headers["Content-Type"].startswith("text/plain")
     # CORS headers must be present on the early 429 response for browsers
     assert response.headers["Access-Control-Allow-Origin"] == "*"
     exposed = response.headers["Access-Control-Expose-Headers"].lower()
@@ -213,6 +217,7 @@ def test_rate_limit_never_affordable_has_no_retry_after(monkeypatch, caplog):
         response = client.get("/servers", params={"limit": 1})
     assert response.status_code == 429
     assert "Retry-After" not in response.headers
+    assert response.headers["Cache-Control"] == "private, no-store"
     assert "higher than the credit limit" in response.text
     logged = [
         r.rate_limit for r in caplog.records if getattr(r, "event", None) == "response"
