@@ -180,7 +180,7 @@ memory_max = Annotated[
     Query(
         title="Maximum memory",
         description="Maximum amount of memory in GBs.",
-        ge=0,
+        gt=0,
         json_schema_extra={
             "category_id": CommonFilterCategory.MEMORY,
             "unit": "GB",
@@ -194,7 +194,7 @@ memory_per_vcpu_min = Annotated[
     Query(
         title="Minimum memory per vCPU",
         description="Minimum amount of memory (GBs) per virtual CPU.",
-        ge=0,
+        gt=0,
         json_schema_extra={
             "category_id": CommonFilterCategory.MEMORY,
             "unit": "GB/vCPU",
@@ -208,7 +208,7 @@ memory_per_vcpu_max = Annotated[
     Query(
         title="Maximum memory per vCPU",
         description="Maximum amount of memory (GBs) per virtual CPU.",
-        ge=0,
+        gt=0,
         json_schema_extra={
             "category_id": CommonFilterCategory.MEMORY,
             "unit": "GB/vCPU",
@@ -240,7 +240,7 @@ best_price_max = Annotated[
             "(hourly price, or monthly price when MONTHLY is selected), "
             "including the optional extra traffic and storage costs."
         ),
-        ge=0,
+        gt=0,
         json_schema_extra={
             "category_id": CommonFilterCategory.PRICE,
             "step": 0.0001,
