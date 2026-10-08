@@ -788,3 +788,36 @@ def test_auth_static_tokens_last_resort(monkeypatch):
         assert response.status_code == 200
         assert response.json()["user_id"] == "static_user"
         assert mock_client.post_call_count == 1
+
+
+def test_auth_skipped_for_cors_preflight(client_with_auth):
+    """Test that CORS preflight requests do not trigger token verification."""
+    client, _ = client_with_auth
+    with mock_token_introspection({"active": False}) as mock_client:
+        response = client.options(
+            "/me",
+            headers={
+                "Origin": "https://sparecores.com",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "Authorization",
+                # browsers never send this on preflight, but make sure it's ignored
+                "Authorization": "Bearer random_token",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["Access-Control-Allow-Origin"] == "*"
+        assert mock_client.post_call_count == 0
+
+
+def test_auth_verified_for_non_preflight_options(client_with_auth):
+    """Test that plain OPTIONS requests (not CORS preflight) still verify the token."""
+    client, _ = client_with_auth
+    with mock_token_introspection(
+        {"active": True, "sub": "user123", "scope": "read"}
+    ) as mock_client:
+        response = client.options(
+            "/healthcheck", headers={"Authorization": "Bearer valid_options_token"}
+        )
+        # no OPTIONS route, but the token was accepted (not 401)
+        assert response.status_code == 405
+        assert mock_client.post_call_count == 1

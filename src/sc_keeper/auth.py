@@ -672,11 +672,25 @@ async def current_user(
     )
 
 
+def _is_cors_preflight(request) -> bool:
+    """Check if request is a CORS preflight (same logic as Starlette's CORSMiddleware)."""
+    return (
+        request.method == "OPTIONS"
+        and "origin" in request.headers
+        and "access-control-request-method" in request.headers
+    )
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     """Middleware that extracts and stores user info early in the request lifecycle."""
 
     async def dispatch(self, request, call_next):
-        request.state.user = await extract_user_from_request(request)
+        # skip token verification for CORS preflight requests: browsers never send
+        # credentials with them, and they are answered by CORSMiddleware anyway
+        if _is_cors_preflight(request):
+            request.state.user = None
+        else:
+            request.state.user = await extract_user_from_request(request)
         response = await call_next(request)
         return response
 

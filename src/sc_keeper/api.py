@@ -298,14 +298,20 @@ app = FastAPI(
       queries, e.g. `/servers` (3 credits) or `/server_prices` (5 credits)
     - Tracking: per authenticated user or IP address
     - Headers: `X-RateLimit-Limit`, `X-RateLimit-Cost`, `X-RateLimit-Remaining`
-    - Status code returned in case of rate limit exceeded: 429
+    - Status code returned in case of rate limit exceeded: 429, with a
+      `Retry-After` header indicating the number of seconds to wait. If the
+      cost of a single request is higher than the credit limit, the 429
+      response has no `Retry-After` (nor `X-RateLimit-Remaining`) header, as
+      retrying will never succeed.
 
     Furthermore, the number of concurrent heavy requests per worker might be
     also limited to avoid overloading the serving cluster or database; in such
     case, a 503 response will be returned.
 
     Temporary errors (such as 429 or 503 status codes) should be retried with
-    exponential backoff.
+    exponential backoff, waiting at least the number of seconds in the
+    `Retry-After` header when present. A 429 without `Retry-After` should not
+    be retried.
 
     The default limits are intended to support exploration and prototyping. If
     you are building something larger, we are glad to help you scale access
@@ -358,17 +364,6 @@ async def redoc_html():
 # - last added runs first on the request
 # - then last added runs last on the response
 
-# CORS: allows all origins; Sentry headers + Authorization header required for the Angular app
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_headers=["Authorization", "sentry-trace", "baggage", "x-application-id"],
-    expose_headers=["X-Total-Count"],
-)
-
-# response handler: set cache control header
-app.add_middleware(CacheHeaderMiddleware)
-
 # auth guard: return 401 early (but after logging and rate-limiting) if token was provided but validation failed
 app.add_middleware(AuthGuardMiddleware)
 
@@ -377,8 +372,30 @@ rate_limiter = create_rate_limiter()
 if rate_limiter:
     app.add_middleware(RateLimitMiddleware, default_limiter=rate_limiter)
 
-# Compression is handled by CloudFront (compress=True). Origin gzip would
-# create separate Accept-Encoding cache variants that can diverge.
+# GZipMiddleware was removed as compression is handled by CloudFront (compress=True)
+# as origin gzip would create separate Accept-Encoding cache variants that can diverge.
+
+# CORS: allows all origins; Sentry headers + Authorization header required for the Angular app;
+# needs to wrap AuthGuardMiddleware and RateLimitMiddleware so that early responses (401, 429)
+# also get the CORS headers, otherwise the browser would not let the frontend read them
+# (e.g. Retry-After); and runs after LogMiddleware so that preflight requests are logged,
+# but answered before rate-limiting (no credits charged)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_headers=["Authorization", "sentry-trace", "baggage", "x-application-id"],
+    expose_headers=[
+        "X-Total-Count",
+        "Retry-After",
+        "X-RateLimit-Limit",
+        "X-RateLimit-Cost",
+        "X-RateLimit-Remaining",
+    ],
+)
+
+# response handler: set cache control header; needs to wrap CORSMiddleware, RateLimitMiddleware
+# and AuthGuardMiddleware so that early responses (preflight, 401, 429) also get the header
+app.add_middleware(CacheHeaderMiddleware)
 
 # logging: need to run ASAP for the request (after auth),
 # and as late as possible for the response (to log e.g. rate-limit params and results)
