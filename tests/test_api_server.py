@@ -108,7 +108,7 @@ def _make_server(
         "family": family,
         "vcpus": vcpus,
         "memory_amount": memory,
-        "gpu_count": gpu,
+        "accelerator_count": gpu,
         "cpu_allocation": CpuAllocation.DEDICATED,
         "cpu_architecture": CpuArchitecture.X86_64,
         "status": Status.ACTIVE,
@@ -475,10 +475,12 @@ class TestSimilarBySpecs:
         resp = client.get(_url("s2", "specs", 9))
         data = resp.json()
         # s2 has 0 GPUs – non-GPU servers should come first
-        gpu_zero = [d for d in data if d["gpu_count"] == 0]
-        gpu_nonzero = [d for d in data if d["gpu_count"] > 0]
+        gpu_zero = [d for d in data if d["accelerator_count"] == 0]
+        gpu_nonzero = [d for d in data if d["accelerator_count"] > 0]
         if gpu_zero and gpu_nonzero:
-            first_gpu_idx = next(i for i, d in enumerate(data) if d["gpu_count"] > 0)
+            first_gpu_idx = next(
+                i for i, d in enumerate(data) if d["accelerator_count"] > 0
+            )
             assert first_gpu_idx >= len(gpu_zero)
 
     def test_specs_excludes_self(self, client):

@@ -276,12 +276,15 @@ def get_sort_key_for_benchmark_configs(item):
         "Geekbench",
         "Passmark",
         "Memory bandwidth",
-        "OpenSSL",
+        "Memory latency",
+        "Cryptography",
         "Compression algos",
         "Static web server",
-        "Redis",
-        "LLM inference speed",
         "Database",
+        "LLM inference speed",
+        "GPU bandwidth",
+        "GPU latency",
+        "Workload profile",
         "Other",
     ]
     sub_category_order = [

@@ -1,7 +1,19 @@
 ## October 2026
 
+Breaking change(s):
+
+- Upgrade to `sparecores-crawler` 0.10.0: the `gpu_*` and `gpus` fields of `Server` are
+  renamed to `accelerator_*` and `accelerators` in the API responses and in `order_by`.
+  The `gpu_*` query parameters of `/servers` and `/server_prices` are unchanged.
+
 New feature(s):
 
+- Expose the new `Server.accelerator_type`, `series`, `api_reference_object`, and
+  `compatible_storage_ids` fields in `/table/server/meta`.
+- Return the benchmark `subcategory` in `/benchmark_configs`.
+- Exclude TPUs from the `gpu_model` filter values using `Server.accelerator_type`.
+- Order `/benchmark_configs` by the new benchmark categories (`Cryptography`, `Database`,
+  `Memory latency`, `GPU bandwidth`, `GPU latency`, `Workload profile`).
 - Add `memory_max`, `memory_per_vcpu_min`, `memory_per_vcpu_max`, `gpu_max`, `price_max`,
   `benchmark_score_max`, and `benchmark_score_per_vcpu_min` filters to `/servers`.
 - Add `/inspector/task_block_reason_codes` and

@@ -22,10 +22,12 @@ def _get_category(server_column_name: str) -> str:
         "display_name",
         "description",
         "family",
+        "series",
         "status",
         "observed_at",
         "hw_virt",
         "average_time_to_start",
+        "api_reference_object",
     ]:
         return "meta"
     if server_column_name in [
@@ -37,9 +39,12 @@ def _get_category(server_column_name: str) -> str:
         return "cpu"
     if server_column_name.startswith("memory"):
         return "memory"
-    if server_column_name.startswith("gpu"):
+    if server_column_name.startswith("accelerator"):
         return "gpu"
-    if server_column_name.startswith("storage"):
+    if (
+        server_column_name.startswith("storage")
+        or server_column_name == "compatible_storage_ids"
+    ):
         return "storage"
     if (
         server_column_name.endswith("_traffic")
@@ -55,7 +60,6 @@ def _get_name(server_column_name: str) -> str:
     mapping = {
         "vcpus": "vCPUs",
         "cpus": "CPUs",
-        "gpus": "GPUs",
         "ipv4": "IPv4",
     }
     if server_column_name in mapping:
@@ -64,8 +68,8 @@ def _get_name(server_column_name: str) -> str:
     name = name.replace(" Id", " ID")
     name = name.replace("Api ", "API ")
     name = name.replace("Cpu ", "CPU ")
-    name = name.replace("Gpu ", "GPU ")
     name = name.replace(" Ecc", " ECC")
+    name = name.replace(" Ids", " IDs")
     return name
 
 
@@ -83,8 +87,8 @@ def _get_unit(server_column_name: str) -> str:
         "memory_amount": "MiB",
         "memory_amount_actual": "MiB",
         "memory_speed": "Mhz",
-        "gpu_memory_min": "MiB",
-        "gpu_memory_total": "MiB",
+        "accelerator_memory_min": "MiB",
+        "accelerator_memory_total": "MiB",
         "storage_size": "GB",
         "network_speed_baseline": "Gbps",
         "network_speed_max": "Gbps",
