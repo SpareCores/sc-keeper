@@ -11,6 +11,7 @@ from fastapi import (
 from sc_crawler.table_bases import ServerBase
 from sc_crawler.table_fields import ResourceType, Status
 from sc_crawler.tables import (
+    Benchmark,
     BenchmarkScore,
     Region,
     Server,
@@ -427,7 +428,8 @@ def get_server_benchmarks(
     vendor_id, server_id = server_args
 
     results = db.exec(
-        select(BenchmarkScore)
+        select(BenchmarkScore, Benchmark.category, Benchmark.subcategory)
+        .join(Benchmark)
         .where(BenchmarkScore.resource_type == ResourceType.SERVER)
         .where(BenchmarkScore.status == Status.ACTIVE)
         .where(BenchmarkScore.vendor_id == vendor_id)
@@ -435,8 +437,11 @@ def get_server_benchmarks(
     ).all()
 
     benchmarks = []
-    for i, result in enumerate(results):
+    for i, (result, category, subcategory) in enumerate(results):
         benchmark = result.model_dump()
+        # only used for sorting, not part of the response model
+        benchmark["category"] = category
+        benchmark["subcategory"] = subcategory
         benchmark["original_order"] = i
         benchmarks.append(benchmark)
 

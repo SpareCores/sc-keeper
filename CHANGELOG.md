@@ -13,7 +13,10 @@ New feature(s):
 - Return the benchmark `subcategory` in `/benchmark_configs`.
 - Exclude TPUs from the `gpu_model` filter values using `Server.accelerator_type`.
 - Order `/benchmark_configs` by the new benchmark categories (`Cryptography`, `Database`,
-  `Memory latency`, `GPU bandwidth`, `GPU latency`, `Workload profile`).
+  `Memory latency`, `GPU bandwidth`, `GPU latency`, `Workload profile`), then by
+  subcategory and `benchmark_id`. `/server/{vendor}/{server}/benchmarks` and
+  `/database/{vendor}/{database}/benchmarks` use the same category-based ordering.
+  The order of the configs of a benchmark is unchanged.
 - Add `memory_max`, `memory_per_vcpu_min`, `memory_per_vcpu_max`, `gpu_max`, `price_max`,
   `benchmark_score_max`, and `benchmark_score_per_vcpu_min` filters to `/servers`.
 - Add `/inspector/task_block_reason_codes` and
