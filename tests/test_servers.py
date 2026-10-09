@@ -186,19 +186,19 @@ class TestFiltering:
 
     def test_gpu_min(self):
         data, _ = get_servers(gpu_min=1, limit=10, order_by="vcpus")
-        assert all(s["gpu_count"] >= 1 for s in data)
+        assert all(s["accelerator_count"] >= 1 for s in data)
 
     def test_gpu_max(self):
         data, _ = get_servers(gpu_min=1, gpu_max=2, limit=10, order_by="vcpus")
         assert data
-        assert all(1 <= s["gpu_count"] <= 2 for s in data)
+        assert all(1 <= s["accelerator_count"] <= 2 for s in data)
 
     def test_gpu_max_zero(self):
         data, _ = get_servers(
-            gpu_max=0, limit=25, order_by="gpu_count", order_dir="desc"
+            gpu_max=0, limit=25, order_by="accelerator_count", order_dir="desc"
         )
         assert data
-        assert all(s["gpu_count"] == 0 for s in data)
+        assert all(s["accelerator_count"] == 0 for s in data)
 
     def test_memory_max(self):
         data, _ = get_servers(

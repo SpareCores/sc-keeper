@@ -11,6 +11,7 @@ from fastapi import (
 from sc_crawler.table_bases import ServerBase
 from sc_crawler.table_fields import ResourceType, Status
 from sc_crawler.tables import (
+    Benchmark,
     BenchmarkScore,
     Region,
     Server,
@@ -156,12 +157,12 @@ def get_similar_servers(
         query = (
             query.where(Server.vendor_id == serverobj.vendor_id)
             .where(Server.family == serverobj.family)
-            .order_by(Server.vcpus, Server.gpu_count, Server.memory_amount)
+            .order_by(Server.vcpus, Server.accelerator_count, Server.memory_amount)
         )
 
     if by == "specs":
         query = query.order_by(
-            func.abs(Server.gpu_count - serverobj.gpu_count) * 10e6
+            func.abs(Server.accelerator_count - serverobj.accelerator_count) * 10e6
             + func.abs(Server.vcpus - serverobj.vcpus) * 10e3
             + func.abs(Server.memory_amount - serverobj.memory_amount) / 1e03
         )
@@ -427,7 +428,8 @@ def get_server_benchmarks(
     vendor_id, server_id = server_args
 
     results = db.exec(
-        select(BenchmarkScore)
+        select(BenchmarkScore, Benchmark.category, Benchmark.subcategory)
+        .join(Benchmark, isouter=True)
         .where(BenchmarkScore.resource_type == ResourceType.SERVER)
         .where(BenchmarkScore.status == Status.ACTIVE)
         .where(BenchmarkScore.vendor_id == vendor_id)
@@ -435,8 +437,11 @@ def get_server_benchmarks(
     ).all()
 
     benchmarks = []
-    for i, result in enumerate(results):
+    for i, (result, category, subcategory) in enumerate(results):
         benchmark = result.model_dump()
+        # only used for sorting, not part of the response model
+        benchmark["category"] = category
+        benchmark["subcategory"] = subcategory
         benchmark["original_order"] = i
         benchmarks.append(benchmark)
 

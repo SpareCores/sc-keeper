@@ -3,7 +3,7 @@ from typing import List
 from fastapi import APIRouter, Depends, Request
 from sc_crawler.table_bases import DatabaseBase
 from sc_crawler.table_fields import ResourceType, Status
-from sc_crawler.tables import BenchmarkScore, DatabasePrice, Region
+from sc_crawler.tables import Benchmark, BenchmarkScore, DatabasePrice, Region
 from sqlmodel import Session, select
 
 from .. import parameters as options
@@ -75,7 +75,8 @@ def get_database_benchmarks(
     vendor_id, database_id = database_args
 
     results = db.exec(
-        select(BenchmarkScore)
+        select(BenchmarkScore, Benchmark.category, Benchmark.subcategory)
+        .join(Benchmark, isouter=True)
         .where(BenchmarkScore.resource_type == ResourceType.DATABASE)
         .where(BenchmarkScore.status == Status.ACTIVE)
         .where(BenchmarkScore.vendor_id == vendor_id)
@@ -83,8 +84,11 @@ def get_database_benchmarks(
     ).all()
 
     benchmarks = []
-    for i, result in enumerate(results):
+    for i, (result, category, subcategory) in enumerate(results):
         benchmark = result.model_dump()
+        # only used for sorting, not part of the response model
+        benchmark["category"] = category
+        benchmark["subcategory"] = subcategory
         benchmark["original_order"] = i
         benchmarks.append(benchmark)
 
