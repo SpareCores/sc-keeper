@@ -76,7 +76,7 @@ def get_database_benchmarks(
 
     results = db.exec(
         select(BenchmarkScore, Benchmark.category, Benchmark.subcategory)
-        .join(Benchmark)
+        .join(Benchmark, isouter=True)
         .where(BenchmarkScore.resource_type == ResourceType.DATABASE)
         .where(BenchmarkScore.status == Status.ACTIVE)
         .where(BenchmarkScore.vendor_id == vendor_id)

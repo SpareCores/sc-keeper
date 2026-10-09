@@ -429,7 +429,7 @@ def get_server_benchmarks(
 
     results = db.exec(
         select(BenchmarkScore, Benchmark.category, Benchmark.subcategory)
-        .join(Benchmark)
+        .join(Benchmark, isouter=True)
         .where(BenchmarkScore.resource_type == ResourceType.SERVER)
         .where(BenchmarkScore.status == Status.ACTIVE)
         .where(BenchmarkScore.vendor_id == vendor_id)

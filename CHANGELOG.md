@@ -4,14 +4,14 @@ Breaking change(s):
 
 - Upgrade to `sparecores-crawler` 0.10.0: the `gpu_*` and `gpus` fields of `Server` are
   renamed to `accelerator_*` and `accelerators` in the API responses and in `order_by`.
-  The `gpu_*` query parameters of `/servers` and `/server_prices` are unchanged.
+  The `gpu_*` query parameters of `/servers` and `/server_prices` are unchanged, and
+  still include TPUs (e.g. `gpu_min` filters on `accelerator_count`).
 
 New feature(s):
 
 - Expose the new `Server.accelerator_type`, `series`, `api_reference_object`, and
   `compatible_storage_ids` fields in `/table/server/meta`.
 - Return the benchmark `subcategory` in `/benchmark_configs`.
-- Exclude TPUs from the `gpu_model` filter values using `Server.accelerator_type`.
 - Order `/benchmark_configs` by the new benchmark categories (`Cryptography`, `Database`,
   `Memory latency`, `GPU bandwidth`, `GPU latency`, `Workload profile`), then by
   subcategory and `benchmark_id`. `/server/{vendor}/{server}/benchmarks` and
@@ -27,6 +27,9 @@ New feature(s):
 
 Fix(es):
 
+- Exclude TPUs from the `gpu_model` filter values based on the new
+  `Server.accelerator_type`, as the TPU model name patterns no longer matched the
+  normalized model names (e.g. `v5e`).
 - Fix inflated `X-Total-Count` header for `/servers` when using a non-default
   `best_price_allocation` without filtering for orderable servers.
 - Include CORS headers in early 401 and 429 responses so that browsers can read them.
