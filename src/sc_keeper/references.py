@@ -17,7 +17,7 @@ from sc_crawler.table_bases import (
     VendorBase,
     ZoneBase,
 )
-from sc_crawler.table_fields import Status
+from sc_crawler.table_fields import AcceleratorType, Status
 from sc_crawler.tables import (
     ComplianceFramework,
     Country,
@@ -25,7 +25,7 @@ from sc_crawler.tables import (
     Server,
     Vendor,
 )
-from sqlmodel import distinct, func, not_, select, text
+from sqlmodel import distinct, func, select, text
 
 from .database import session
 
@@ -104,8 +104,8 @@ with session.sessionmaker as db:
         {
             m: m
             for m in db.exec(
-                select(distinct(Server.gpu_manufacturer))
-                .where(Server.gpu_manufacturer.isnot(None))
+                select(distinct(Server.accelerator_manufacturer))
+                .where(Server.accelerator_manufacturer.isnot(None))
                 .where(Server.status == Status.ACTIVE)
                 .order_by(text("1"))
             ).all()
@@ -116,8 +116,8 @@ with session.sessionmaker as db:
         {
             f: f
             for f in db.exec(
-                select(distinct(Server.gpu_family))
-                .where(Server.gpu_family.isnot(None))
+                select(distinct(Server.accelerator_family))
+                .where(Server.accelerator_family.isnot(None))
                 .where(Server.status == Status.ACTIVE)
                 .order_by(text("1"))
             ).all()
@@ -128,15 +128,14 @@ with session.sessionmaker as db:
         {
             m: m
             for m in db.exec(
-                select(distinct(Server.gpu_model))
-                .where(Server.gpu_model.isnot(None))
+                select(distinct(Server.accelerator_model))
+                .where(Server.accelerator_model.isnot(None))
                 .where(Server.status == Status.ACTIVE)
                 # exclude Google TPUs for now
-                .where(not_(Server.gpu_model.like("ct%")))
-                .where(not_(Server.gpu_model.like("tpu%")))
+                .where(Server.accelerator_type == AcceleratorType.GPU)
                 # and a few other low-frequency models
                 .where(
-                    Server.gpu_model.notin_(
+                    Server.accelerator_model.notin_(
                         [
                             "5090",
                             "5880",
@@ -336,6 +335,7 @@ class BenchmarkConfig(BaseModel):
     benchmark_id: str
     config: str
     category: Optional[str] = None
+    subcategory: Optional[str] = None
 
 
 class VendorDebugInfo(BaseModel):

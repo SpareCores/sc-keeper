@@ -717,20 +717,20 @@ def search_servers(
             Server.network_storage_speed_max >= network_storage_speed_max_min
         )
     if gpu_min:
-        conditions.add(Server.gpu_count >= gpu_min)
+        conditions.add(Server.accelerator_count >= gpu_min)
     # 0 is a valid value to search for servers without GPUs
     if gpu_max is not None:
-        conditions.add(Server.gpu_count <= gpu_max)
+        conditions.add(Server.accelerator_count <= gpu_max)
     if gpu_memory_min:
-        conditions.add(Server.gpu_memory_min >= gpu_memory_min * 1024)
+        conditions.add(Server.accelerator_memory_min >= gpu_memory_min * 1024)
     if gpu_memory_total:
-        conditions.add(Server.gpu_memory_total >= gpu_memory_total * 1024)
+        conditions.add(Server.accelerator_memory_total >= gpu_memory_total * 1024)
     if gpu_manufacturer:
-        conditions.add(Server.gpu_manufacturer.in_(gpu_manufacturer))
+        conditions.add(Server.accelerator_manufacturer.in_(gpu_manufacturer))
     if gpu_family:
-        conditions.add(Server.gpu_family.in_(gpu_family))
+        conditions.add(Server.accelerator_family.in_(gpu_family))
     if gpu_model:
-        conditions.add(Server.gpu_model.in_(gpu_model))
+        conditions.add(Server.accelerator_model.in_(gpu_model))
     if storage_type:
         conditions.add(Server.storage_type.in_(storage_type))
     if storage_count_min:
@@ -1706,19 +1706,19 @@ def search_server_prices(
         conditions.add(Server.storage_size >= storage_size)
     if gpu_min:
         joins.add(ServerPrice.server)
-        conditions.add(Server.gpu_count >= gpu_min)
+        conditions.add(Server.accelerator_count >= gpu_min)
     if gpu_memory_min:
         joins.add(ServerPrice.server)
-        conditions.add(Server.gpu_memory_min >= gpu_memory_min * 1024)
+        conditions.add(Server.accelerator_memory_min >= gpu_memory_min * 1024)
     if gpu_memory_total:
         joins.add(ServerPrice.server)
-        conditions.add(Server.gpu_memory_total >= gpu_memory_total * 1024)
+        conditions.add(Server.accelerator_memory_total >= gpu_memory_total * 1024)
     if gpu_manufacturer:
-        conditions.add(Server.gpu_manufacturer.in_(gpu_manufacturer))
+        conditions.add(Server.accelerator_manufacturer.in_(gpu_manufacturer))
     if gpu_family:
-        conditions.add(Server.gpu_family.in_(gpu_family))
+        conditions.add(Server.accelerator_family.in_(gpu_family))
     if gpu_model:
-        conditions.add(Server.gpu_model.in_(gpu_model))
+        conditions.add(Server.accelerator_model.in_(gpu_model))
     if only_active:
         joins.add(ServerPrice.server)
         conditions.add(Server.status == Status.ACTIVE)
@@ -2334,6 +2334,7 @@ def search_benchmark_configs(
         select(
             BenchmarkScore.benchmark_id,
             Benchmark.category,
+            Benchmark.subcategory,
             func.cast(BenchmarkScore.config, String),
         )
         .distinct()
