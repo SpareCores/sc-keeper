@@ -268,31 +268,43 @@ def update_database_price_currency(
     return database_obj
 
 
-def get_sort_key_for_benchmark_configs(item):
-    """Helper function to determine the sort order for benchmark configs"""
+# Display order of the benchmark categories. sc-crawler does not define an order
+# yet, so unlisted categories follow alphabetically, and "Other" comes last.
+BENCHMARK_CATEGORY_ORDER = [
+    "stress-ng",
+    "Geekbench",
+    "Passmark",
+    "Memory bandwidth",
+    "Memory latency",
+    "Cryptography",
+    "Compression algos",
+    "Static web server",
+    "Database",
+    "LLM inference speed",
+    "GPU bandwidth",
+    "GPU latency",
+    "Workload profile",
+]
+# Main scores listed first within their (sub)category.
+BENCHMARK_ID_ORDER = [
+    "geekbench:score",
+    "passmark:cpu_mark",
+    "passmark:memory_mark",
+]
 
-    category_order = [
-        "stress-ng",
-        "Geekbench",
-        "Passmark",
-        "Memory bandwidth",
-        "OpenSSL",
-        "Compression algos",
-        "Static web server",
-        "Redis",
-        "LLM inference speed",
-        "Database",
-        "Other",
-    ]
-    sub_category_order = [
-        "geekbench:score",
-        "passmark:cpu_mark",
-        "passmark:memory_mark",
-        "llm_speed:prompt_processing",
-        "llm_speed:text_generation",
-        "membench:latency",
-        "pgbench:heavy_read_only",
-    ]
+
+def _order_idx(value, order: list) -> int:
+    return order.index(value) if value in order else len(order)
+
+
+def get_sort_key_for_benchmark_configs(item):
+    """Helper function to determine the sort order for benchmark configs.
+
+    Benchmarks are ordered by their category, subcategory and benchmark_id
+    (as defined in sc-crawler), then by the config and environment values.
+    Items without a category are sorted as "Other".
+    """
+
     model_order = [
         "SmolLM-135M.Q4_K_M.gguf",
         "qwen1_5-0_5b-chat-q4_k_m.gguf",
@@ -318,17 +330,18 @@ def get_sort_key_for_benchmark_configs(item):
 
     # primary sort by category
     category = item.get("category") or "Other"
-    category_idx = (
-        category_order.index(category)
-        if category in category_order
-        else len(category_order)
+    category_key = (
+        category == "Other",
+        _order_idx(category, BENCHMARK_CATEGORY_ORDER),
+        category,
     )
 
-    # secondary sort by benchmark_id
-    if item["benchmark_id"] in sub_category_order:
-        subcategory_idx = sub_category_order.index(item["benchmark_id"])
-    else:
-        subcategory_idx = len(sub_category_order)
+    # secondary sort by subcategory (benchmarks without one first)
+    subcategory = item.get("subcategory") or ""
+
+    # then sort by benchmark_id
+    benchmark_id = item["benchmark_id"]
+    benchmark_key = (_order_idx(benchmark_id, BENCHMARK_ID_ORDER), benchmark_id)
 
     # then sort by cores (single-core first)
     cores_idx = (
@@ -379,8 +392,9 @@ def get_sort_key_for_benchmark_configs(item):
 
     # finally, sort by original order
     return (
-        category_idx,
-        subcategory_idx,
+        category_key,
+        subcategory,
+        benchmark_key,
         cores_idx,
         model_idx,
         concurrency_idx,
