@@ -24,6 +24,7 @@ New feature(s):
   inspector tasks are blocked.
 - Add `Retry-After` header to 429 responses and expose it, along with the `X-RateLimit-*`
   headers, to browsers via CORS.
+- Add `only_active` filter to `/server/{vendor}/{server}/prices` endpoint to enable querying inactive server prices.
 
 Fix(es):
 

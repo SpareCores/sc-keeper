@@ -388,24 +388,25 @@ def get_server_prices(
     countries: options.countries = None,
     vendor_regions: options.vendor_regions = None,
     currency: options.currency = "USD",
+    only_active: options.only_active = True,
     db: Session = Depends(get_db),
 ) -> List[ServerPrice]:
-    """Query the current prices of a single server by its vendor id and server id."""
+    """Query the prices of a single server by its vendor id and server id."""
     vendor_id, server_id = server_args
 
     check_currency(currency)
 
     check_filter_limits(request, countries, vendor_regions=vendor_regions)
 
-    query = select(ServerPrice)
-    if countries:
-        query = query.join(ServerPrice.region)
     query = (
-        query.where(ServerPrice.status == Status.ACTIVE)
+        select(ServerPrice)
         .where(ServerPrice.vendor_id == vendor_id)
         .where(ServerPrice.server_id == server_id)
     )
+    if only_active:
+        query = query.where(ServerPrice.status == Status.ACTIVE)
     if countries:
+        query = query.join(ServerPrice.region)
         query = query.where(Region.country_id.in_(countries))
     if vendor_regions:
         query = query.where(vendor_region_filter(vendor_regions, ServerPrice))
