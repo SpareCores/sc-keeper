@@ -252,8 +252,8 @@ app = FastAPI(
     title="Spare Cores Navigator API",
     description=dedent("""
     The Spare Cores Navigator API lets you programmatically explore cloud
-    compute instances across providers, covering pricing, hardware
-    specifications, benchmark performance, and cost-efficiency metrics.
+    resources across providers in a standardized format, covering pricing,
+    hardware specifications, benchmark performance, and cost-efficiency metrics.
 
     It is designed for FinOps engineers, data scientists, and platform teams,
     who prefer working with empirical and structured data rather than vendor
@@ -267,12 +267,11 @@ app = FastAPI(
 
     ## Getting Started
 
-    The API is served at <https://keeper.sparecores.net>, and most endpoints
-    can be called without authentication. For example, list the 5 cheapest
-    servers with at least 8 vCPUs:
+    The API is served at <https://keeper.sparecores.net>, and most endpoints can
+    be called without authentication. For example, list the 5 cheapest servers
+    with at least 8 vCPUs:
 
-    ```shell
-    curl "https://keeper.sparecores.net/servers?vcpus_min=8&limit=5"
+    ```shell curl "https://keeper.sparecores.net/servers?vcpus_min=8&limit=5"
     ```
 
     The search endpoints, such as `/servers` or `/server_prices`, share the
@@ -281,8 +280,8 @@ app = FastAPI(
     - `limit` and `page` for pagination (`limit=-1` returns all results)
     - `order_by` and `order_dir` for sorting, e.g. by `min_price` (the default
       of `/servers`)
-    - `add_total_count_header=true` to get the number of all matching results
-      in the `X-Total-Count` response header
+    - `add_total_count_header=true` to get the number of all matching results in
+      the `X-Total-Count` response header
 
     Invalid parameters return a 422 response, listing the problems in its
     `detail` field. For the 429 and 503 responses, see Rate Limiting below.
@@ -300,12 +299,12 @@ app = FastAPI(
     - Database schemas and ETL tooling:
       <https://github.com/SpareCores/sc-crawler>
     - Underlying data on cloud servers, regions, zones, storages and more:
-      <https://github.com/SpareCores/sc-data>
+      <https://github.com/SpareCores/sc-data-dumps>
     - Raw hardware inspection and performance benchmarking logs:
       <https://github.com/SpareCores/sc-inspector-data>
 
-    Source code is licensed under **MPL-2.0**, data records under
-    **CC-BY-SA-4.0**.
+    Source code is licensed under **MPL-2.0**, raw data records under
+    **CC-BY-SA-4.0**, compiled SQLite database under **BSL 1.1*.
 
     ## Caching
 
@@ -324,10 +323,10 @@ app = FastAPI(
     - Tracking: per authenticated user or IP address
     - Headers: `X-RateLimit-Limit`, `X-RateLimit-Cost`, `X-RateLimit-Remaining`
     - Status code returned in case of rate limit exceeded: 429, with a
-      `Retry-After` header indicating the number of seconds to wait. If the
-      cost of a single request is higher than the credit limit, the 429
-      response has no `Retry-After` (nor `X-RateLimit-Remaining`) header, as
-      retrying will never succeed.
+      `Retry-After` header indicating the number of seconds to wait. If the cost
+      of a single request is higher than the credit limit, the 429 response has
+      no `Retry-After` (nor `X-RateLimit-Remaining`) header, as retrying will
+      never succeed.
 
     Furthermore, the number of concurrent heavy requests per worker might be
     also limited to avoid overloading the serving cluster or database; in such
@@ -335,8 +334,8 @@ app = FastAPI(
 
     Temporary errors (such as 429 or 503 status codes) should be retried with
     exponential backoff, waiting at least the number of seconds in the
-    `Retry-After` header when present. A 429 without `Retry-After` should not
-    be retried.
+    `Retry-After` header when present. A 429 without `Retry-After` should not be
+    retried.
 
     The default limits are intended to support exploration and prototyping. If
     you are building something larger, we are glad to help you scale access
