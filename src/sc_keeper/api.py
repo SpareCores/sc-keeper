@@ -370,10 +370,6 @@ app = FastAPI(
         "name": "Spare Cores Team",
         "email": "social@sparecores.com",
     },
-    license_info={
-        "name": "Mozilla Public License 2.0 (MPL 2.0)",
-        "url": "http://mozilla.org/MPL/2.0/",
-    },
     lifespan=lifespan,
 )
 
