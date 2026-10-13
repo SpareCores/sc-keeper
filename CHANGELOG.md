@@ -40,6 +40,9 @@ Fix(es):
 Housekeeping:
 
 - Stop gzip compression at the origin and let CloudFront compress responses.
+- Version the package as `<year>.<month>+g<short commit sha>` (e.g. `2026.10+g5e02c8c`),
+  set at Docker build time and shown in the API docs and `/healthcheck`, instead of the
+  manually bumped (and long stale) `0.3.6`.
 
 ## September 2026
 
