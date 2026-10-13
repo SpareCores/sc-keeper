@@ -47,6 +47,10 @@ all = ["sparecores-keeper[testing]", "sparecores-keeper[apm]", "sparecores-keepe
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# bundle the API description
+[tool.setuptools.package-data]
+sc_keeper = ["*.md"]
+
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
