@@ -325,6 +325,10 @@ app = FastAPI(
     - Access to premium endpoints
     - Commercial and partnership use cases
 
+    To authenticate, send your token in the `Authorization` header of each
+    request: `Authorization: Bearer <token>`. An invalid token returns a 401
+    response.
+
     ## Fair Use & Commercial Use
 
     This public API is provided under a fair use policy to ensure availability
