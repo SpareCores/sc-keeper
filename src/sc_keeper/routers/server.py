@@ -18,6 +18,7 @@ from sc_crawler.tables import (
     ServerDescription,
     ServerPrice,
 )
+from sqlalchemy.orm import contains_eager
 from sqlmodel import Session, and_, func, not_, select
 
 from sc_keeper.views import ServerExtra
@@ -124,6 +125,7 @@ def get_similar_servers(
 
     query = select(*select_entities)
 
+    query = query.join(Server.vendor).options(contains_eager(Server.vendor))
     query = query.join(
         ServerExtra,
         (Server.vendor_id == ServerExtra.vendor_id)
@@ -414,7 +416,7 @@ def get_server_prices(
 
     prices = []
     for price in results:
-        price = ServerPrice.model_validate(price)
+        price = ServerPrice.model_validate(price.model_dump())
         prices.append(update_server_price_currency(price, currency))
 
     return prices

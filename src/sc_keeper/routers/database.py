@@ -60,7 +60,7 @@ def get_database_prices(
 
     prices = []
     for price in results:
-        price = DatabasePrice.model_validate(price)
+        price = DatabasePrice.model_validate(price.model_dump())
         prices.append(update_database_price_currency(price, currency))
 
     return prices
