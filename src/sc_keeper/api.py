@@ -265,6 +265,31 @@ app = FastAPI(
     web interface exposes the same underlying dataset at
     <https://sparecores.com/servers>.
 
+    ## Getting Started
+
+    The API is served at <https://keeper.sparecores.net>, and most endpoints
+    can be called without authentication. For example, list the 5 cheapest
+    servers with at least 8 vCPUs:
+
+    ```shell
+    curl "https://keeper.sparecores.net/servers?vcpus_min=8&limit=5"
+    ```
+
+    The search endpoints, such as `/servers` or `/server_prices`, share the
+    following query parameters:
+
+    - `limit` and `page` for pagination (`limit=-1` returns all results)
+    - `order_by` and `order_dir` for sorting, e.g. by `min_price` (the default
+      of `/servers`)
+    - `add_total_count_header=true` to get the number of all matching results
+      in the `X-Total-Count` response header
+
+    Invalid parameters return a 422 response, listing the problems in its
+    `detail` field. For the 429 and 503 responses, see Rate Limiting below.
+
+    The fields of most responses follow the database schema, described at
+    <https://docs.sparecores.com/schemas>.
+
     ## Open Source & Self-Hosting
 
     The entire Navigator stack is open source and designed to be inspectable,
