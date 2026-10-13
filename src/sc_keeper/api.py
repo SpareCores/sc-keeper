@@ -271,7 +271,8 @@ app = FastAPI(
     be called without authentication. For example, list the 5 cheapest servers
     with at least 8 vCPUs:
 
-    ```shell curl "https://keeper.sparecores.net/servers?vcpus_min=8&limit=5"
+    ```shell
+    curl "https://keeper.sparecores.net/servers?vcpus_min=8&limit=5"
     ```
 
     The search endpoints, such as `/servers` or `/server_prices`, share the
@@ -304,20 +305,20 @@ app = FastAPI(
       <https://github.com/SpareCores/sc-inspector-data>
 
     Source code is licensed under **MPL-2.0**, raw data records under
-    **CC-BY-SA-4.0**, compiled SQLite database under **BSL 1.1*.
+    **CC-BY-SA-4.0**, compiled SQLite database under **BSL 1.1**.
 
     ## Caching
 
-    Responses are served via reverse proxy and CDN with 1-hour cache TTL for
-    most endpoints. For real-time access, lower-latency requirements, or custom
-    caching strategies, feel free to reach out -- we are happy to discuss what
-    works best for your use case.
+    Responses are served via reverse proxy and CDN with a 15-minute to 1-hour
+    cache TTL for most endpoints. For real-time access, lower-latency
+    requirements, or custom caching strategies, feel free to reach out -- we are
+    happy to discuss what works best for your use case.
 
     ## Rate Limiting
 
     Credit-based rate limiting with a 1-minute sliding window:
 
-    - Default: 60 credits/minute
+    - Default: 300 credits/minute
     - Cost per request: 1 credit (standard) with some exceptions for heavier
       queries, e.g. `/servers` (3 credits) or `/server_prices` (5 credits)
     - Tracking: per authenticated user or IP address
@@ -328,8 +329,8 @@ app = FastAPI(
       no `Retry-After` (nor `X-RateLimit-Remaining`) header, as retrying will
       never succeed.
 
-    Furthermore, the number of concurrent heavy requests per worker might be
-    also limited to avoid overloading the serving cluster or database; in such
+    Furthermore, the number of concurrent heavy requests per worker might also
+    be limited to avoid overloading the serving cluster or database; in such
     case, a 503 response will be returned.
 
     Temporary errors (such as 429 or 503 status codes) should be retried with
@@ -349,9 +350,9 @@ app = FastAPI(
     - Access to premium endpoints
     - Commercial and partnership use cases
 
-    To authenticate, send your token in the `Authorization` header of each
-    request: `Authorization: Bearer <token>`. An invalid token returns a 401
-    response.
+    Tokens are issued on request. To authenticate, send your token in the
+    `Authorization` header of each request: `Authorization: Bearer <token>`. An
+    invalid token returns a 401 response.
 
     ## Fair Use & Commercial Use
 
