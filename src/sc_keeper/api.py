@@ -28,7 +28,7 @@ from sc_crawler.tables import (
     VendorComplianceLink,
     Zone,
 )
-from sqlalchemy.orm import aliased, contains_eager
+from sqlalchemy.orm import aliased, contains_eager, selectinload
 from sqlmodel import Session, String, case, func, or_, select
 
 from . import parameters as options
@@ -422,7 +422,7 @@ def search_regions(
     vendor: options.vendor = None,
     db: Session = Depends(get_db),
 ) -> List[RegionPKs]:
-    query = select(Region)
+    query = select(Region).options(selectinload(Region.vendor))
     if vendor:
         query = query.where(Region.vendor_id.in_(vendor))
     return db.exec(query).all()
