@@ -77,7 +77,6 @@ vcpus_min = Annotated[
         title="Minimum vCPUs",
         description="Minimum number of virtual CPUs.",
         ge=1,
-        le=256,
         json_schema_extra={
             "category_id": CommonFilterCategory.PROCESSOR,
             "unit": "vCPUs",
@@ -93,7 +92,6 @@ vcpus_max = Annotated[
         title="Maximum vCPUs",
         description="Maximum number of virtual CPUs.",
         ge=1,
-        le=256,
         json_schema_extra={
             "category_id": CommonFilterCategory.PROCESSOR,
             "unit": "vCPUs",
