@@ -2,6 +2,10 @@ FROM python:3.13
 
 WORKDIR /pkg
 COPY . /pkg
+ARG KEEPER_VERSION
+RUN if [ -n "$KEEPER_VERSION" ]; then \
+        sed -i "s/^version = .*/version = \"$KEEPER_VERSION\"/" pyproject.toml; \
+    fi
 RUN pip install --no-cache-dir .[apm,security]
 
 ARG SENTRY_RELEASE
