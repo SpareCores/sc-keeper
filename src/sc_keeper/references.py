@@ -99,6 +99,43 @@ with session.sessionmaker as db:
             ).all()
         },
     )
+    AcceleratorManufacturers = StrEnum(
+        "AcceleratorManufacturers",
+        {
+            m: m
+            for m in db.exec(
+                select(distinct(Server.accelerator_manufacturer))
+                .where(Server.accelerator_manufacturer.isnot(None))
+                .where(Server.status == Status.ACTIVE)
+                .order_by(text("1"))
+            ).all()
+        },
+    )
+    AcceleratorFamilies = StrEnum(
+        "AcceleratorFamilies",
+        {
+            f: f
+            for f in db.exec(
+                select(distinct(Server.accelerator_family))
+                .where(Server.accelerator_family.isnot(None))
+                .where(Server.status == Status.ACTIVE)
+                .order_by(text("1"))
+            ).all()
+        },
+    )
+    AcceleratorModels = StrEnum(
+        "AcceleratorModels",
+        {
+            m: m
+            for m in db.exec(
+                select(distinct(Server.accelerator_model))
+                .where(Server.accelerator_model.isnot(None))
+                .where(Server.status == Status.ACTIVE)
+                .order_by(text("1"))
+            ).all()
+        },
+    )
+    # GPU filters are restricted to GPUs (excluding e.g. Google TPUs)
     GpuManufacturers = StrEnum(
         "GpuManufacturers",
         {
@@ -106,6 +143,7 @@ with session.sessionmaker as db:
             for m in db.exec(
                 select(distinct(Server.accelerator_manufacturer))
                 .where(Server.accelerator_manufacturer.isnot(None))
+                .where(Server.accelerator_type == AcceleratorType.GPU)
                 .where(Server.status == Status.ACTIVE)
                 .order_by(text("1"))
             ).all()
@@ -118,6 +156,7 @@ with session.sessionmaker as db:
             for f in db.exec(
                 select(distinct(Server.accelerator_family))
                 .where(Server.accelerator_family.isnot(None))
+                .where(Server.accelerator_type == AcceleratorType.GPU)
                 .where(Server.status == Status.ACTIVE)
                 .order_by(text("1"))
             ).all()
@@ -130,24 +169,8 @@ with session.sessionmaker as db:
             for m in db.exec(
                 select(distinct(Server.accelerator_model))
                 .where(Server.accelerator_model.isnot(None))
-                .where(Server.status == Status.ACTIVE)
-                # exclude Google TPUs for now
                 .where(Server.accelerator_type == AcceleratorType.GPU)
-                # and a few other low-frequency models
-                .where(
-                    Server.accelerator_model.notin_(
-                        [
-                            "5090",
-                            "5880",
-                            "ALINPU 800",
-                            "H20",
-                            "Lovelace",
-                            "MI-308X",
-                            "NETINT T408",
-                            "VG1000",
-                        ]
-                    )
-                )
+                .where(Server.status == Status.ACTIVE)
                 .order_by(text("1"))
             ).all()
         },
@@ -322,6 +345,7 @@ class ServerFilterCategory(Enum):
 
     CPU_CACHE = "cpu_cache"
     GPU = "gpu"
+    ACCELERATOR = "accelerator"
 
 
 class DatabaseFilterCategory(Enum):

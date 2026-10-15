@@ -2,21 +2,21 @@
 
 Breaking change(s):
 
-- Upgrade to `sparecores-crawler` 0.10.0: the `gpu_*` and `gpus` fields of `Server` are
-  renamed to `accelerator_*` and `accelerators` in the API responses and in `order_by`.
-  The `gpu_*` query parameters of `/servers` and `/server_prices` are unchanged, and
-  still include TPUs (e.g. `gpu_min` filters on `accelerator_count`).
+- Upgrade to `sparecores-crawler` 0.10.0: `Server.gpu_*` / `gpus` renamed to
+  `accelerator_*` / `accelerators` in responses and `order_by` (`gpu_*` query params
+  keep their names).
+- `/servers` `gpu_*` filters now match only `accelerator_type=GPU`;
+  `gpu_manufacturer` / `gpu_family` values are GPU-only on `/servers` and
+  `/server_prices`. Use the new `accelerator_*` filters for all accelerator types.
 
 New feature(s):
 
-- Expose the new `Server.accelerator_type`, `series`, `api_reference_object`, and
-  `compatible_storage_ids` fields in `/table/server/meta`.
-- Return the benchmark `subcategory` in `/benchmark_configs`.
-- Order `/benchmark_configs` by the new benchmark categories (`Cryptography`, `Database`,
-  `Memory latency`, `GPU bandwidth`, `GPU latency`, `Workload profile`), then by
-  subcategory and `benchmark_id`. `/server/{vendor}/{server}/benchmarks` and
-  `/database/{vendor}/{database}/benchmarks` use the same category-based ordering.
-  The order of the configs of a benchmark is unchanged.
+- Expose `Server.accelerator_type`, `series`, `api_reference_object`, and
+  `compatible_storage_ids` in `/table/server/meta`.
+- Return benchmark `subcategory` in `/benchmark_configs`; order configs and server /
+  database benchmarks by the new categories, then subcategory and `benchmark_id`.
+- Add `accelerator_*` filters to `/servers` (any accelerator type) under a new
+  `accelerator` filter category.
 - Add `memory_max`, `memory_per_vcpu_min`, `memory_per_vcpu_max`, `gpu_max`, `price_max`,
   `benchmark_score_max`, and `benchmark_score_per_vcpu_min` filters to `/servers`.
 - Add `/inspector/task_block_reason_codes` and

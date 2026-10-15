@@ -2,6 +2,7 @@ from typing import Annotated, List, Optional
 
 from fastapi import Depends, Path, Query
 from sc_crawler.table_fields import (
+    AcceleratorType,
     Allocation,
     CpuAllocation,
     CpuArchitecture,
@@ -16,6 +17,9 @@ from sc_crawler.table_fields import (
 
 from .helpers import get_database_dict, get_server_dict
 from .references import (
+    AcceleratorFamilies,
+    AcceleratorManufacturers,
+    AcceleratorModels,
     BestDatabasePriceAllocation,
     BestPriceAllocation,
     CommonFilterCategory,
@@ -748,6 +752,108 @@ gpu_model = Annotated[
         json_schema_extra={
             "category_id": ServerFilterCategory.GPU,
             "enum": [m.value for m in GpuModels],
+        },
+    ),
+]
+
+
+accelerator_type = Annotated[
+    Optional[List[AcceleratorType]],
+    Query(
+        title="Accelerator type",
+        description="Type of the accelerator, e.g. GPU or TPU.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "enum": [m.value for m in AcceleratorType],
+        },
+    ),
+]
+
+
+accelerator_min = Annotated[
+    Optional[float],
+    Query(
+        title="Accelerator count",
+        description="Required number of accelerators (e.g. GPUs or TPUs).",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "unit": "accelerators",
+        },
+    ),
+]
+
+accelerator_max = Annotated[
+    Optional[float],
+    Query(
+        title="Maximum accelerator count",
+        description="Maximum number of accelerators. Set to 0 to search for servers without accelerators.",
+        ge=0,
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "unit": "accelerators",
+        },
+    ),
+]
+
+accelerator_memory_min = Annotated[
+    Optional[float],
+    Query(
+        title="Required accelerator memory",
+        description="Required amount of accelerator memory (GB) in each accelerator.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "unit": "GB",
+            "step": 0.1,
+        },
+    ),
+]
+
+
+accelerator_memory_total = Annotated[
+    Optional[float],
+    Query(
+        title="Total accelerator memory",
+        description="Required amount of total accelerator memory (GBs) in all accelerators.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "unit": "GB",
+            "step": 0.1,
+        },
+    ),
+]
+
+
+accelerator_manufacturer = Annotated[
+    Optional[List[AcceleratorManufacturers]],
+    Query(
+        title="Accelerator manufacturer",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "enum": [m.value for m in AcceleratorManufacturers],
+        },
+    ),
+]
+
+
+accelerator_family = Annotated[
+    Optional[List[AcceleratorFamilies]],
+    Query(
+        title="Accelerator family",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "enum": [m.value for m in AcceleratorFamilies],
+        },
+    ),
+]
+
+
+accelerator_model = Annotated[
+    Optional[List[AcceleratorModels]],
+    Query(
+        title="Accelerator model",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "enum": [m.value for m in AcceleratorModels],
         },
     ),
 ]
