@@ -14,8 +14,8 @@ web interface exposes the same underlying dataset at
 
 ## Getting Started
 
-The API is served at <https://keeper.sparecores.net>, and most endpoints can
-be called without authentication. For example, list the 5 cheapest servers
+The base URL of the API is `https://keeper.sparecores.net`, and most endpoints
+can be called without authentication. For example, list the 5 cheapest servers
 with at least 8 vCPUs:
 
 ```shell
