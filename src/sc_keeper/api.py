@@ -7,7 +7,12 @@ from typing import List
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html
-from sc_crawler.table_fields import ResourceType, Status, TrafficDirection
+from sc_crawler.table_fields import (
+    AcceleratorType,
+    ResourceType,
+    Status,
+    TrafficDirection,
+)
 from sc_crawler.tables import (
     Benchmark,
     BenchmarkScore,
@@ -399,6 +404,14 @@ def search_servers(
     gpu_manufacturer: options.gpu_manufacturer = None,
     gpu_family: options.gpu_family = None,
     gpu_model: options.gpu_model = None,
+    accelerator_type: options.accelerator_type = None,
+    accelerator_min: options.accelerator_min = None,
+    accelerator_max: options.accelerator_max = None,
+    accelerator_memory_min: options.accelerator_memory_min = None,
+    accelerator_memory_total: options.accelerator_memory_total = None,
+    accelerator_manufacturer: options.accelerator_manufacturer = None,
+    accelerator_family: options.accelerator_family = None,
+    accelerator_model: options.accelerator_model = None,
     price_max: options.best_price_max = None,
     currency: options.currency = "USD",
     best_price_allocation: options.best_price_allocation = BestPriceAllocation.ANY,
@@ -627,11 +640,28 @@ def search_servers(
         conditions.add(
             Server.network_storage_speed_max >= network_storage_speed_max_min
         )
+    # GPU filters only match GPU accelerators (e.g. not TPUs)
+    if (
+        gpu_min
+        or gpu_memory_min
+        or gpu_memory_total
+        or gpu_manufacturer
+        or gpu_family
+        or gpu_model
+    ):
+        conditions.add(Server.accelerator_type == AcceleratorType.GPU)
     if gpu_min:
         conditions.add(Server.accelerator_count >= gpu_min)
-    # 0 is a valid value to search for servers without GPUs
+    # 0 is a valid value to search for servers without GPUs,
+    # and servers with non-GPU accelerators have no GPUs
     if gpu_max is not None:
-        conditions.add(Server.accelerator_count <= gpu_max)
+        conditions.add(
+            or_(
+                Server.accelerator_type.is_(None),
+                Server.accelerator_type != AcceleratorType.GPU,
+                Server.accelerator_count <= gpu_max,
+            )
+        )
     if gpu_memory_min:
         conditions.add(Server.accelerator_memory_min >= gpu_memory_min * 1024)
     if gpu_memory_total:
@@ -642,6 +672,25 @@ def search_servers(
         conditions.add(Server.accelerator_family.in_(gpu_family))
     if gpu_model:
         conditions.add(Server.accelerator_model.in_(gpu_model))
+    if accelerator_type:
+        conditions.add(Server.accelerator_type.in_(accelerator_type))
+    if accelerator_min:
+        conditions.add(Server.accelerator_count >= accelerator_min)
+    # 0 is a valid value to search for servers without accelerators
+    if accelerator_max is not None:
+        conditions.add(Server.accelerator_count <= accelerator_max)
+    if accelerator_memory_min:
+        conditions.add(Server.accelerator_memory_min >= accelerator_memory_min * 1024)
+    if accelerator_memory_total:
+        conditions.add(
+            Server.accelerator_memory_total >= accelerator_memory_total * 1024
+        )
+    if accelerator_manufacturer:
+        conditions.add(Server.accelerator_manufacturer.in_(accelerator_manufacturer))
+    if accelerator_family:
+        conditions.add(Server.accelerator_family.in_(accelerator_family))
+    if accelerator_model:
+        conditions.add(Server.accelerator_model.in_(accelerator_model))
     if storage_type:
         conditions.add(Server.storage_type.in_(storage_type))
     if storage_count_min:

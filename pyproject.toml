@@ -131,4 +131,6 @@ docstring-code-line-length = "dynamic"
 filterwarnings = [
     # fail on SQLAlchemy warnings, e.g. cartesian product due to a missing join
     "error::sqlalchemy.exc.SAWarning",
+    # starlette<1.0 (required by fastapi) still uses the deprecated anyio alias
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
 ]
