@@ -5,7 +5,8 @@ Breaking change(s):
 - Upgrade to `sparecores-crawler` 0.10.0: `Server.gpu_*` / `gpus` renamed to
   `accelerator_*` / `accelerators` in responses and `order_by` (`gpu_*` query params
   keep their names).
-- `/servers` `gpu_*` filters now match only `accelerator_type=GPU`;
+- `/servers` `gpu_*` filters now match only `accelerator_type=GPU`, except
+  `gpu_max`, which also matches servers with non-GPU accelerators;
   `gpu_manufacturer` / `gpu_family` values are GPU-only on `/servers` and
   `/server_prices`. Use the new `accelerator_*` filters for all accelerator types.
 
