@@ -9,6 +9,8 @@ Breaking change(s):
   `gpu_max`, which also matches servers with non-GPU accelerators;
   `gpu_manufacturer` / `gpu_family` values are GPU-only on `/servers` and
   `/server_prices`. Use the new `accelerator_*` filters for all accelerator types.
+- The `regions` and `vendor_regions` filter values only include active regions;
+  inactive ones are rejected with 422.
 
 New feature(s):
 
@@ -16,8 +18,13 @@ New feature(s):
   `compatible_storage_ids` in `/table/server/meta`.
 - Return benchmark `subcategory` in `/benchmark_configs`; order configs and server /
   database benchmarks by the new categories, then subcategory and `benchmark_id`.
-- Add `accelerator_*` filters to `/servers` (any accelerator type) under a new
-  `accelerator` filter category.
+- Add `accelerator_type`, `accelerator_min`, `accelerator_max`,
+  `accelerator_memory_min`, and `accelerator_memory_total` filters to `/servers` (any
+  accelerator type) under a new `accelerator` filter category.
+- Add `asic_min`, `asic_max`, `asic_memory_min`, `asic_memory_total`,
+  `asic_manufacturer`, `asic_family`, and `asic_model` filters to `/servers` under a new
+  `asic` filter category, matching all non-GPU accelerators (ASICs, e.g. Google TPUs);
+  `asic_max` also matches servers with GPUs or no accelerators.
 - Add `memory_max`, `memory_per_vcpu_min`, `memory_per_vcpu_max`, `gpu_max`, `price_max`,
   `benchmark_score_max`, and `benchmark_score_per_vcpu_min` filters to `/servers`.
 - Add `/inspector/task_block_reason_codes` and

@@ -404,14 +404,18 @@ def search_servers(
     gpu_manufacturer: options.gpu_manufacturer = None,
     gpu_family: options.gpu_family = None,
     gpu_model: options.gpu_model = None,
+    asic_min: options.asic_min = None,
+    asic_max: options.asic_max = None,
+    asic_memory_min: options.asic_memory_min = None,
+    asic_memory_total: options.asic_memory_total = None,
+    asic_manufacturer: options.asic_manufacturer = None,
+    asic_family: options.asic_family = None,
+    asic_model: options.asic_model = None,
     accelerator_type: options.accelerator_type = None,
     accelerator_min: options.accelerator_min = None,
     accelerator_max: options.accelerator_max = None,
     accelerator_memory_min: options.accelerator_memory_min = None,
     accelerator_memory_total: options.accelerator_memory_total = None,
-    accelerator_manufacturer: options.accelerator_manufacturer = None,
-    accelerator_family: options.accelerator_family = None,
-    accelerator_model: options.accelerator_model = None,
     price_max: options.best_price_max = None,
     currency: options.currency = "USD",
     best_price_allocation: options.best_price_allocation = BestPriceAllocation.ANY,
@@ -672,6 +676,38 @@ def search_servers(
         conditions.add(Server.accelerator_family.in_(gpu_family))
     if gpu_model:
         conditions.add(Server.accelerator_model.in_(gpu_model))
+    # ASIC filters only match non-GPU accelerators (e.g. TPUs)
+    if (
+        asic_min
+        or asic_memory_min
+        or asic_memory_total
+        or asic_manufacturer
+        or asic_family
+        or asic_model
+    ):
+        conditions.add(Server.accelerator_type != AcceleratorType.GPU)
+    if asic_min:
+        conditions.add(Server.accelerator_count >= asic_min)
+    # 0 is a valid value to search for servers without ASICs,
+    # and servers without accelerators or with GPUs have no ASICs
+    if asic_max is not None:
+        conditions.add(
+            or_(
+                Server.accelerator_type.is_(None),
+                Server.accelerator_type == AcceleratorType.GPU,
+                Server.accelerator_count <= asic_max,
+            )
+        )
+    if asic_memory_min:
+        conditions.add(Server.accelerator_memory_min >= asic_memory_min * 1024)
+    if asic_memory_total:
+        conditions.add(Server.accelerator_memory_total >= asic_memory_total * 1024)
+    if asic_manufacturer:
+        conditions.add(Server.accelerator_manufacturer.in_(asic_manufacturer))
+    if asic_family:
+        conditions.add(Server.accelerator_family.in_(asic_family))
+    if asic_model:
+        conditions.add(Server.accelerator_model.in_(asic_model))
     if accelerator_type:
         conditions.add(Server.accelerator_type.in_(accelerator_type))
     if accelerator_min:
@@ -685,12 +721,6 @@ def search_servers(
         conditions.add(
             Server.accelerator_memory_total >= accelerator_memory_total * 1024
         )
-    if accelerator_manufacturer:
-        conditions.add(Server.accelerator_manufacturer.in_(accelerator_manufacturer))
-    if accelerator_family:
-        conditions.add(Server.accelerator_family.in_(accelerator_family))
-    if accelerator_model:
-        conditions.add(Server.accelerator_model.in_(accelerator_model))
     if storage_type:
         conditions.add(Server.storage_type.in_(storage_type))
     if storage_count_min:

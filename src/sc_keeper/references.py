@@ -43,13 +43,18 @@ with session.sessionmaker as db:
         {
             m.vendor_id + "~" + m.region_id: m.vendor_id + "~" + m.region_id
             for m in db.exec(
-                select(Region).order_by(Region.vendor_id, Region.region_id)
+                select(Region)
+                .where(Region.status == Status.ACTIVE)
+                .order_by(Region.vendor_id, Region.region_id)
             ).all()
         },
     )
     Regions = StrEnum(
         "Regions",
-        {m.region_id: m.region_id for m in db.exec(select(Region)).all()},
+        {
+            m.region_id: m.region_id
+            for m in db.exec(select(Region).where(Region.status == Status.ACTIVE)).all()
+        },
     )
     ComplianceFrameworks = StrEnum(
         "ComplianceFrameworks",
@@ -99,42 +104,6 @@ with session.sessionmaker as db:
             ).all()
         },
     )
-    AcceleratorManufacturers = StrEnum(
-        "AcceleratorManufacturers",
-        {
-            m: m
-            for m in db.exec(
-                select(distinct(Server.accelerator_manufacturer))
-                .where(Server.accelerator_manufacturer.isnot(None))
-                .where(Server.status == Status.ACTIVE)
-                .order_by(text("1"))
-            ).all()
-        },
-    )
-    AcceleratorFamilies = StrEnum(
-        "AcceleratorFamilies",
-        {
-            f: f
-            for f in db.exec(
-                select(distinct(Server.accelerator_family))
-                .where(Server.accelerator_family.isnot(None))
-                .where(Server.status == Status.ACTIVE)
-                .order_by(text("1"))
-            ).all()
-        },
-    )
-    AcceleratorModels = StrEnum(
-        "AcceleratorModels",
-        {
-            m: m
-            for m in db.exec(
-                select(distinct(Server.accelerator_model))
-                .where(Server.accelerator_model.isnot(None))
-                .where(Server.status == Status.ACTIVE)
-                .order_by(text("1"))
-            ).all()
-        },
-    )
     # GPU filters are restricted to GPUs (excluding e.g. Google TPUs)
     GpuManufacturers = StrEnum(
         "GpuManufacturers",
@@ -170,6 +139,46 @@ with session.sessionmaker as db:
                 select(distinct(Server.accelerator_model))
                 .where(Server.accelerator_model.isnot(None))
                 .where(Server.accelerator_type == AcceleratorType.GPU)
+                .where(Server.status == Status.ACTIVE)
+                .order_by(text("1"))
+            ).all()
+        },
+    )
+    # ASIC filters cover all non-GPU accelerators (e.g. Google TPUs)
+    AsicManufacturers = StrEnum(
+        "AsicManufacturers",
+        {
+            m: m
+            for m in db.exec(
+                select(distinct(Server.accelerator_manufacturer))
+                .where(Server.accelerator_manufacturer.isnot(None))
+                .where(Server.accelerator_type != AcceleratorType.GPU)
+                .where(Server.status == Status.ACTIVE)
+                .order_by(text("1"))
+            ).all()
+        },
+    )
+    AsicFamilies = StrEnum(
+        "AsicFamilies",
+        {
+            f: f
+            for f in db.exec(
+                select(distinct(Server.accelerator_family))
+                .where(Server.accelerator_family.isnot(None))
+                .where(Server.accelerator_type != AcceleratorType.GPU)
+                .where(Server.status == Status.ACTIVE)
+                .order_by(text("1"))
+            ).all()
+        },
+    )
+    AsicModels = StrEnum(
+        "AsicModels",
+        {
+            m: m
+            for m in db.exec(
+                select(distinct(Server.accelerator_model))
+                .where(Server.accelerator_model.isnot(None))
+                .where(Server.accelerator_type != AcceleratorType.GPU)
                 .where(Server.status == Status.ACTIVE)
                 .order_by(text("1"))
             ).all()
@@ -345,6 +354,9 @@ class ServerFilterCategory(Enum):
 
     CPU_CACHE = "cpu_cache"
     GPU = "gpu"
+    # Application-Specific Integrated Circuits: all non-GPU accelerators
+    # (e.g. Google TPUs)
+    ASIC = "asic"
     ACCELERATOR = "accelerator"
 
 
