@@ -2,8 +2,12 @@
 
 import pytest
 from fastapi.testclient import TestClient
+from sc_crawler.table_fields import Status
+from sc_crawler.tables import Region
+from sqlmodel import select
 
 from sc_keeper.api import app
+from sc_keeper.database import session
 
 client = TestClient(app)
 
@@ -198,7 +202,128 @@ class TestFiltering:
             gpu_max=0, limit=25, order_by="accelerator_count", order_dir="desc"
         )
         assert data
+        # servers with non-GPU accelerators have no GPUs
+        assert all(
+            s["accelerator_count"] == 0 or s["accelerator_type"] != "GPU" for s in data
+        )
+
+    @pytest.mark.parametrize(
+        "params",
+        [
+            {"gpu_min": 1},
+            {"gpu_memory_min": 1},
+            {"gpu_memory_total": 1},
+            {"gpu_manufacturer": ["NVIDIA"]},
+        ],
+    )
+    def test_gpu_filters_only_gpus(self, params):
+        data, _ = get_servers(**params, limit=100, order_by="vcpus")
+        assert data
+        assert all(s["accelerator_type"] == "GPU" for s in data)
+
+    def test_gpu_min_excludes_tpus(self):
+        data, _ = get_servers(gpu_min=1, accelerator_type=["TPU"], only_orderable=False)
+        assert data == []
+
+    def test_accelerator_type(self):
+        data, _ = get_servers(accelerator_type=["TPU"], limit=100, only_orderable=False)
+        assert data
+        assert all(s["accelerator_type"] == "TPU" for s in data)
+
+    def test_accelerator_min_includes_tpus(self):
+        data, _ = get_servers(accelerator_min=1, limit=500, only_orderable=False)
+        assert all(s["accelerator_count"] >= 1 for s in data)
+        assert {s["accelerator_type"] for s in data} >= {"GPU", "TPU"}
+
+    def test_accelerator_max(self):
+        data, _ = get_servers(
+            accelerator_min=1, accelerator_max=2, limit=10, order_by="vcpus"
+        )
+        assert data
+        assert all(1 <= s["accelerator_count"] <= 2 for s in data)
+
+    def test_accelerator_max_zero(self):
+        data, _ = get_servers(
+            accelerator_max=0,
+            limit=25,
+            order_by="accelerator_count",
+            order_dir="desc",
+        )
+        assert data
         assert all(s["accelerator_count"] == 0 for s in data)
+
+    @pytest.mark.parametrize(
+        "params",
+        [
+            {"asic_min": 1},
+            {"asic_memory_min": 1},
+            {"asic_memory_total": 1},
+            {"asic_manufacturer": ["Google"]},
+            {"asic_family": ["TPU"]},
+        ],
+    )
+    def test_asic_filters_only_non_gpus(self, params):
+        data, _ = get_servers(**params, limit=100, only_orderable=False)
+        assert data
+        assert all(
+            s["accelerator_type"] is not None and s["accelerator_type"] != "GPU"
+            for s in data
+        )
+
+    def test_asic_min_excludes_gpus(self):
+        data, _ = get_servers(
+            asic_min=1, accelerator_type=["GPU"], only_orderable=False
+        )
+        assert data == []
+
+    def test_asic_max(self):
+        data, _ = get_servers(asic_min=1, asic_max=4, limit=100, only_orderable=False)
+        assert data
+        assert all(1 <= s["accelerator_count"] <= 4 for s in data)
+
+    def test_asic_max_zero(self):
+        data, _ = get_servers(
+            asic_max=0,
+            limit=100,
+            order_by="accelerator_count",
+            order_dir="desc",
+            only_orderable=False,
+        )
+        assert data
+        # servers with GPUs (or unknown accelerator type) have no ASICs
+        assert all(
+            s["accelerator_count"] == 0 or s["accelerator_type"] in (None, "GPU")
+            for s in data
+        )
+
+    def test_asic_manufacturer_rejects_gpu_only(self):
+        resp = client.get("/servers", params={"asic_manufacturer": ["NVIDIA"]})
+        assert resp.status_code == 422
+
+    def test_accelerator_manufacturer_removed(self):
+        # unknown query params are ignored, so no filtering happens
+        _, filtered = get_servers(
+            accelerator_manufacturer=["Google"], add_total_count_header=True
+        )
+        _, unfiltered = get_servers(add_total_count_header=True)
+        assert filtered.headers["x-total-count"] == unfiltered.headers["x-total-count"]
+
+    def test_inactive_vendor_regions_rejected(self):
+        with session.sessionmaker as db:
+            inactive = db.exec(
+                select(Region).where(Region.status != Status.ACTIVE).limit(1)
+            ).first()
+        if inactive is None:
+            pytest.skip("no inactive regions in the database")
+        resp = client.get(
+            "/servers",
+            params={"vendor_regions": [inactive.vendor_id + "~" + inactive.region_id]},
+        )
+        assert resp.status_code == 422
+
+    def test_gpu_manufacturer_rejects_non_gpu(self):
+        resp = client.get("/servers", params={"gpu_manufacturer": ["Google"]})
+        assert resp.status_code == 422
 
     def test_memory_max(self):
         data, _ = get_servers(

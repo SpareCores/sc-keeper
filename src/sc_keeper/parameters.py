@@ -2,6 +2,7 @@ from typing import Annotated, List, Optional
 
 from fastapi import Depends, Path, Query
 from sc_crawler.table_fields import (
+    AcceleratorType,
     Allocation,
     CpuAllocation,
     CpuArchitecture,
@@ -16,6 +17,9 @@ from sc_crawler.table_fields import (
 
 from .helpers import get_database_dict, get_server_dict
 from .references import (
+    AsicFamilies,
+    AsicManufacturers,
+    AsicModels,
     BestDatabasePriceAllocation,
     BestPriceAllocation,
     CommonFilterCategory,
@@ -748,6 +752,167 @@ gpu_model = Annotated[
         json_schema_extra={
             "category_id": ServerFilterCategory.GPU,
             "enum": [m.value for m in GpuModels],
+        },
+    ),
+]
+
+
+# ASICs (Application-Specific Integrated Circuits) are accelerators designed
+# for a specific workload instead of general-purpose parallel computing,
+# e.g. Google TPUs for machine learning; all non-GPU accelerators are ASICs
+
+asic_min = Annotated[
+    Optional[float],
+    Query(
+        title="ASIC count",
+        description="Required number of ASICs (Application-Specific Integrated Circuits, e.g. Google TPUs), including all non-GPU accelerators.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ASIC,
+            "unit": "ASICs",
+        },
+    ),
+]
+
+asic_max = Annotated[
+    Optional[float],
+    Query(
+        title="Maximum ASIC count",
+        description="Maximum number of ASICs (Application-Specific Integrated Circuits, e.g. Google TPUs). Set to 0 to search for servers without ASICs.",
+        ge=0,
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ASIC,
+            "unit": "ASICs",
+        },
+    ),
+]
+
+asic_memory_min = Annotated[
+    Optional[float],
+    Query(
+        title="Required ASIC memory",
+        description="Required amount of ASIC (Application-Specific Integrated Circuit, e.g. Google TPU) memory (GB) in each ASIC.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ASIC,
+            "unit": "GB",
+            "step": 0.1,
+        },
+    ),
+]
+
+
+asic_memory_total = Annotated[
+    Optional[float],
+    Query(
+        title="Total ASIC memory",
+        description="Required amount of total ASIC (Application-Specific Integrated Circuit, e.g. Google TPU) memory (GBs) in all ASICs.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ASIC,
+            "unit": "GB",
+            "step": 0.1,
+        },
+    ),
+]
+
+
+asic_manufacturer = Annotated[
+    Optional[List[AsicManufacturers]],
+    Query(
+        title="ASIC manufacturer",
+        description="Manufacturer of the ASIC (Application-Specific Integrated Circuit), e.g. Google.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ASIC,
+            "enum": [m.value for m in AsicManufacturers],
+        },
+    ),
+]
+
+
+asic_family = Annotated[
+    Optional[List[AsicFamilies]],
+    Query(
+        title="ASIC family",
+        description="Family of the ASIC (Application-Specific Integrated Circuit), e.g. TPU.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ASIC,
+            "enum": [m.value for m in AsicFamilies],
+        },
+    ),
+]
+
+
+asic_model = Annotated[
+    Optional[List[AsicModels]],
+    Query(
+        title="ASIC model",
+        description="Model of the ASIC (Application-Specific Integrated Circuit), e.g. v5e.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ASIC,
+            "enum": [m.value for m in AsicModels],
+        },
+    ),
+]
+
+accelerator_type = Annotated[
+    Optional[List[AcceleratorType]],
+    Query(
+        title="Accelerator type",
+        description="Type of the accelerator, e.g. GPU or TPU.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "enum": [m.value for m in AcceleratorType],
+        },
+    ),
+]
+
+
+accelerator_min = Annotated[
+    Optional[float],
+    Query(
+        title="Accelerator count",
+        description="Required number of accelerators (e.g. GPUs or TPUs).",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "unit": "accelerators",
+        },
+    ),
+]
+
+accelerator_max = Annotated[
+    Optional[float],
+    Query(
+        title="Maximum accelerator count",
+        description="Maximum number of accelerators. Set to 0 to search for servers without accelerators.",
+        ge=0,
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "unit": "accelerators",
+        },
+    ),
+]
+
+accelerator_memory_min = Annotated[
+    Optional[float],
+    Query(
+        title="Required accelerator memory",
+        description="Required amount of accelerator memory (GB) in each accelerator.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "unit": "GB",
+            "step": 0.1,
+        },
+    ),
+]
+
+
+accelerator_memory_total = Annotated[
+    Optional[float],
+    Query(
+        title="Total accelerator memory",
+        description="Required amount of total accelerator memory (GBs) in all accelerators.",
+        json_schema_extra={
+            "category_id": ServerFilterCategory.ACCELERATOR,
+            "unit": "GB",
+            "step": 0.1,
         },
     ),
 ]
