@@ -53,7 +53,13 @@ def overlay(ref: str) -> str:
         return "pypi"
     rules = fetch(f"{raw}/inspector_rules.py")
     target = Path(find_spec("sc_crawler.inspector_rules").origin)
-    target.write_text(rules)
+    # write to a temp file and swap atomically so a failed write leaves the
+    # installed rules intact
+    with tempfile.NamedTemporaryFile(
+        "w", dir=target.parent, suffix=".tmp", delete=False
+    ) as tmp:
+        tmp.write(rules)
+    os.replace(tmp.name, target)
     print(f"Installed inspector rules from {REPO}@{sha} to {target}.")
     return f"github@{sha}"
 
