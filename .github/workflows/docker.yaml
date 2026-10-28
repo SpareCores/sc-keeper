@@ -4,6 +4,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      crawler_ref:
+        description: sc-crawler branch or commit to use the inspector rules from
+        required: false
+        default: main
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -55,6 +60,7 @@ jobs:
           build-args: |
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
             KEEPER_VERSION=${{ env.KEEPER_VERSION }}
+            INSPECTOR_RULES_REF=${{ inputs.crawler_ref || 'main' }}
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
         with:

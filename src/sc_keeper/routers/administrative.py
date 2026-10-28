@@ -1,5 +1,6 @@
 from collections import defaultdict
 from importlib.metadata import version
+from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, Depends, Security
@@ -36,6 +37,16 @@ package_versions = {
     for pkg in ["sparecores-crawler", "sparecores-data", "sparecores-keeper"]
 }
 
+# set at Docker build time, see docker/overlay_inspector_rules.py
+_inspector_rules_source_file = (
+    Path(__file__).parent.parent / "inspector_rules_source.txt"
+)
+inspector_rules_source = (
+    _inspector_rules_source_file.read_text().strip()
+    if _inspector_rules_source_file.exists()
+    else "pypi"
+)
+
 
 @router.get("/healthcheck")
 def healthcheck(db: Session = Depends(get_db)) -> HealthcheckResponse:
@@ -47,6 +58,7 @@ def healthcheck(db: Session = Depends(get_db)) -> HealthcheckResponse:
         "database_alembic_version": db.exec(
             text("SELECT version_num FROM zzz_alembic_version")
         ).one()[0],
+        "inspector_rules": inspector_rules_source,
     }
 
 
