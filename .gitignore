@@ -22,3 +22,6 @@ coverage.xml
 
 # Sphinx documentation
 docs/_build/
+
+# set at Docker build time
+src/sc_keeper/inspector_rules_source.txt

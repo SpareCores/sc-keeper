@@ -51,6 +51,10 @@ Housekeeping:
 - Version the package as `<year>.<month>+g<short commit sha>` (e.g. `2026.10+g5e02c8c`),
   set at Docker build time and shown in the API docs and `/healthcheck`, instead of the
   manually bumped (and long stale) `0.3.6`.
+- Use the most recent inspector rules from the sc-crawler GitHub repo at Docker build
+  time when its version matches the installed `sparecores-crawler`, so rule changes no
+  longer need a PyPI release. The source of the rules is shown in `/healthcheck` as
+  `inspector_rules`.
 
 ## September 2026
 

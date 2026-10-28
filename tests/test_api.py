@@ -26,6 +26,8 @@ def test_healthcheck():
     # updated recently
     assert response.json()["database_last_updated"] > time() - 60
     assert response.json()["database_last_updated"] < time()
+    # only overlaid with the GitHub version at Docker build time
+    assert response.json()["inspector_rules"] == "pypi"
 
 
 test_general_params = [
