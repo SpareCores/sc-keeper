@@ -193,3 +193,17 @@ def test_copy_again_when_the_hash_changes(tmp_path, monkeypatch):
     monkeypatch.setattr(database, "copyfile", copyfile)
     assert database.Database()._copy(str(tmp_path / "copy.db")) == "new"
     assert copies == ["old", "new"]
+
+
+def test_healthcheck_without_a_database_hash(client, monkeypatch):  # noqa: F811
+    """With a custom SC_DATA_DB_PATH, sc-data tracks no hash: the healthcheck still
+    answers, without a hash (and without the header)."""
+    monkeypatch.setattr(
+        session,
+        "version",
+        DataVersion(hash=None, published_at=None, engine=session.engine),
+    )
+    response = client.get("/healthcheck")
+    assert response.status_code == 200
+    assert response.json()["database_hash"] is None
+    assert DATA_HASH_HEADER not in response.headers

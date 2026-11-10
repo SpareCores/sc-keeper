@@ -189,7 +189,10 @@ with session.sessionmaker as db:
 class HealthcheckResponse(BaseModel):
     packages: dict
     database_last_updated: float
-    database_hash: str
+    database_hash: Optional[str] = Field(
+        default=None,
+        description="The hash of the loaded sc-data file, as in the SC-Data-Hash header.",
+    )
     database_published_at: Optional[str] = Field(
         default=None,
         description=(
