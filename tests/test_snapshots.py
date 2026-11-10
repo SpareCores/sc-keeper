@@ -250,3 +250,22 @@ def test_unknown_currency_is_reported_once(monkeypatch, caplog):
     assert doc == {"currency": ["XYZ"] * 3, "price": [1.0, 2.0, 3.0]}
     errors = [r for r in caplog.records if r.levelname == "ERROR"]
     assert len(errors) == 1 and "XYZ" in errors[0].getMessage()
+
+
+def test_booleans_are_true_false(hash_dir):
+    """R12: booleans are JSON true/false as in other API responses, not SQLite's 1/0."""
+    from sqlalchemy import Boolean
+
+    for path, model in [("vendor", snapshots.Vendor), ("region/aws", snapshots.Region)]:
+        doc = _read(hash_dir, path)
+        columns = [
+            c.name for c in model.__table__.columns if isinstance(c.type, Boolean)
+        ]
+        assert columns, path
+        for column in columns:
+            assert {type(v) for v in doc[column]} <= {bool, type(None)}, column
+    with gzip.open(snapshots.file_path(hash_dir, "vendor")) as f:
+        raw = f.read().decode()
+    assert '"stopped_server_charged":[' in raw
+    values = raw.split('"stopped_server_charged":[', 1)[1].split("]", 1)[0].split(",")
+    assert set(values) <= {"true", "false", "null"}

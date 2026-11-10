@@ -42,7 +42,7 @@ from sc_crawler.tables import (
     VendorComplianceLink,
     Zone,
 )
-from sqlalchemy import JSON, Table
+from sqlalchemy import JSON, Boolean, Table
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.engine import Connection
 
@@ -157,8 +157,9 @@ class Selection:
     or a database without a foreign key, and is checked the same way.
 
     Rows are read with the database driver, without SQLAlchemy's result processing:
-    enums are mapped from the names the database stores to their values (R12), and
-    JSON columns are kept as their stored text (`RawJson`), never parsed. This keeps
+    enums are mapped from the names the database stores to their values (R12),
+    booleans from SQLite's 0/1 to true/false, and JSON columns are kept as their
+    stored text (`RawJson`), never parsed. No other column type needs conversion. This keeps
     `config` exactly as stored, and is several times faster on `benchmark_score`.
     Only the status filter runs in SQL. The referenced tables are small (vendors,
     regions, zones, servers, ...), so their kept keys are loaded once into sets.
@@ -177,6 +178,10 @@ class Selection:
             if isinstance(table.c[c].type, SAEnum) and table.c[c].type.enum_class
         }
         json_columns = [i for i, c in enumerate(columns) if _is_json(table.c[c])]
+        # SQLite stores booleans as 0/1; the API (and JSON clients) expect true/false
+        bool_columns = [
+            i for i, c in enumerate(columns) if isinstance(table.c[c].type, Boolean)
+        ]
 
         sql = (
             f"SELECT {', '.join(_quote(c) for c in columns)} FROM {_quote(table.name)}"
@@ -206,6 +211,9 @@ class Selection:
             for i in json_columns:
                 if row[i] is not None:
                     row[i] = RawJson(row[i])
+            for i in bool_columns:
+                if row[i] is not None:
+                    row[i] = bool(row[i])
             if all(_refers_to(row, local, keys) for local, keys in checks) and (
                 resource_check is None or resource_check(row)
             ):
