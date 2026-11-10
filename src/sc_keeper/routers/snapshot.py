@@ -121,11 +121,14 @@ def _not_available(db_hash: str, current: Optional[str]) -> JSONResponse:
 
 
 def accepts_gzip(accept_encoding: Optional[str]) -> bool:
-    """Whether `Accept-Encoding` lists `gzip` or `*` with a non-zero quality (R14)."""
+    """Whether `Accept-Encoding` lists `gzip` or `*` with a non-zero quality (R14).
+
+    An explicit `gzip` entry decides, so `gzip;q=0, *` refuses gzip: `*` only counts
+    for codings not listed otherwise (RFC 9110, section 12.5.3).
+    """
+    qualities = {}
     for item in (accept_encoding or "").split(","):
         coding, *params = [part.strip() for part in item.split(";")]
-        if coding.lower() not in ("gzip", "*"):
-            continue
         quality = 1.0
         for param in params:
             name, _, value = param.partition("=")
@@ -134,9 +137,10 @@ def accepts_gzip(accept_encoding: Optional[str]) -> bool:
                     quality = float(value)
                 except ValueError:
                     quality = 0.0
-        if quality > 0:
-            return True
-    return False
+        qualities[coding.lower()] = quality
+    if "gzip" in qualities:
+        return qualities["gzip"] > 0
+    return qualities.get("*", 0) > 0
 
 
 def _gzip_mtime(path: Path) -> int:
