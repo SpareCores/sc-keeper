@@ -102,7 +102,7 @@ def _get_unit(server_column_name: str) -> str:
     return None
 
 
-@router.get("/table/server/meta", tags=["Table metadata"])
+@router.get("/table/server/meta", tags=["Table Metadata"])
 def table_metadata_server(db: Session = Depends(get_db)) -> ServerTableMetaData:
     """Server table and column names and comments."""
     table = {
