@@ -422,3 +422,16 @@ def snapshot_benchmark_score(
         vendor=vendor,
         empty_columns=_score_columns,
     )
+
+
+# Registered last, so it only matches paths no route above does, e.g. an unknown table
+# or a vendor table without a vendor: they get the documented problem type (R17)
+# instead of the framework's plain 404. Hidden from the API docs.
+@router.get("/{hash}/{rest:path}", include_in_schema=False)
+def snapshot_unknown(
+    request: Request,
+    hash: options.snapshot_hash,
+    rest: str,
+    user: User = Security(current_user),
+) -> Response:
+    return _not_found()

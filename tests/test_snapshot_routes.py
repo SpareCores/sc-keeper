@@ -250,3 +250,23 @@ def test_vendor_cache_is_thread_safe(tmp_path):
         results = list(pool.map(router._vendors, dirs * 25))
     assert all(vendors == frozenset({"aws"}) for vendors in results)
     assert len(router._vendor_cache) <= 16
+
+
+@pytest.mark.parametrize(
+    "path", ["foo", "server", "vendor/aws", "server/aws/extra", "benchmark_score/aws"]
+)
+def test_unknown_routes(client, db_hash, path):
+    """R17: unknown tables and routes get the not-found problem type, not a plain 404."""
+    response = _get(client, f"/snapshot/{db_hash}/{path}")
+    assert response.status_code == 404
+    assert response.headers["Content-Type"] == "application/problem+json"
+    assert response.json()["type"] == NOT_FOUND
+
+
+def test_unknown_routes_require_api_key(client, db_hash):
+    assert client.get(f"/snapshot/{db_hash}/foo").status_code == 401
+
+
+def test_unknown_routes_are_not_documented(client):
+    paths = client.get("/openapi.json").json()["paths"]
+    assert not any("{rest" in p for p in paths)
