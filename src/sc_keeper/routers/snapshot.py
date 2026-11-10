@@ -18,7 +18,6 @@ from pydantic.errors import PydanticSchemaGenerationError
 
 from .. import parameters as options
 from .. import snapshot_storage, snapshots
-from ..references import SnapshotManifest
 from ..auth import User, current_user
 from ..data_version import (
     DATA_HASH_HEADER,
@@ -26,6 +25,7 @@ from ..data_version import (
     format_published_at,
 )
 from ..database import session
+from ..references import SnapshotManifest
 
 router = APIRouter()
 
