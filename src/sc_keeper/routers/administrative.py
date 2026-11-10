@@ -50,15 +50,21 @@ inspector_rules_source = (
 
 
 @router.get("/healthcheck")
-def healthcheck(db: Session = Depends(get_db)) -> HealthcheckResponse:
+async def healthcheck() -> HealthcheckResponse:
     """Quickly return package and database version information."""
+    # async, and without the (sync) get_db dependency: sync endpoints and
+    # dependencies run in a thread pool shared by all endpoints, so a burst of slow
+    # requests could delay the health checks, which time out after a few seconds.
+    # The query is a single row, so running it on the event loop is harmless.
+    with session.sessionmaker as db:
+        alembic_version = db.exec(
+            text("SELECT version_num FROM zzz_alembic_version")
+        ).one()[0]
     return {
         "packages": package_versions,
         "database_last_updated": session.last_updated,
         "database_hash": session.db_hash,
-        "database_alembic_version": db.exec(
-            text("SELECT version_num FROM zzz_alembic_version")
-        ).one()[0],
+        "database_alembic_version": alembic_version,
         "inspector_rules": inspector_rules_source,
         "snapshot_hashes": snapshots.local_hashes(),
     }

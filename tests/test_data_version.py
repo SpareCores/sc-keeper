@@ -78,3 +78,14 @@ def test_read_published_at():
     )
     # the version carries the engine of the same database
     assert session.version.engine is session.engine
+
+
+def test_healthcheck_needs_no_thread_pool():
+    """/healthcheck is async and has no sync dependencies, so it doesn't need a
+    thread of the pool that the other endpoints share."""
+    import inspect
+
+    from sc_keeper.routers.administrative import healthcheck
+
+    assert inspect.iscoroutinefunction(healthcheck)
+    assert not inspect.signature(healthcheck).parameters
