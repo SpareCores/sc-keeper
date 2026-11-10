@@ -55,6 +55,15 @@ def read_published_at(conn) -> Optional[datetime]:
         return None
 
 
+def _unlink(path: str) -> None:
+    try:
+        unlink(path)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        logger.warning(f"Could not delete {path}", exc_info=True)
+
+
 class Database(Thread):
     daemon = True
 
@@ -82,6 +91,52 @@ class Database(Thread):
             if len(self.tmpfiles) == 0:
                 self.updated.clear()
 
+    def _load(self, tmpfile: str) -> tuple[Engine, Optional[datetime]]:
+        """Prepare a copied SQLite file for serving: add columns, indexes and views."""
+        engine = create_engine(
+            "sqlite:///" + abspath(tmpfile),
+            connect_args={"check_same_thread": False},
+            echo=bool(environ.get("KEEPER_DEBUG", False)),
+            poolclass=NullPool,
+        )
+        with engine.connect() as conn:
+            # These PRAGMAs apply only to the build phase (write operations).
+            # synchronous=OFF and journal_mode=OFF speed up the one-time DB build;
+            # mmap_size gives a modest read boost once the engine is reused for queries.
+            # Additional PRAGMA tuning (cache_size, temp_store, etc.) showed no significant
+            # latency improvement for the read-heavy query workload.
+            conn.execute(text("PRAGMA synchronous=OFF"))
+            conn.execute(text("PRAGMA journal_mode=OFF"))
+            conn.execute(text("PRAGMA mmap_size=67108864"))  # 64 MiB
+            # add new columns to the database
+            logger.info("Extending tables")
+            for extender in extenders:
+                logger.info(f"Adding columns to {extender.table.__table__}")
+                extender.add_columns(engine)
+                extender.update(engine)
+            # speed up some queries with indexes
+            for index in indexes:
+                index.create(bind=conn, checkfirst=True)
+            # prep and fill ~materialized views
+            for t in views:
+                t.__table__.create(engine, checkfirst=True)
+                if hasattr(t, "insert"):
+                    with Session(engine) as session:
+                        t.insert(session)
+                        session.commit()
+                if hasattr(t, "query"):
+                    conn.execute(delete(t))
+                    q = insert(t).from_select(
+                        t.get_columns()["all"],
+                        t.query(),
+                    )
+                    conn.execute(q)
+                    conn.commit()
+            conn.execute(text("VACUUM"))
+            conn.execute(text("ANALYZE"))
+            published_at = read_published_at(conn)
+        return engine, published_at
+
     def update(self, force=False):
         """Copies sc-data's most recent SQLite file, adds index and new tables."""
         if not self.ready or self.db_hash != db.hash or force:
@@ -92,62 +147,25 @@ class Database(Thread):
             new_hash = db.hash
             # delete=False due to Windows support
             tmpfile = NamedTemporaryFile(delete=False).name
-            logger.info(f"Copying {db.path} to {tmpfile}")
-            copyfile(db.path, tmpfile)
+            try:
+                logger.info(f"Copying {db.path} to {tmpfile}")
+                copyfile(db.path, tmpfile)
+                engine, published_at = self._load(tmpfile)
+                logger.info(f"SQLite database updated {tmpfile}")
+                # snapshots are available before any response carries the new hash
+                snapshot_storage.prepare(
+                    engine,
+                    new_hash,
+                    published_at,
+                    previous_hash=self.version.hash if self.version else None,
+                )
+            except BaseException:
+                # a failed copy is never kept: it would count towards the files kept by
+                # cleanup(), pushing out the previous file that requests may still use
+                _unlink(tmpfile)
+                raise
             with self.lock:
                 self.tmpfiles.append(tmpfile)
-            # add indexes etc
-            engine = create_engine(
-                "sqlite:///" + abspath(tmpfile),
-                connect_args={"check_same_thread": False},
-                echo=bool(environ.get("KEEPER_DEBUG", False)),
-                poolclass=NullPool,
-            )
-            with engine.connect() as conn:
-                # These PRAGMAs apply only to the build phase (write operations).
-                # synchronous=OFF and journal_mode=OFF speed up the one-time DB build;
-                # mmap_size gives a modest read boost once the engine is reused for queries.
-                # Additional PRAGMA tuning (cache_size, temp_store, etc.) showed no significant
-                # latency improvement for the read-heavy query workload.
-                conn.execute(text("PRAGMA synchronous=OFF"))
-                conn.execute(text("PRAGMA journal_mode=OFF"))
-                conn.execute(text("PRAGMA mmap_size=67108864"))  # 64 MiB
-                # add new columns to the database
-                logger.info("Extending tables")
-                for extender in extenders:
-                    logger.info(f"Adding columns to {extender.table.__table__}")
-                    extender.add_columns(engine)
-                    extender.update(engine)
-                # speed up some queries with indexes
-                for index in indexes:
-                    index.create(bind=conn, checkfirst=True)
-                # prep and fill ~materialized views
-                for t in views:
-                    t.__table__.create(engine, checkfirst=True)
-                    if hasattr(t, "insert"):
-                        with Session(engine) as session:
-                            t.insert(session)
-                            session.commit()
-                    if hasattr(t, "query"):
-                        conn.execute(delete(t))
-                        q = insert(t).from_select(
-                            t.get_columns()["all"],
-                            t.query(),
-                        )
-                        conn.execute(q)
-                        conn.commit()
-                conn.execute(text("VACUUM"))
-                conn.execute(text("ANALYZE"))
-                published_at = read_published_at(conn)
-            logger.info(f"SQLite database updated {tmpfile}")
-            # snapshots are available before any response carries the new hash
-            snapshot_storage.prepare(
-                engine,
-                new_hash,
-                published_at,
-                previous_hash=self.version.hash if self.version else None,
-            )
-            with self.lock:
                 self.engine = engine
                 self.db_hash = new_hash
                 self.version = DataVersion(

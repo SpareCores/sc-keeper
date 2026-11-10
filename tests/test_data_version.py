@@ -132,3 +132,42 @@ def test_get_db_outside_requests_uses_the_current_database():
 
     with next(get_db()) as db:
         assert db.get_bind() is session.engine
+
+
+def test_failed_load_keeps_the_previous_file(tmp_path, monkeypatch):
+    """A failed load deletes its copy, and doesn't count towards the files kept, so
+    the next switch keeps the previous file that pinned requests may still use."""
+    from collections import deque
+    from pathlib import Path
+
+    from sc_keeper import database
+
+    older, previous = tmp_path / "older.db", tmp_path / "previous.db"
+    older.touch()
+    previous.touch()
+    copies = []
+
+    def copyfile(src, dst):
+        copies.append(dst)
+        Path(dst).touch()
+
+    def failing_load(tmpfile):
+        raise RuntimeError("build failed")
+
+    monkeypatch.setattr(database, "copyfile", copyfile)
+    monkeypatch.setattr(database.snapshot_storage, "prepare", lambda *a, **k: None)
+    db = database.Database()
+    db.tmpfiles = deque([str(older), str(previous)])
+    db.updated.set()
+
+    monkeypatch.setattr(db, "_load", failing_load)
+    with pytest.raises(RuntimeError):
+        db.update(force=True)
+    assert not Path(copies[-1]).exists()
+    assert list(db.tmpfiles) == [str(older), str(previous)]
+
+    monkeypatch.setattr(db, "_load", lambda tmpfile: (session.engine, None))
+    db.update(force=True)
+    assert list(db.tmpfiles) == [str(previous), copies[-1]]
+    assert previous.exists() and not older.exists()
+    Path(copies[-1]).unlink()
