@@ -39,10 +39,12 @@ repository = "https://github.com/SpareCores/sc-keeper"
 issues = "https://github.com/SpareCores/sc-keeper/issues"
 
 [project.optional-dependencies]
-testing = ["pytest", "fakeredis[lua]"]
+testing = ["pytest", "fakeredis[lua]", "boto3>=1.36"]
 apm = ["sentry-sdk[fastapi]"]
 security = ["redis", "common-expression-language", "PyJWT[crypto]"]
-all = ["sparecores-keeper[testing]", "sparecores-keeper[apm]", "sparecores-keeper[security]"]
+# shared snapshot storage in S3
+s3 = ["boto3>=1.36"]
+all = ["sparecores-keeper[testing]", "sparecores-keeper[apm]", "sparecores-keeper[security]", "sparecores-keeper[s3]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

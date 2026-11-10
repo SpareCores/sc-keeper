@@ -6,7 +6,7 @@ ARG KEEPER_VERSION
 RUN if [ -n "$KEEPER_VERSION" ]; then \
         sed -i "s/^version = .*/version = \"$KEEPER_VERSION\"/" pyproject.toml; \
     fi
-RUN pip install --no-cache-dir .[apm,security]
+RUN pip install --no-cache-dir .[apm,security,s3]
 # use the inspector rules from the sc-crawler GitHub repo (branch or commit) when
 # compatible with the installed sc-crawler version (set to empty to disable);
 # note that this layer must not be cached when using a branch name

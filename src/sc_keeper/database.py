@@ -15,7 +15,7 @@ from sc_data import db
 from sqlalchemy.pool import NullPool
 from sqlmodel import Session, create_engine, delete, insert, text
 
-from . import snapshots
+from . import snapshot_storage
 from .crawler_extend import extenders
 from .indexes import indexes
 from .views import views
@@ -136,7 +136,7 @@ class Database(Thread):
                 published_at = read_published_at(conn)
             logger.info(f"SQLite database updated {tmpfile}")
             # snapshots are available before any response carries the new hash
-            snapshots.prepare(engine, new_hash, published_at)
+            snapshot_storage.prepare(engine, new_hash, published_at)
             with self.lock:
                 self.engine = engine
                 self.db_hash = new_hash

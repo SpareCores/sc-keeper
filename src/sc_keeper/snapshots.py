@@ -46,7 +46,7 @@ from sc_crawler.tables import (
 )
 from sqlalchemy import JSON, Table
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine import Connection
 
 from .currency import currency_converter
 from .views import Currency
@@ -427,27 +427,3 @@ def cleanup(root: Path, keep_hash: str, max_age: int) -> None:
                 path.rmdir()
         if not any(hash_dir.iterdir()):
             hash_dir.rmdir()
-
-
-def prepare(
-    engine: Engine, db_hash: Optional[str], published_at: Optional[datetime]
-) -> None:
-    """Make a database's snapshots available locally before the switch (R20).
-
-    Failures are logged as errors (reported to Sentry) and don't stop the switch.
-    """
-    if db_hash is None:
-        logger.info("No database hash (custom SC_DATA_DB_PATH?), skipping snapshots")
-        return
-    root = snapshot_dir()
-    hash_dir = root / db_hash
-    try:
-        if not is_complete(hash_dir):
-            with engine.connect() as conn:
-                build(conn, hash_dir, published_at)
-    except Exception:
-        logger.exception(f"Failed to build snapshots of {db_hash}")
-    try:
-        cleanup(root, keep_hash=db_hash, max_age=local_retention_seconds())
-    except Exception:
-        logger.exception("Failed to clean up local snapshots")
