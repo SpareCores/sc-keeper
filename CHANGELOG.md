@@ -1,3 +1,12 @@
+## November 2026
+
+Fix(es):
+
+- List all active benchmark configs in `/benchmark_configs`, including all stress-ng
+  benchmarks (e.g. `stress_ng:matrix`, `stress_ng:div16`) and not only
+  `stress_ng:best1` / `stress_ng:bestn`, so they can be discovered for the
+  `benchmark_id` filters.
+
 ## October 2026
 
 Breaking change(s):

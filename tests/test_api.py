@@ -176,6 +176,35 @@ def test_server_prices(currency):
         assert response.json()[1]["currency"] == currency
 
 
+def test_benchmark_configs():
+    response = client.get("/benchmark_configs")
+    assert response.status_code == 200
+    configs = response.json()
+    ids = {config["benchmark_id"] for config in configs}
+    # all stress-ng benchmarks are listed, not only the best1/bestn summaries
+    assert {"stress_ng:best1", "stress_ng:bestn", "stress_ng:div16"} <= ids
+    stressng_ids = {i for i in ids if i.startswith("stress_ng:")}
+    # each listed benchmark_id + config can be used as a /servers filter
+    config = next(
+        c
+        for c in configs
+        if c["benchmark_id"] in stressng_ids - {"stress_ng:best1", "stress_ng:bestn"}
+    )
+    response = client.get(
+        "/servers",
+        params={
+            "benchmark_id": config["benchmark_id"],
+            "benchmark_config": config["config"],
+            "order_by": "selected_benchmark_score",
+            "order_dir": "desc",
+            "limit": 5,
+        },
+    )
+    assert response.status_code == 200
+    assert len(response.json()) > 0
+    assert all(s["selected_benchmark_score"] for s in response.json())
+
+
 def test_server_benchmarks():
     response = client.get("/server/aws/t3.nano/benchmarks")
     # expect OK status within a reasonable time
