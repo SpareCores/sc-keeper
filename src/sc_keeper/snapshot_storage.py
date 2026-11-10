@@ -150,8 +150,11 @@ _locks_lock = Lock()
 
 
 @contextmanager
-def _lock(db_hash: str):
-    """One download or build per hash at a time (R21).
+def _lock(db_hash: str, blocking: bool = True):
+    """One download, build or cleanup per hash at a time (R21).
+
+    Yields whether the lock was acquired: always with `blocking`, and without it
+    only if no other thread held it.
 
     A hash's entry is removed once no thread holds or waits for its lock, so
     requests for many different (e.g. made-up) hashes don't grow memory.
@@ -159,10 +162,13 @@ def _lock(db_hash: str):
     with _locks_lock:
         entry = _locks.setdefault(db_hash, [Lock(), 0])
         entry[1] += 1
+    acquired = False
     try:
-        with entry[0]:
-            yield
+        acquired = entry[0].acquire(blocking)
+        yield acquired
     finally:
+        if acquired:
+            entry[0].release()
         with _locks_lock:
             entry[1] -= 1
             if entry[1] == 0:
@@ -237,6 +243,8 @@ def prepare(
             # partway through a refresh with it; the next load deletes it
             keep_hashes={db_hash, previous_hash} - {None},
             max_age=snapshots.local_retention_seconds(),
+            # a hash being downloaded or built (e.g. on request) is left for later
+            lock=lambda db_hash: _lock(db_hash, blocking=False),
         )
     except Exception:
         logger.exception("Failed to clean up local snapshots")

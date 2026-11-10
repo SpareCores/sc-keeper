@@ -11,14 +11,16 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 import time
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime
 from itertools import groupby
 from pathlib import Path
-from typing import Iterable, Iterator, Optional
+from typing import Callable, Iterable, Iterator, Optional
 
 from sc_crawler.table_fields import ResourceType, Status
 from sc_crawler.tables import (
@@ -90,6 +92,8 @@ PRICE_TABLES = {
 PRICE_COLUMNS = ("price", "price_upfront", "price_monthly")
 
 MANIFEST_PATH = "manifest"
+# a database hash, as in the /snapshot/{hash} routes and the local directory names
+HASH_PATTERN = re.compile(r"^[0-9a-f]{40,64}$")
 FILE_SUFFIX = ".json.gz"
 
 
@@ -458,7 +462,12 @@ def _age_reference(hash_dir: Path) -> Optional[float]:
     return max(times, default=None)
 
 
-def cleanup(root: Path, keep_hashes: set[str], max_age: int) -> None:
+def cleanup(
+    root: Path,
+    keep_hashes: set[str],
+    max_age: int,
+    lock: Optional[Callable[[str], AbstractContextManager[bool]]] = None,
+) -> None:
     """Delete the local snapshots of hashes written more than `max_age` ago, except
     `keep_hashes` (R20 step 3).
 
@@ -466,15 +475,32 @@ def cleanup(root: Path, keep_hashes: set[str], max_age: int) -> None:
     files one by one could keep a manifest whose files are already gone, which would
     still look like a complete build. The manifest goes first, so a directory being
     deleted never looks complete.
+
+    Only directories named like a hash are deleted, whatever else is in `root`.
+    `lock(hash)` guards each deletion, and yields whether it may go ahead: a hash
+    being downloaded or built into its directory meanwhile is left for later, or the
+    deletion could remove some of its new files, and it would look complete without
+    them.
     """
     if not root.is_dir():
         return
     now = time.time()
     for hash_dir in root.iterdir():
-        if not hash_dir.is_dir() or hash_dir.name in keep_hashes:
+        if (
+            not hash_dir.is_dir()
+            or not HASH_PATTERN.match(hash_dir.name)
+            or hash_dir.name in keep_hashes
+        ):
             continue
-        written = _age_reference(hash_dir)
-        if written is not None and now - written <= max_age:
-            continue
-        file_path(hash_dir, MANIFEST_PATH).unlink(missing_ok=True)
-        shutil.rmtree(hash_dir, ignore_errors=True)
+        with (lock or _no_lock)(hash_dir.name) as acquired:
+            if not acquired:
+                continue
+            written = _age_reference(hash_dir)
+            if written is not None and now - written <= max_age:
+                continue
+            file_path(hash_dir, MANIFEST_PATH).unlink(missing_ok=True)
+            shutil.rmtree(hash_dir, ignore_errors=True)
+
+
+def _no_lock(db_hash: str) -> AbstractContextManager[bool]:
+    return nullcontext(True)

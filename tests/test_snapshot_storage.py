@@ -268,20 +268,57 @@ def test_failed_build_isnt_retried_right_away(local_dir, monkeypatch):
     assert "current" not in snapshot_storage._failed_builds
 
 
+def _old_build(hash_dir: Path) -> None:
+    _small_build(hash_dir)
+    for path in hash_dir.rglob("*"):
+        os.utime(path, (0, 0))
+
+
+NEW, PREVIOUS, OLDER = "a" * 40, "b" * 40, "c" * 40
+
+
 def test_prepare_keeps_the_previous_hash(local_dir, monkeypatch):
     """The hash being replaced survives the cleanup, whatever its age."""
     monkeypatch.setattr(snapshot_storage, "store", lambda: None)
     monkeypatch.setattr(
         snapshots, "build", lambda conn, hash_dir, _: _small_build(hash_dir)
     )
-    for name in ("previous", "older"):
-        _small_build(local_dir / name)
-        for path in (local_dir / name).rglob("*"):
-            os.utime(path, (0, 0))
-    snapshot_storage.prepare(session.engine, "new", None, previous_hash="previous")
-    assert snapshots.is_complete(local_dir / "new")
-    assert snapshots.is_complete(local_dir / "previous")
-    assert not (local_dir / "older").exists()
+    _old_build(local_dir / PREVIOUS)
+    _old_build(local_dir / OLDER)
+    snapshot_storage.prepare(session.engine, NEW, None, previous_hash=PREVIOUS)
+    assert snapshots.is_complete(local_dir / NEW)
+    assert snapshots.is_complete(local_dir / PREVIOUS)
+    assert not (local_dir / OLDER).exists()
+
+
+def test_prepare_doesnt_clean_up_a_busy_hash(local_dir, monkeypatch):
+    """A hash being downloaded or built by another thread isn't deleted under it."""
+    import threading
+
+    monkeypatch.setattr(snapshot_storage, "store", lambda: None)
+    monkeypatch.setattr(
+        snapshots, "build", lambda conn, hash_dir, _: _small_build(hash_dir)
+    )
+    _old_build(local_dir / OLDER)
+    holding, release = threading.Event(), threading.Event()
+
+    def hold():
+        with snapshot_storage._lock(OLDER):
+            holding.set()
+            release.wait(10)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    holding.wait(10)
+    try:
+        snapshot_storage.prepare(session.engine, NEW, None)
+        assert snapshots.is_complete(local_dir / OLDER)
+    finally:
+        release.set()
+        holder.join()
+    snapshot_storage.prepare(session.engine, NEW, None)
+    assert not (local_dir / OLDER).exists()
+    assert snapshot_storage._locks == {}
 
 
 def test_locks_dont_accumulate(local_dir, monkeypatch):

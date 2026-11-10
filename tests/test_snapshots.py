@@ -208,16 +208,16 @@ def _age(path: Path, seconds: float) -> None:
 
 def test_cleanup(tmp_path):
     """R20 step 3: delete old hashes as a whole, except the hash being loaded."""
-    old = _hash_dir(tmp_path, "old", age=3600, manifest_age=3600)
+    old = _hash_dir(tmp_path, "a" * 40, age=3600, manifest_age=3600)
     # the manifest is written last: files can be older than their manifest
-    recent = _hash_dir(tmp_path, "recent", age=3600, manifest_age=10)
-    partial_old = _hash_dir(tmp_path, "partial-old", age=3600)
-    partial_fresh = _hash_dir(tmp_path, "partial-fresh", age=10)
-    current = _hash_dir(tmp_path, "current", age=3600, manifest_age=3600)
+    recent = _hash_dir(tmp_path, "b" * 40, age=3600, manifest_age=10)
+    partial_old = _hash_dir(tmp_path, "c" * 40, age=3600)
+    partial_fresh = _hash_dir(tmp_path, "d" * 40, age=10)
+    current = _hash_dir(tmp_path, "e" * 40, age=3600, manifest_age=3600)
     # the hash being replaced is kept whatever its age
-    previous = _hash_dir(tmp_path, "previous", age=3600, manifest_age=3600)
+    previous = _hash_dir(tmp_path, "f" * 40, age=3600, manifest_age=3600)
 
-    snapshots.cleanup(tmp_path, keep_hashes={"current", "previous"}, max_age=60)
+    snapshots.cleanup(tmp_path, keep_hashes={"e" * 40, "f" * 40}, max_age=60)
 
     assert not old.exists()
     assert not partial_old.exists()
@@ -226,6 +226,29 @@ def test_cleanup(tmp_path):
     assert partial_fresh.exists()
     assert snapshots.is_complete(current)
     assert snapshots.is_complete(previous)
+
+
+def test_cleanup_only_deletes_hashes(tmp_path):
+    """Other directories in SNAPSHOT_DIR are never deleted, whatever their age."""
+    other = _hash_dir(tmp_path, "not-a-hash", age=3600, manifest_age=3600)
+    snapshots.cleanup(tmp_path, keep_hashes=set(), max_age=60)
+    assert snapshots.is_complete(other)
+
+
+def test_cleanup_skips_busy_hashes(tmp_path):
+    """A hash whose lock is held (being downloaded or built) is left for later."""
+    from contextlib import nullcontext
+
+    busy = _hash_dir(tmp_path, "a" * 40, age=3600, manifest_age=3600)
+    idle = _hash_dir(tmp_path, "b" * 40, age=3600, manifest_age=3600)
+    snapshots.cleanup(
+        tmp_path,
+        keep_hashes=set(),
+        max_age=60,
+        lock=lambda db_hash: nullcontext(db_hash != "a" * 40),
+    )
+    assert snapshots.is_complete(busy)
+    assert not idle.exists()
 
 
 def test_local_hashes(tmp_path, monkeypatch):

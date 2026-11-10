@@ -40,7 +40,6 @@ PREPARING = "/problems/snapshot-preparing"
 # how long a client waits before retrying a hash that's being prepared
 RETRY_AFTER_SECONDS = 5
 
-_HASH = re.compile(r"^[0-9a-f]{40,64}$")
 _ID = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_:.-]*$")
 
 ERROR_RESPONSES = {
@@ -235,7 +234,7 @@ def _serve(
     # `current` matches them; one read, so its hash and engine always match
     version = request_version.get() or session.version
     current = version.hash if version else None
-    if not _HASH.match(db_hash):
+    if not snapshots.HASH_PATTERN.match(db_hash):
         return _not_available(db_hash, current)
 
     hash_dir = snapshots.snapshot_dir() / db_hash
