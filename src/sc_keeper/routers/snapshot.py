@@ -1,7 +1,7 @@
-"""Database snapshots pinned to a hash (sc-specs 2026-11-08-keeper-snapshots.md).
+"""Database table snapshots pinned to a hash.
 
-Every route serves a file built in advance (see `snapshots`), gzipped. The response
-models only document the columnar format: the files are sent as they are.
+Every route serves a columnar JSON file built in advance, gzipped, including all
+active records, without the `observed_at` timestamp.
 """
 
 import gzip
@@ -10,14 +10,14 @@ import re
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Any, List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Request, Security
-from fastapi import Path as PathParam
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, TypeAdapter, create_model
 from pydantic.errors import PydanticSchemaGenerationError
 
+from .. import parameters as options
 from .. import snapshot_storage, snapshots
 from ..auth import User, current_user
 from ..data_version import (
@@ -37,14 +37,6 @@ NOT_AVAILABLE = "/problems/snapshot-not-available"
 
 _HASH = re.compile(r"^[0-9a-f]{40,64}$")
 _ID = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_:.-]*$")
-
-HashParam = Annotated[
-    str, PathParam(description="Database hash, e.g. `database_hash` of `/healthcheck`.")
-]
-VendorParam = Annotated[str, PathParam(description="Vendor id, e.g. `aws`.")]
-BenchmarkParam = Annotated[
-    str, PathParam(description="Benchmark id, e.g. `stress_ng:bestn`.")
-]
 
 ERROR_RESPONSES = {
     401: {"description": "No API key."},
@@ -233,7 +225,7 @@ def _serve(
     summary="Snapshot manifest",
 )
 def snapshot_manifest(
-    request: Request, hash: HashParam, user: User = Security(current_user)
+    request: Request, hash: options.snapshot_hash, user: User = Security(current_user)
 ) -> Response:
     """List every snapshot file of a database hash, with its number of rows and the
     SHA-256 of its uncompressed JSON, so clients can skip files that didn't change.
@@ -250,7 +242,9 @@ def _add_global_route(model) -> None:
     table = model.__table__.name
 
     def endpoint(
-        request: Request, hash: HashParam, user: User = Security(current_user)
+        request: Request,
+        hash: options.snapshot_hash,
+        user: User = Security(current_user),
     ) -> Response:
         return _serve(request, hash, table)
 
@@ -271,8 +265,8 @@ def _add_vendor_route(model) -> None:
 
     def endpoint(
         request: Request,
-        hash: HashParam,
-        vendor: VendorParam,
+        hash: options.snapshot_hash,
+        vendor: options.snapshot_vendor,
         user: User = Security(current_user),
     ) -> Response:
         if not _ID.match(vendor):
@@ -312,9 +306,9 @@ _score_columns = snapshots._columns(snapshots.SCORE_TABLE.__table__)
 )
 def snapshot_benchmark_score(
     request: Request,
-    hash: HashParam,
-    vendor: VendorParam,
-    benchmark_id: BenchmarkParam,
+    hash: options.snapshot_hash,
+    vendor: options.snapshot_vendor,
+    benchmark_id: options.snapshot_benchmark_id,
     user: User = Security(current_user),
 ) -> Response:
     """Scores of one vendor and benchmark, with every config, for servers and
