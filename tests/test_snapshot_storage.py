@@ -267,3 +267,11 @@ def test_prepare_keeps_the_previous_hash(local_dir, monkeypatch):
     assert snapshots.is_complete(local_dir / "new")
     assert snapshots.is_complete(local_dir / "previous")
     assert not (local_dir / "older").exists()
+
+
+def test_locks_dont_accumulate(local_dir, monkeypatch):
+    """Requests for many unknown hashes leave no lock entries behind."""
+    monkeypatch.setattr(snapshot_storage, "store", lambda: None)
+    for i in range(20):
+        assert not snapshot_storage.ensure(f"{i:040x}", "current", session.engine, None)
+    assert snapshot_storage._locks == {}

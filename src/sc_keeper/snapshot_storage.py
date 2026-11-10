@@ -14,6 +14,7 @@ import re
 import tempfile
 import time
 import zipfile
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from threading import Event, Lock, Thread
@@ -143,14 +144,29 @@ def store() -> Optional[S3Store]:
 # Loading and serving
 
 
-_locks: dict[str, Lock] = {}
+# per hash: the lock and how many threads hold it or wait for it
+_locks: dict[str, list] = {}
 _locks_lock = Lock()
 
 
-def _lock(db_hash: str) -> Lock:
-    """One download or build per hash at a time (R21)."""
+@contextmanager
+def _lock(db_hash: str):
+    """One download or build per hash at a time (R21).
+
+    A hash's entry is removed once no thread holds or waits for its lock, so
+    requests for many different (e.g. made-up) hashes don't grow memory.
+    """
     with _locks_lock:
-        return _locks.setdefault(db_hash, Lock())
+        entry = _locks.setdefault(db_hash, [Lock(), 0])
+        entry[1] += 1
+    try:
+        with entry[0]:
+            yield
+    finally:
+        with _locks_lock:
+            entry[1] -= 1
+            if entry[1] == 0:
+                _locks.pop(db_hash, None)
 
 
 def _download(db_hash: str, hash_dir: Path) -> bool:
