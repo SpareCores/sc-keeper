@@ -448,9 +448,9 @@ def _age_reference(hash_dir: Path) -> Optional[float]:
     return max(times, default=None)
 
 
-def cleanup(root: Path, keep_hash: str, max_age: int) -> None:
+def cleanup(root: Path, keep_hashes: set[str], max_age: int) -> None:
     """Delete the local snapshots of hashes written more than `max_age` ago, except
-    `keep_hash`'s (R20 step 3).
+    `keep_hashes` (R20 step 3).
 
     A hash's directory is deleted as a whole, decided by its manifest's age: deleting
     files one by one could keep a manifest whose files are already gone, which would
@@ -461,7 +461,7 @@ def cleanup(root: Path, keep_hash: str, max_age: int) -> None:
         return
     now = time.time()
     for hash_dir in root.iterdir():
-        if not hash_dir.is_dir() or hash_dir.name == keep_hash:
+        if not hash_dir.is_dir() or hash_dir.name in keep_hashes:
             continue
         written = _age_reference(hash_dir)
         if written is not None and now - written <= max_age:

@@ -214,8 +214,10 @@ def test_cleanup(tmp_path):
     partial_old = _hash_dir(tmp_path, "partial-old", age=3600)
     partial_fresh = _hash_dir(tmp_path, "partial-fresh", age=10)
     current = _hash_dir(tmp_path, "current", age=3600, manifest_age=3600)
+    # the hash being replaced is kept whatever its age
+    previous = _hash_dir(tmp_path, "previous", age=3600, manifest_age=3600)
 
-    snapshots.cleanup(tmp_path, keep_hash="current", max_age=60)
+    snapshots.cleanup(tmp_path, keep_hashes={"current", "previous"}, max_age=60)
 
     assert not old.exists()
     assert not partial_old.exists()
@@ -223,6 +225,7 @@ def test_cleanup(tmp_path):
     assert snapshots.file_path(recent, "server/aws").exists()
     assert partial_fresh.exists()
     assert snapshots.is_complete(current)
+    assert snapshots.is_complete(previous)
 
 
 def test_local_hashes(tmp_path, monkeypatch):

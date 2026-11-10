@@ -195,7 +195,10 @@ def _build_and_upload(
 
 
 def prepare(
-    engine: Engine, db_hash: Optional[str], published_at: Optional[datetime]
+    engine: Engine,
+    db_hash: Optional[str],
+    published_at: Optional[datetime],
+    previous_hash: Optional[str] = None,
 ) -> None:
     """Make a database's snapshots available before switching to it (R20).
 
@@ -213,7 +216,11 @@ def prepare(
             _build_and_upload(engine, db_hash, hash_dir, published_at)
     try:
         snapshots.cleanup(
-            root, keep_hash=db_hash, max_age=snapshots.local_retention_seconds()
+            root,
+            # keep the hash being replaced too, whatever its age: clients may be
+            # partway through a refresh with it; the next load deletes it
+            keep_hashes={db_hash, previous_hash} - {None},
+            max_age=snapshots.local_retention_seconds(),
         )
     except Exception:
         logger.exception("Failed to clean up local snapshots")

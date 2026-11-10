@@ -3,6 +3,7 @@
 import gzip
 import io
 import json
+import os
 import shutil
 import threading
 import time
@@ -250,3 +251,19 @@ def test_failed_build_isnt_retried_right_away(local_dir, monkeypatch):
     )
     assert snapshot_storage.ensure("current", "current", session.engine, None)
     assert "current" not in snapshot_storage._failed_builds
+
+
+def test_prepare_keeps_the_previous_hash(local_dir, monkeypatch):
+    """The hash being replaced survives the cleanup, whatever its age."""
+    monkeypatch.setattr(snapshot_storage, "store", lambda: None)
+    monkeypatch.setattr(
+        snapshots, "build", lambda conn, hash_dir, _: _small_build(hash_dir)
+    )
+    for name in ("previous", "older"):
+        _small_build(local_dir / name)
+        for path in (local_dir / name).rglob("*"):
+            os.utime(path, (0, 0))
+    snapshot_storage.prepare(session.engine, "new", None, previous_hash="previous")
+    assert snapshots.is_complete(local_dir / "new")
+    assert snapshots.is_complete(local_dir / "previous")
+    assert not (local_dir / "older").exists()

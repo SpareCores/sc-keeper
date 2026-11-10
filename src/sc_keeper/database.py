@@ -140,7 +140,12 @@ class Database(Thread):
                 published_at = read_published_at(conn)
             logger.info(f"SQLite database updated {tmpfile}")
             # snapshots are available before any response carries the new hash
-            snapshot_storage.prepare(engine, new_hash, published_at)
+            snapshot_storage.prepare(
+                engine,
+                new_hash,
+                published_at,
+                previous_hash=self.version.hash if self.version else None,
+            )
             with self.lock:
                 self.engine = engine
                 self.db_hash = new_hash
