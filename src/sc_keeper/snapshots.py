@@ -68,11 +68,8 @@ VENDOR_TABLES = [
     DatabaseStoragePrice,
     VendorComplianceLink,
 ]
-# The implementation overrides sc-specs 2026-11-08-keeper-snapshots.md R5, which
-# splits every table with a vendor_id column by vendor, including `vendor` itself
-# (one row per file). Here, only tables that reference a vendor (vendor_id is a
-# foreign key to `vendor`) are split by vendor, so `vendor` is one file: the list
-# of vendors.
+# R5: tables that reference a vendor (vendor_id is a foreign key to `vendor`) are
+# split by vendor, so `vendor` itself is one file: the list of vendors.
 GLOBAL_TABLES = [Vendor, Country, ComplianceFramework, Benchmark, Currency]
 # R11: split by vendor and benchmark
 SCORE_TABLE = BenchmarkScore
