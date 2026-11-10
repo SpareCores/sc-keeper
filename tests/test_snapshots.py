@@ -237,17 +237,18 @@ def test_local_hashes(tmp_path, monkeypatch):
     assert snapshots.local_hashes() == ["newer", "older"]
 
 
-def test_unknown_currency_is_reported_once(monkeypatch, caplog):
-    """An unconvertible currency is logged once per build, not once per row."""
+def test_unknown_currency_is_left_out(monkeypatch, caplog):
+    """R9: rows that can't be converted to USD are left out, and the currency is
+    logged once per build, not once per row."""
 
     def convert(amount, from_currency, to_currency="USD"):
         raise ValueError(f"{from_currency} is not a supported currency")
 
     monkeypatch.setattr(currency_converter, "convert", convert)
     monkeypatch.setattr(snapshots, "_unconvertible_currencies", set())
-    rows = [("XYZ", 1.0), ("XYZ", 2.0), ("XYZ", 3.0)]
+    rows = [("XYZ", 1.0), ("USD", 2.0), ("XYZ", 3.0)]
     doc = snapshots.columnar(["currency", "price"], rows, usd=True)
-    assert doc == {"currency": ["XYZ"] * 3, "price": [1.0, 2.0, 3.0]}
+    assert doc == {"currency": ["USD"], "price": [2.0]}
     errors = [r for r in caplog.records if r.levelname == "ERROR"]
     assert len(errors) == 1 and "XYZ" in errors[0].getMessage()
 

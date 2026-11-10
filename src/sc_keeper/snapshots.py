@@ -264,8 +264,12 @@ def _refers_to(row, local, keys) -> bool:
 _unconvertible_currencies: set[str] = set()
 
 
-def _to_usd(row: dict) -> dict:
-    """Convert a price row to USD (R9), unrounded."""
+def _to_usd(row: dict) -> Optional[dict]:
+    """Convert a price row to USD (R9), unrounded.
+
+    Returns None for a row whose currency can't be converted (missing from the
+    exchange rates): the row is left out, so every snapshot price is in USD.
+    """
     currency = row.get("currency")
     if currency is None or currency == "USD":
         return row
@@ -292,10 +296,8 @@ def _to_usd(row: dict) -> dict:
         if currency not in _unconvertible_currencies:
             # once per currency and build, not per row (each would reach Sentry)
             _unconvertible_currencies.add(currency)
-            logger.error(
-                f"Cannot convert {currency} to USD, keeping those prices as is"
-            )
-        return row
+            logger.error(f"Cannot convert {currency} to USD, leaving those prices out")
+        return None
     row["currency"] = "USD"
     return row
 
@@ -305,7 +307,10 @@ def columnar(columns: list[str], rows: Iterable, usd: bool = False) -> dict[str,
     doc = {column: [] for column in columns}
     for row in rows:
         if usd:
-            row = list(_to_usd(dict(zip(columns, row))).values())
+            converted = _to_usd(dict(zip(columns, row)))
+            if converted is None:
+                continue
+            row = list(converted.values())
         for column, value in zip(columns, row):
             doc[column].append(value)
     return doc

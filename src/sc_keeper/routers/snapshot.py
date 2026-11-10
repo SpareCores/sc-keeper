@@ -291,7 +291,9 @@ def _contents(prices: bool = False) -> str:
     if prices:
         lines.append(
             "- Prices (`price`, `price_upfront`, `price_monthly` and the tiers of "
-            "`price_tiered`) converted to USD, unrounded, with `currency` set to `USD`."
+            "`price_tiered`) converted to USD, unrounded, with `currency` set to `USD`. "
+            "Rows whose prices can't be converted (a currency missing from the exchange "
+            "rates) are left out."
         )
     lines += [
         "- Sorted by the table's primary key.",
