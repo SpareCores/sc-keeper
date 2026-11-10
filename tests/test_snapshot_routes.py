@@ -225,3 +225,20 @@ def test_snapshot_without_published_at(client, tmp_path, monkeypatch):
     assert response.status_code == 200
     assert response.headers[DATA_HASH_HEADER] == UNKNOWN_HASH
     assert DATA_PUBLISHED_AT_HEADER not in response.headers
+
+
+def test_vendor_cache_is_thread_safe(tmp_path):
+    """Concurrent lookups of more hashes than the cache holds never fail."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from sc_keeper.routers import snapshot as router
+
+    dirs = []
+    for i in range(40):
+        hash_dir = tmp_path / f"{i:040x}"
+        snapshots._write(hash_dir, "vendor", {"vendor_id": ["aws"]}, 0)
+        dirs.append(hash_dir)
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        results = list(pool.map(router._vendors, dirs * 25))
+    assert all(vendors == frozenset({"aws"}) for vendors in results)
+    assert len(router._vendor_cache) <= 16
