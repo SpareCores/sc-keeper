@@ -18,6 +18,7 @@ from pydantic.errors import PydanticSchemaGenerationError
 
 from .. import parameters as options
 from .. import snapshot_storage, snapshots
+from ..references import SnapshotManifest
 from ..auth import User, current_user
 from ..data_version import (
     DATA_HASH_HEADER,
@@ -79,18 +80,6 @@ def columnar_model(model) -> type[BaseModel]:
         f"{model.__name__}Snapshot",
         __doc__=f"Columnar snapshot of the `{table.name}` table.",
         **fields,
-    )
-
-
-class SnapshotManifest(BaseModel):
-    """Every file of a hash's snapshots, sorted by path (R13)."""
-
-    path: List[str] = Field(
-        description="Route below `/snapshot/{hash}/`, e.g. `server_price/aws`."
-    )
-    rows: List[int] = Field(description="Number of rows in the file.")
-    sha256: List[str] = Field(
-        description="SHA-256 of the file's uncompressed JSON, in lowercase hex."
     )
 
 

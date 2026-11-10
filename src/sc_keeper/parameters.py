@@ -1402,11 +1402,17 @@ inspector_tasks = Annotated[
 
 snapshot_hash = Annotated[
     str,
-    Path(description="Database hash, e.g. `database_hash` of `/healthcheck`."),
+    Path(
+        title="Database hash",
+        description="Database hash, e.g. `database_hash` of `/healthcheck`.",
+    ),
 ]
 
-snapshot_vendor = Annotated[str, Path(description="Vendor id, e.g. `aws`.")]
+snapshot_vendor = Annotated[
+    str, Path(title="Vendor", description="Vendor id, e.g. `aws`.")
+]
 
 snapshot_benchmark_id = Annotated[
-    str, Path(description="Benchmark id, e.g. `stress_ng:bestn`.")
+    str,
+    Path(title="Benchmark", description="Benchmark id, e.g. `stress_ng:bestn`."),
 ]

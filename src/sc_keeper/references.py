@@ -212,6 +212,39 @@ HealthcheckResponse.model_config["json_schema_extra"] = {
 }
 
 
+class SnapshotManifest(BaseModel):
+    """Every file of a database hash's snapshots, sorted by path."""
+
+    path: List[str] = Field(
+        description="Route below `/snapshot/{hash}/`, e.g. `server_price/aws`."
+    )
+    rows: List[int] = Field(description="Number of rows in the file.")
+    sha256: List[str] = Field(
+        description="SHA-256 of the file's uncompressed JSON, in lowercase hex."
+    )
+
+
+SnapshotManifest.model_config["json_schema_extra"] = {
+    "examples": [
+        {
+            "path": [
+                "benchmark_score/aws/stress_ng:bestn",
+                "country",
+                "server/aws",
+                "server_price/aws",
+            ],
+            "rows": [1191, 54, 1419, 135240],
+            "sha256": [
+                "9f2c5d4e0a1b3c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d",
+                "41d0b2e5c8f1a4d7b0e3c6f9a2d5b8e1c4f7a0d3b6e9c2f5a8d1b4e7c0f3a6d9",
+                "7ab3c9e2f5a8d1b4e7c0f3a6d9b2e5c8f1a4d7b0e3c6f9a2d5b8e1c4f7a0d3b6",
+                "e05c1a4d7b0e3c6f9a2d5b8e1c4f7a0d3b6e9c2f5a8d1b4e7c0f3a6d9b2e5c8f",
+            ],
+        }
+    ]
+}
+
+
 ServerColumns = StrEnum(
     "ServerColumns",
     {col: col for col in Server.get_columns()["all"]},
