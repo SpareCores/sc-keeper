@@ -8,7 +8,6 @@ import gzip
 import json
 import re
 from datetime import datetime, timezone
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, List, Optional
 
@@ -158,14 +157,25 @@ def _headers(db_hash: str, mtime: int) -> dict[str, str]:
     return headers
 
 
-@lru_cache(maxsize=16)
+_vendor_cache: dict[Path, frozenset[str]] = {}
+
+
 def _vendors(hash_dir: Path) -> frozenset[str]:
-    """Vendors in a complete build, from its `vendor` snapshot."""
-    try:
-        with gzip.open(snapshots.file_path(hash_dir, "vendor")) as f:
-            return frozenset(json.load(f)["vendor_id"])
-    except FileNotFoundError:
-        return frozenset()
+    """Vendors in a complete build, from its `vendor` snapshot.
+
+    Cached only when read, so a missing file (e.g. a directory being deleted) is
+    looked up again next time instead of being remembered as no vendors.
+    """
+    if hash_dir not in _vendor_cache:
+        try:
+            with gzip.open(snapshots.file_path(hash_dir, "vendor")) as f:
+                vendors = frozenset(json.load(f)["vendor_id"])
+        except FileNotFoundError:
+            return frozenset()
+        if len(_vendor_cache) >= 16:
+            _vendor_cache.pop(next(iter(_vendor_cache)))
+        _vendor_cache[hash_dir] = vendors
+    return _vendor_cache[hash_dir]
 
 
 def _serve(

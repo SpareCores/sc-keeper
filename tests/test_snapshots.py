@@ -187,21 +187,48 @@ def test_deterministic_encoding():
     }
 
 
+def _hash_dir(root: Path, name: str, age: float, manifest_age=None) -> Path:
+    """A hash directory with one data file (and a manifest), aged in seconds."""
+    hash_dir = root / name
+    files = [snapshots.file_path(hash_dir, "server/aws")]
+    if manifest_age is not None:
+        files.append(snapshots.file_path(hash_dir, snapshots.MANIFEST_PATH))
+    for path in files:
+        snapshots.write_atomically(path, b"x")
+    _age(files[0], age)
+    if manifest_age is not None:
+        _age(files[1], manifest_age)
+    return hash_dir
+
+
+def _age(path: Path, seconds: float) -> None:
+    then = time.time() - seconds
+    os.utime(path, (then, then))
+
+
 def test_cleanup(tmp_path):
-    """R20 step 3: delete old files, except the hash being loaded."""
-    old, current = tmp_path / "old", tmp_path / "current"
-    for hash_dir in (old, current):
-        snapshots.write_atomically(snapshots.file_path(hash_dir, "server/aws"), b"x")
-    fresh = snapshots.file_path(old, "zone/aws")
-    snapshots.write_atomically(fresh, b"x")
-    long_ago = time.time() - 3600
-    for path in (
-        snapshots.file_path(old, "server/aws"),
-        snapshots.file_path(current, "server/aws"),
-    ):
-        os.utime(path, (long_ago, long_ago))
+    """R20 step 3: delete old hashes as a whole, except the hash being loaded."""
+    old = _hash_dir(tmp_path, "old", age=3600, manifest_age=3600)
+    # the manifest is written last: files can be older than their manifest
+    recent = _hash_dir(tmp_path, "recent", age=3600, manifest_age=10)
+    partial_old = _hash_dir(tmp_path, "partial-old", age=3600)
+    partial_fresh = _hash_dir(tmp_path, "partial-fresh", age=10)
+    current = _hash_dir(tmp_path, "current", age=3600, manifest_age=3600)
+
     snapshots.cleanup(tmp_path, keep_hash="current", max_age=60)
-    assert not snapshots.file_path(old, "server/aws").exists()
-    assert not (old / "server").exists()
-    assert fresh.exists()
-    assert snapshots.file_path(current, "server/aws").exists()
+
+    assert not old.exists()
+    assert not partial_old.exists()
+    assert snapshots.is_complete(recent)
+    assert snapshots.file_path(recent, "server/aws").exists()
+    assert partial_fresh.exists()
+    assert snapshots.is_complete(current)
+
+
+def test_local_hashes(tmp_path, monkeypatch):
+    monkeypatch.setenv("SNAPSHOT_DIR", str(tmp_path))
+    _hash_dir(tmp_path, "older", age=100, manifest_age=100)
+    _hash_dir(tmp_path, "newer", age=10, manifest_age=10)
+    _hash_dir(tmp_path, "partial", age=10)
+    (tmp_path / "not-a-dir").write_bytes(b"x")
+    assert snapshots.local_hashes() == ["newer", "older"]

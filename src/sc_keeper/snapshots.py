@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import tempfile
 import time
 from dataclasses import dataclass
@@ -120,11 +121,13 @@ def local_hashes() -> list[str]:
     root = snapshot_dir()
     if not root.is_dir():
         return []
-    manifests = [
-        (file_path(d, MANIFEST_PATH).stat().st_mtime, d.name)
-        for d in root.iterdir()
-        if d.is_dir() and is_complete(d)
-    ]
+    manifests = []
+    for hash_dir in root.iterdir():
+        try:
+            mtime = file_path(hash_dir, MANIFEST_PATH).stat().st_mtime
+        except (FileNotFoundError, NotADirectoryError):
+            continue  # not a complete build, or deleted meanwhile
+        manifests.append((mtime, hash_dir.name))
     return [name for _, name in sorted(manifests, reverse=True)]
 
 
@@ -419,25 +422,40 @@ def build(
     return files
 
 
+def _age_reference(hash_dir: Path) -> Optional[float]:
+    """When a hash's local snapshots were written: its manifest's time, or, without a
+    manifest (a build or download in progress, or interrupted), its newest file's."""
+    try:
+        return file_path(hash_dir, MANIFEST_PATH).stat().st_mtime
+    except FileNotFoundError:
+        pass
+    times = []
+    for path in hash_dir.rglob("*"):
+        try:
+            if path.is_file():  # a directory's time changes with every new file
+                times.append(path.stat().st_mtime)
+        except FileNotFoundError:
+            pass
+    return max(times, default=None)
+
+
 def cleanup(root: Path, keep_hash: str, max_age: int) -> None:
-    """Delete local snapshot files older than `max_age`, except `keep_hash`'s (R20 step 3)."""
+    """Delete the local snapshots of hashes written more than `max_age` ago, except
+    `keep_hash`'s (R20 step 3).
+
+    A hash's directory is deleted as a whole, decided by its manifest's age: deleting
+    files one by one could keep a manifest whose files are already gone, which would
+    still look like a complete build. The manifest goes first, so a directory being
+    deleted never looks complete.
+    """
     if not root.is_dir():
         return
     now = time.time()
     for hash_dir in root.iterdir():
         if not hash_dir.is_dir() or hash_dir.name == keep_hash:
             continue
-        for path in hash_dir.rglob("*"):
-            try:
-                if path.is_file() and now - path.stat().st_mtime > max_age:
-                    path.unlink()
-            except FileNotFoundError:
-                pass
-        # remove empty directories, deepest first
-        for path in sorted(
-            hash_dir.rglob("*"), key=lambda p: len(p.parts), reverse=True
-        ):
-            if path.is_dir() and not any(path.iterdir()):
-                path.rmdir()
-        if not any(hash_dir.iterdir()):
-            hash_dir.rmdir()
+        written = _age_reference(hash_dir)
+        if written is not None and now - written <= max_age:
+            continue
+        file_path(hash_dir, MANIFEST_PATH).unlink(missing_ok=True)
+        shutil.rmtree(hash_dir, ignore_errors=True)
