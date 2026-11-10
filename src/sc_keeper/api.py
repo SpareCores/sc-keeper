@@ -339,11 +339,13 @@ app.add_middleware(DataVersionMiddleware)
 app.include_router(routers.administrative.router, tags=["Administrative endpoints"])
 app.include_router(routers.tables.router, prefix="/table", tags=["Table dumps"])
 app.include_router(routers.table_metadata.router)
+app.include_router(
+    routers.snapshot.router, prefix="/snapshot", tags=["Table snapshots"]
+)
 app.include_router(routers.server.router, tags=["Server Details"])
 app.include_router(routers.database.router, tags=["Database Details"])
 app.include_router(routers.ai.router, prefix="/ai", tags=["AI"])
 app.include_router(routers.inspector.router, prefix="/inspector", tags=["Inspector"])
-app.include_router(routers.snapshot.router, prefix="/snapshot", tags=["Snapshots"])
 
 
 @app.get("/regions", tags=["Query Resources"])
