@@ -340,7 +340,7 @@ app.include_router(routers.administrative.router, tags=["Administrative Endpoint
 app.include_router(routers.tables.router, prefix="/table", tags=["Table Dumps"])
 app.include_router(routers.table_metadata.router)
 app.include_router(
-    routers.snapshot.router, prefix="/snapshot", tags=["Table snapshots"]
+    routers.snapshot.router, prefix="/snapshot", tags=["Table Snapshots"]
 )
 app.include_router(routers.server.router, tags=["Server Details"])
 app.include_router(routers.database.router, tags=["Database Details"])
