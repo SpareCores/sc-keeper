@@ -204,3 +204,20 @@ def test_rebuild_doesnt_hold_the_request(client, db_hash, tmp_path, monkeypatch)
     assert time.time() - t0 < 3
     assert response.status_code == 404
     assert response.json()["type"] == NOT_AVAILABLE
+
+
+def test_snapshot_without_published_at(client, tmp_path, monkeypatch):
+    """R3: a snapshot without a publication time gets no other version's time."""
+    monkeypatch.setenv("SNAPSHOT_DIR", str(tmp_path))
+    hash_dir = tmp_path / UNKNOWN_HASH
+    files = [snapshots._write(hash_dir, "country", {"country_id": ["DE"]}, 0)]
+    manifest = {
+        "path": [f.path for f in files],
+        "rows": [f.rows for f in files],
+        "sha256": [f.sha256 for f in files],
+    }
+    snapshots._write(hash_dir, snapshots.MANIFEST_PATH, manifest, 0)
+    response = _get(client, f"/snapshot/{UNKNOWN_HASH}/country")
+    assert response.status_code == 200
+    assert response.headers[DATA_HASH_HEADER] == UNKNOWN_HASH
+    assert DATA_PUBLISHED_AT_HEADER not in response.headers

@@ -35,14 +35,14 @@ class DataVersionMiddleware(BaseHTTPMiddleware):
     time to run the other middlewares and resolve dependencies), which would label
     a response from the new database with the previous version.
 
-    Headers already set by an endpoint are kept, as `/snapshot` responses describe
-    the snapshot's own version.
+    An endpoint that sets `SC-Data-Hash` itself (`/snapshot` responses, describing
+    the snapshot's own version) gets neither header from here, so a response never
+    pairs one version's hash with another version's publication time.
     """
 
     async def dispatch(self, request, call_next):
         version = session.version
         response = await call_next(request)
-        if version is not None:
-            for name, value in data_version_headers(version).items():
-                response.headers.setdefault(name, value)
+        if version is not None and DATA_HASH_HEADER not in response.headers:
+            response.headers.update(data_version_headers(version))
         return response
