@@ -104,6 +104,17 @@ def test_no_per_replica_validators(client, db_hash):
         assert "Content-Length" in response.headers
 
 
+def test_if_range_gets_the_whole_file(client, db_hash):
+    """An If-Range can't match a validator never sent, so the whole file is served."""
+    response = _get(
+        client,
+        f"/snapshot/{db_hash}/country",
+        {"Range": "bytes=0-9", "If-Range": '"some-etag"'},
+    )
+    assert response.status_code == 200
+    assert "country_id" in response.json()
+
+
 def test_vendor_table(client, db_hash):
     response = _get(client, f"/snapshot/{db_hash}/server/aws")
     assert response.status_code == 200

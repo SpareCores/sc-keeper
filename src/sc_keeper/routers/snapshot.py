@@ -192,6 +192,11 @@ class _SnapshotFileResponse(FileResponse):
     def set_stat_headers(self, stat_result) -> None:
         self.headers.setdefault("content-length", str(stat_result.st_size))
 
+    def _should_use_range(self, http_if_range: str) -> bool:
+        # an If-Range can't match a validator that was never sent: serve the whole
+        # file (FileResponse's own check expects both headers, and would fail)
+        return False
+
 
 _vendor_cache: dict[Path, frozenset[str]] = {}
 _vendor_cache_lock = Lock()
