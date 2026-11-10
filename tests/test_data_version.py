@@ -171,3 +171,25 @@ def test_failed_load_keeps_the_previous_file(tmp_path, monkeypatch):
     assert list(db.tmpfiles) == [str(previous), copies[-1]]
     assert previous.exists() and not older.exists()
     Path(copies[-1]).unlink()
+
+
+def test_copy_again_when_the_hash_changes(tmp_path, monkeypatch):
+    """sc-data replaces its file before updating its hash: a hash that changed during
+    the copy may not be the copied file's, so the file is copied again."""
+    from types import SimpleNamespace
+
+    from sc_keeper import database
+
+    fake = SimpleNamespace(hash="old", path=str(tmp_path / "sc-data.db"))
+    copies = []
+
+    def copyfile(src, dst):
+        copies.append(fake.hash)
+        if len(copies) == 1:
+            # a download lands during the first copy
+            fake.hash = "new"
+
+    monkeypatch.setattr(database, "db", fake)
+    monkeypatch.setattr(database, "copyfile", copyfile)
+    assert database.Database()._copy(str(tmp_path / "copy.db")) == "new"
+    assert copies == ["old", "new"]

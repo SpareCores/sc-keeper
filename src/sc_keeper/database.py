@@ -55,6 +55,10 @@ def read_published_at(conn) -> Optional[datetime]:
         return None
 
 
+# copies of sc-data's file to try when its hash changes during the copy
+COPY_ATTEMPTS = 3
+
+
 def _unlink(path: str) -> None:
     try:
         unlink(path)
@@ -137,19 +141,35 @@ class Database(Thread):
             published_at = read_published_at(conn)
         return engine, published_at
 
+    def _copy(self, tmpfile: str) -> Optional[str]:
+        """Copy sc-data's file, and return its hash.
+
+        sc-data replaces its file before it updates its hash, so the hash read before
+        the copy may not be the copied file's: a file labelled with another hash would
+        serve (and upload) its snapshots under the wrong hash. If the hash changed
+        during the copy, copy again.
+        """
+        for _ in range(COPY_ATTEMPTS):
+            db_hash = db.hash
+            logger.info(f"Copying {db.path} [{db_hash}] to {tmpfile}")
+            copyfile(db.path, tmpfile)
+            if db.hash == db_hash:
+                return db_hash
+            logger.info(
+                "sc-data switched to a newer file during the copy, copying again"
+            )
+        raise RuntimeError(f"sc-data's file kept changing in {COPY_ATTEMPTS} copies")
+
     def update(self, force=False):
         """Copies sc-data's most recent SQLite file, adds index and new tables."""
         if not self.ready or self.db_hash != db.hash or force:
             logger.info(
                 f"Found a new version of the SQLite database at {db.path} [{db.hash}]"
             )
-            # read the hash once: sc-data may switch to a newer file during the rebuild
-            new_hash = db.hash
             # delete=False due to Windows support
             tmpfile = NamedTemporaryFile(delete=False).name
             try:
-                logger.info(f"Copying {db.path} to {tmpfile}")
-                copyfile(db.path, tmpfile)
+                new_hash = self._copy(tmpfile)
                 engine, published_at = self._load(tmpfile)
                 logger.info(f"SQLite database updated {tmpfile}")
                 # snapshots are available before any response carries the new hash
