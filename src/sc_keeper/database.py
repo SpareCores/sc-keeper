@@ -73,13 +73,23 @@ class Database(Thread):
 
     def __init__(self, *args, **kwargs):
         self.tmpfiles = deque()
-        self.db_hash = db.hash
         self.lock = Lock()
         self.updated = Event()
         self.last_updated = None
-        self.engine = None
         self.version: Optional[DataVersion] = None
         super().__init__(*args, **kwargs)
+
+    @property
+    def db_hash(self) -> Optional[str]:
+        """The hash of the loaded database."""
+        version = self.version
+        return version.hash if version else None
+
+    @property
+    def engine(self) -> Optional[Engine]:
+        """The engine of the loaded database."""
+        version = self.version
+        return version.engine if version else None
 
     @property
     def ready(self):
@@ -186,8 +196,6 @@ class Database(Thread):
                 raise
             with self.lock:
                 self.tmpfiles.append(tmpfile)
-                self.engine = engine
-                self.db_hash = new_hash
                 self.version = DataVersion(
                     hash=new_hash, published_at=published_at, engine=engine
                 )

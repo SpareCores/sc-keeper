@@ -69,13 +69,12 @@ def healthcheck(db: Session = Depends(get_db)) -> HealthcheckResponse:
     # the version the request started on, as in its SC-Data-* headers, so the body
     # and the headers always agree, even during a database switch
     version = request_version.get() or session.version
-    published_at = version.published_at if version else None
     return {
         "packages": package_versions,
         "database_last_updated": session.last_updated,
-        "database_hash": version.hash if version else session.db_hash,
+        "database_hash": version.hash,
         "database_published_at": (
-            format_published_at(published_at) if published_at else None
+            format_published_at(version.published_at) if version.published_at else None
         ),
         "database_alembic_version": db.exec(
             text("SELECT version_num FROM zzz_alembic_version")
