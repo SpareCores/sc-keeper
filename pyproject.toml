@@ -42,7 +42,6 @@ issues = "https://github.com/SpareCores/sc-keeper/issues"
 testing = ["pytest", "fakeredis[lua]", "boto3>=1.36"]
 apm = ["sentry-sdk[fastapi]"]
 security = ["redis", "common-expression-language", "PyJWT[crypto]"]
-# shared snapshot storage in S3
 s3 = ["boto3>=1.36"]
 all = ["sparecores-keeper[testing]", "sparecores-keeper[apm]", "sparecores-keeper[security]", "sparecores-keeper[s3]"]
 

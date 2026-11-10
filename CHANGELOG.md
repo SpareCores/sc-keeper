@@ -13,16 +13,6 @@ New feature(s):
 - `/healthcheck` lists the database hashes with snapshots on the instance in
   `snapshot_hashes`.
 
-Fix(es):
-
-- Read the database hash once when loading a new database, so the recorded hash
-  always matches the loaded file.
-
-Housekeeping:
-
-- New `s3` extra (boto3) for sharing snapshots, installed in the Docker image.
-- `CacheHeaderMiddleware` keeps a `Cache-Control` header set by an endpoint.
-
 ## October 2026
 
 Breaking change(s):
