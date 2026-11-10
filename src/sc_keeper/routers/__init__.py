@@ -4,6 +4,7 @@ from . import (  # noqa: F401
     database,
     inspector,
     server,
+    snapshot,
     table_metadata,
     tables,
 )

@@ -114,6 +114,19 @@ def is_complete(hash_dir: Path) -> bool:
     return file_path(hash_dir, MANIFEST_PATH).is_file()
 
 
+def local_hashes() -> list[str]:
+    """Hashes with a complete build on this replica, newest first (R17, R18)."""
+    root = snapshot_dir()
+    if not root.is_dir():
+        return []
+    manifests = [
+        (file_path(d, MANIFEST_PATH).stat().st_mtime, d.name)
+        for d in root.iterdir()
+        if d.is_dir() and is_complete(d)
+    ]
+    return [name for _, name in sorted(manifests, reverse=True)]
+
+
 # ##############################################################################
 # Row selection
 

@@ -192,6 +192,10 @@ class HealthcheckResponse(BaseModel):
     database_hash: str
     database_alembic_version: str
     inspector_rules: str
+    snapshot_hashes: List[str] = Field(
+        default=[],
+        description="Database hashes with snapshots on this replica, newest first.",
+    )
 
 
 HealthcheckResponse.model_config["json_schema_extra"] = {
@@ -202,6 +206,7 @@ HealthcheckResponse.model_config["json_schema_extra"] = {
             "database_hash": "foo",
             "database_alembic_version": "bar",
             "inspector_rules": "github@0123456789abcdef0123456789abcdef01234567",
+            "snapshot_hashes": ["foo"],
         }
     ]
 }

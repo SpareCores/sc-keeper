@@ -7,6 +7,9 @@ class CacheHeaderMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request, call_next):
         response: Response = await call_next(request)
+        # keep a Cache-Control set by the endpoint itself, e.g. immutable /snapshot files
+        if "cache-control" in response.headers:
+            return response
         # default 1 hour
         ttl = 60 * 60
         # lower TTL for server prices

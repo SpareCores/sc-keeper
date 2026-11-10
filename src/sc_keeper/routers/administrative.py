@@ -18,6 +18,7 @@ from sc_crawler.tables import (
 from sqlmodel import Session, case, func, select, text
 
 from .. import parameters as options
+from .. import snapshots
 from ..auth import User, current_user
 from ..database import get_db, session
 from ..limits import heavy_job_dep
@@ -59,6 +60,7 @@ def healthcheck(db: Session = Depends(get_db)) -> HealthcheckResponse:
             text("SELECT version_num FROM zzz_alembic_version")
         ).one()[0],
         "inspector_rules": inspector_rules_source,
+        "snapshot_hashes": snapshots.local_hashes(),
     }
 
 
