@@ -160,10 +160,12 @@ def _headers(db_hash: str, mtime: int) -> dict[str, str]:
 
 @lru_cache(maxsize=16)
 def _vendors(hash_dir: Path) -> frozenset[str]:
-    """Vendors with snapshots in a complete build, from its manifest."""
-    with gzip.open(snapshots.file_path(hash_dir, snapshots.MANIFEST_PATH)) as f:
-        paths = json.load(f)["path"]
-    return frozenset(p.split("/", 1)[1] for p in paths if p.startswith("vendor/"))
+    """Vendors in a complete build, from its `vendor` snapshot."""
+    try:
+        with gzip.open(snapshots.file_path(hash_dir, "vendor")) as f:
+            return frozenset(json.load(f)["vendor_id"])
+    except FileNotFoundError:
+        return frozenset()
 
 
 def _serve(

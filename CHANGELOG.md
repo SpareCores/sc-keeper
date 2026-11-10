@@ -5,11 +5,11 @@ New feature(s):
 - Every response has `SC-Data-Hash` and `SC-Data-Published-At` headers: the hash and the
   publication time of the database it was built from.
 - Add `/snapshot/{hash}/...` endpoints (API key required): every table pinned to a
-  database hash, split by vendor (scores by vendor and benchmark), with available
-  records only, prices in USD and every column except `observed_at`, as gzipped
-  columnar JSON. `/snapshot/{hash}` lists the files with checksums. Snapshots are
-  built once per hash and shared between instances through S3 (`SNAPSHOT_S3_URI`).
-  See sc-specs `2026-11-08-keeper-snapshots.md`.
+  database hash, tables that reference a vendor split by vendor (scores by vendor and
+  benchmark), with available records only, prices in USD and every column except
+  `observed_at`, as gzipped columnar JSON. `/snapshot/{hash}` lists the files with
+  checksums. Snapshots are built once per hash and shared between instances through S3
+  (`SNAPSHOT_S3_URI`).
 - `/healthcheck` lists the database hashes with snapshots on the instance in
   `snapshot_hashes`.
 

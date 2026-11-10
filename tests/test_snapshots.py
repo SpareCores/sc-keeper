@@ -53,10 +53,11 @@ def test_manifest(hash_dir, manifest):
         assert lengths == {rows}, path
 
 
-def test_routes(manifest):
+def test_routes(hash_dir, manifest):
     """R5: every vendor table per available vendor, the other tables once."""
     paths = set(manifest["path"])
-    vendors = sorted(_vendor_ids(manifest))
+    vendors = sorted(_vendor_ids(hash_dir))
+    assert vendors
     for model in snapshots.VENDOR_TABLES:
         for vendor_id in vendors:
             assert f"{model.__table__.name}/{vendor_id}" in paths
@@ -65,8 +66,8 @@ def test_routes(manifest):
     assert any(p.startswith("benchmark_score/") for p in paths)
 
 
-def _vendor_ids(manifest) -> set[str]:
-    return {p.split("/")[1] for p in manifest["path"] if p.startswith("vendor/")}
+def _vendor_ids(hash_dir) -> set[str]:
+    return set(_read(hash_dir, "vendor")["vendor_id"])
 
 
 def test_empty_vendor_file(hash_dir, manifest):
@@ -129,7 +130,7 @@ def test_prices_in_usd(hash_dir, manifest):
 def test_references_resolve(hash_dir, manifest):
     """R7: every reference between the snapshots of one hash resolves."""
     servers, databases, zones = set(), set(), set()
-    for vendor_id in _vendor_ids(manifest):
+    for vendor_id in _vendor_ids(hash_dir):
         servers |= {
             (vendor_id, s) for s in _read(hash_dir, f"server/{vendor_id}")["server_id"]
         }
@@ -139,7 +140,7 @@ def test_references_resolve(hash_dir, manifest):
         }
         zone = _read(hash_dir, f"zone/{vendor_id}")
         zones |= set(zip(zone["vendor_id"], zone["region_id"], zone["zone_id"]))
-    for vendor_id in _vendor_ids(manifest):
+    for vendor_id in _vendor_ids(hash_dir):
         prices = _read(hash_dir, f"server_price/{vendor_id}")
         assert {(vendor_id, s) for s in prices["server_id"]} <= servers
         assert (
