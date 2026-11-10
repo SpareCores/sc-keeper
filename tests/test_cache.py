@@ -35,6 +35,10 @@ def _healthcheck(client):
     return client.get("/healthcheck")
 
 
+def _ping(client):
+    return client.get("/ping")
+
+
 def _auth_required_without_token(client):
     return client.get("/me")
 
@@ -101,6 +105,7 @@ def _too_many_heavy_jobs(client):
     [
         (_public_endpoint, 200, PUBLIC),
         (_healthcheck, 200, NO_STORE),
+        (_ping, 200, NO_STORE),
         (_auth_required_without_token, 401, NO_STORE),
         (_auth_required_with_token, 200, NO_STORE),
         (_invalid_token, 401, NO_STORE),

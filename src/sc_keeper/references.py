@@ -212,6 +212,13 @@ HealthcheckResponse.model_config["json_schema_extra"] = {
 }
 
 
+class PingResponse(BaseModel):
+    status: str = Field(description="Always `ok`.")
+
+
+PingResponse.model_config["json_schema_extra"] = {"examples": [{"status": "ok"}]}
+
+
 class SnapshotManifest(BaseModel):
     """Every file of a database hash's snapshots, sorted by path."""
 

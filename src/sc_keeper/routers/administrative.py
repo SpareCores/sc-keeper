@@ -27,6 +27,7 @@ from ..references import (
     BenchmarkScoreStatsItem,
     DebugInfoResponse,
     HealthcheckResponse,
+    PingResponse,
 )
 from ..views import ServerExtra
 
@@ -47,6 +48,18 @@ inspector_rules_source = (
     if _inspector_rules_source_file.exists()
     else "pypi"
 )
+
+
+@router.get("/ping")
+async def ping() -> PingResponse:
+    """Liveness check: answers as long as the process responds.
+
+    Unlike `/healthcheck`, it doesn't use the database nor the thread pool that the
+    other endpoints share, so it doesn't tell whether the replica can serve requests.
+    A failing `/healthcheck` with a working `/ping` means a busy or stuck thread pool,
+    not a dead process.
+    """
+    return {"status": "ok"}
 
 
 @router.get("/healthcheck")

@@ -255,3 +255,17 @@ def test_traffic_prices_with_params(params):
     else:
         # filtered list should have fewer items than full search
         assert len(response.json()) < count
+
+
+def test_ping():
+    """/ping is async and has no dependencies: it needs no thread of the pool that
+    the other endpoints share."""
+    import inspect
+
+    from sc_keeper.routers.administrative import ping
+
+    assert inspect.iscoroutinefunction(ping)
+    assert not inspect.signature(ping).parameters
+    response = client.get("/ping")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
