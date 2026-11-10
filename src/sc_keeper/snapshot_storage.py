@@ -271,11 +271,15 @@ def ensure(
 # ##############################################################################
 # Serving without holding request threads
 
-# The implementation overrides sc-specs 2026-11-08-keeper-snapshots.md R21, where
-# requests for a hash that isn't local wait for its download or build. Here they wait
-# for at most SNAPSHOT_REQUEST_WAIT_SECONDS, then get snapshot-not-available (and the
-# client re-pins to `current`), so request threads, shared with every other endpoint,
-# are never held for a whole build.
+# R21: requests for a hash that isn't local wait for its download or build for at
+# most SNAPSHOT_REQUEST_WAIT_SECONDS, so request threads, shared with every other
+# endpoint, are never held for a whole build. A job still running after the wait is
+# answered as "preparing" (503, retry the same hash), one that finished without the
+# hash as "not available" (404, re-pin to `current`).
+
+READY = "ready"
+PREPARING = "preparing"
+UNAVAILABLE = "unavailable"
 
 
 def request_wait_seconds() -> float:
@@ -309,20 +313,24 @@ def available(
     engine: Optional[Engine],
     published_at: Optional[datetime],
     wait: Optional[float] = None,
-) -> bool:
+) -> str:
     """Whether a hash's build is complete locally, for serving (R21).
 
-    If it isn't, a background job downloads it from S3, or builds the replica's
-    current database once (see `ensure`), and this waits for that job for at most
-    `wait` seconds (`SNAPSHOT_REQUEST_WAIT_SECONDS`, default 3). Request threads
-    never wait on the per-hash lock nor for a whole build, so a burst of snapshot
-    requests can't use up the thread pool that serves every other endpoint. A
-    download usually finishes within the wait; a build (about 25 seconds) doesn't,
-    and the request is answered as not available.
+    Returns `READY` if it is. If it isn't, a background job downloads it from S3,
+    or builds the replica's current database once (see `ensure`), and this waits
+    for that job for at most `wait` seconds (`SNAPSHOT_REQUEST_WAIT_SECONDS`,
+    default 3). Request threads never wait on the per-hash lock nor for a whole
+    build, so a burst of snapshot requests can't use up the thread pool that serves
+    every other endpoint.
+
+    Returns `READY` if the job made the hash complete, `PREPARING` if the job is
+    still running (a download that takes longer, or a build, about 25 seconds), and
+    `UNAVAILABLE` if it finished without the hash (no archive in S3, a hash other
+    than the current one, or a build that failed or recently failed).
     """
     hash_dir = snapshots.snapshot_dir() / db_hash
     if snapshots.is_complete(hash_dir):
-        return True
+        return READY
     with _jobs_lock:
         done = _jobs.get(db_hash)
         if done is None:
@@ -334,5 +342,7 @@ def available(
                 name=f"snapshot-{db_hash[:12]}",
                 daemon=True,
             ).start()
-    done.wait(request_wait_seconds() if wait is None else wait)
-    return snapshots.is_complete(hash_dir)
+    finished = done.wait(request_wait_seconds() if wait is None else wait)
+    if snapshots.is_complete(hash_dir):
+        return READY
+    return UNAVAILABLE if finished else PREPARING

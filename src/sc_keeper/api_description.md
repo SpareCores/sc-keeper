@@ -81,10 +81,14 @@ column, with one element per row), sent gzipped: send `Accept-Encoding: gzip`
 checksum, so you can skip files that didn't change since your last refresh.
 
 1. Take `database_hash` from `/healthcheck`, and fetch every snapshot with it.
-2. On a 404 of type `/problems/snapshot-not-available`, switch to the
+2. On a 503 of type `/problems/snapshot-preparing`, the instance is still
+   downloading or building that hash: retry the same request after the
+   `Retry-After` header's seconds, for about a minute at most, then continue
+   with step 3.
+3. On a 404 of type `/problems/snapshot-not-available`, switch to the
    `current` hash in the response body, and fetch again what you already
    fetched. If that also returns 404, try again later.
-3. Any other 404 (type `/problems/not-found`) is an unknown table, vendor or
+4. Any other 404 (type `/problems/not-found`) is an unknown table, vendor or
    id: don't retry.
 
 A hash's snapshots stay available for at least a day after they were first

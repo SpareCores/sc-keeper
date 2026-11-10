@@ -188,11 +188,13 @@ def _fail(*args, **kwargs):
 def test_available_serves_a_quick_download(built_dir, local_dir, fake_store):
     """R21: a download that finishes within the wait is served right away."""
     fake_store.upload("in-s3", built_dir)
-    assert snapshot_storage.available("in-s3", "current", session.engine, None, wait=5)
+    state = snapshot_storage.available("in-s3", "current", session.engine, None, wait=5)
+    assert state == snapshot_storage.READY
 
 
 def test_available_doesnt_wait_for_a_build(local_dir, fake_store, monkeypatch):
-    """R21: a build longer than the wait runs in the background, once per hash."""
+    """R21: a build longer than the wait runs in the background, once per hash, and
+    is reported as being prepared meanwhile."""
     started, release = threading.Event(), threading.Event()
     builds = []
 
@@ -204,12 +206,11 @@ def test_available_doesnt_wait_for_a_build(local_dir, fake_store, monkeypatch):
 
     monkeypatch.setattr(snapshots, "build", slow_build)
     t0 = time.time()
-    assert not snapshot_storage.available(
-        "current", "current", session.engine, None, wait=0.2
-    )
-    assert not snapshot_storage.available(
-        "current", "current", session.engine, None, wait=0.2
-    )
+    for _ in range(2):
+        state = snapshot_storage.available(
+            "current", "current", session.engine, None, wait=0.2
+        )
+        assert state == snapshot_storage.PREPARING
     assert time.time() - t0 < 2
     assert started.wait(5)
     release.set()
@@ -217,17 +218,31 @@ def test_available_doesnt_wait_for_a_build(local_dir, fake_store, monkeypatch):
         if snapshots.is_complete(local_dir / "current"):
             break
         time.sleep(0.1)
-    assert snapshot_storage.available(
+    state = snapshot_storage.available(
         "current", "current", session.engine, None, wait=0
     )
+    assert state == snapshot_storage.READY
     assert builds == ["current"]
 
 
 def test_available_never_builds_another_hash(local_dir, fake_store, monkeypatch):
+    """A hash that isn't in S3 and isn't the current one is not available: the job
+    finishes within the wait, so it's not reported as being prepared."""
     monkeypatch.setattr(snapshots, "build", _fail)
-    assert not snapshot_storage.available(
-        "other", "current", session.engine, None, wait=1
+    state = snapshot_storage.available("other", "current", session.engine, None, wait=1)
+    assert state == snapshot_storage.UNAVAILABLE
+
+
+def test_failed_build_is_not_available(local_dir, monkeypatch):
+    """During the cool-down after a failed build, the current hash is not available
+    (not being prepared), so clients don't keep retrying it."""
+    monkeypatch.setattr(snapshot_storage, "store", lambda: None)
+    monkeypatch.setattr(snapshot_storage, "_failed_builds", {"current": time.time()})
+    monkeypatch.setattr(snapshots, "build", _fail)
+    state = snapshot_storage.available(
+        "current", "current", session.engine, None, wait=1
     )
+    assert state == snapshot_storage.UNAVAILABLE
 
 
 def test_failed_build_isnt_retried_right_away(local_dir, monkeypatch):

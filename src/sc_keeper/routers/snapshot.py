@@ -36,6 +36,9 @@ CACHE_CONTROL = "private, max-age=86400, immutable"
 # R17: problem types
 NOT_FOUND = "/problems/not-found"
 NOT_AVAILABLE = "/problems/snapshot-not-available"
+PREPARING = "/problems/snapshot-preparing"
+# how long a client waits before retrying a hash that's being prepared
+RETRY_AFTER_SECONDS = 5
 
 _HASH = re.compile(r"^[0-9a-f]{40,64}$")
 _ID = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_:.-]*$")
@@ -49,6 +52,13 @@ ERROR_RESPONSES = {
         )
     },
     406: {"description": "The request doesn't accept gzip."},
+    503: {
+        "description": (
+            "The hash is being prepared on this replica (problem type "
+            "`/problems/snapshot-preparing`): retry the same request after "
+            "`Retry-After` seconds."
+        )
+    },
 }
 
 
@@ -89,15 +99,35 @@ def columnar_model(model) -> type[BaseModel]:
 # Serving
 
 
-def _problem(status: int, title: str, type_: Optional[str] = None, **extra):
+def _problem(
+    status: int,
+    title: str,
+    type_: Optional[str] = None,
+    headers: Optional[dict] = None,
+    **extra,
+):
     content = {"type": type_ or "about:blank", "title": title, "status": status}
     return JSONResponse(
-        content | extra, status_code=status, media_type="application/problem+json"
+        content | extra,
+        status_code=status,
+        media_type="application/problem+json",
+        headers=headers,
     )
 
 
 def _not_found() -> JSONResponse:
     return _problem(404, "Unknown snapshot", NOT_FOUND)
+
+
+def _preparing(db_hash: str, current: Optional[str]) -> JSONResponse:
+    return _problem(
+        503,
+        "Snapshot being prepared",
+        PREPARING,
+        headers={"Retry-After": str(RETRY_AFTER_SECONDS)},
+        requested=db_hash,
+        current=current,
+    )
 
 
 def _not_available(db_hash: str, current: Optional[str]) -> JSONResponse:
@@ -198,14 +228,16 @@ def _serve(
     hash_dir = snapshots.snapshot_dir() / db_hash
     target = snapshots.file_path(hash_dir, path)
     if not target.is_file():
-        complete = snapshot_storage.available(
+        state = snapshot_storage.available(
             db_hash,
             current,
             version.engine if version else None,
             version.published_at if version else None,
         )
         if not target.is_file():
-            if not complete:
+            if state == snapshot_storage.PREPARING:
+                return _preparing(db_hash, current)
+            if state == snapshot_storage.UNAVAILABLE:
                 return _not_available(db_hash, current)
             # R11: a well-formed benchmark id without rows gets empty arrays
             if empty_columns is not None and vendor in _vendors(hash_dir):
@@ -239,10 +271,13 @@ with it. `/snapshot/{hash}` lists the files with checksums, so you can skip the 
 that didn't change since your last refresh."""
 
 _USAGE = """The response is immutable for a hash, requires an API key, and is sent gzipped only:
-send `Accept-Encoding: gzip` (e.g. `curl --compressed`), or you get a `406`. A `404` of
-type `/problems/snapshot-not-available` means the hash isn't available: switch to the
-`current` hash in the response body, and fetch again the files you already fetched. A
-`404` of type `/problems/not-found` is an unknown table, vendor or id: don't retry."""
+send `Accept-Encoding: gzip` (e.g. `curl --compressed`), or you get a `406`. A `503` of
+type `/problems/snapshot-preparing` means the replica is still downloading or building
+the hash: retry the same request after `Retry-After` seconds (for about a minute at
+most). A `404` of type `/problems/snapshot-not-available` means the hash isn't
+available: switch to the `current` hash in the response body, and fetch again the files
+you already fetched. A `404` of type `/problems/not-found` is an unknown table, vendor
+or id: don't retry."""
 
 
 def _contents(prices: bool = False) -> str:

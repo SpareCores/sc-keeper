@@ -18,6 +18,8 @@ from sc_keeper.routers.snapshot import (
     CACHE_CONTROL,
     NOT_AVAILABLE,
     NOT_FOUND,
+    PREPARING,
+    RETRY_AFTER_SECONDS,
     accepts_gzip,
 )
 
@@ -206,8 +208,14 @@ def test_rebuild_doesnt_hold_the_request(client, db_hash, tmp_path, monkeypatch)
     response = _get(client, f"/snapshot/{db_hash}/country")
     release.set()
     assert time.time() - t0 < 3
-    assert response.status_code == 404
-    assert response.json()["type"] == NOT_AVAILABLE
+    # R21: still being prepared, so retry the same hash, rather than re-pin
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == str(RETRY_AFTER_SECONDS)
+    assert response.headers["Content-Type"] == "application/problem+json"
+    assert response.headers["Cache-Control"] == "private, no-store"
+    problem = response.json()
+    assert problem["type"] == PREPARING
+    assert problem["requested"] == problem["current"] == db_hash
 
 
 def test_snapshot_without_published_at(client, tmp_path, monkeypatch):
