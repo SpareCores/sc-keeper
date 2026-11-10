@@ -248,6 +248,12 @@ def ensure(
 # ##############################################################################
 # Serving without holding request threads
 
+# The implementation overrides sc-specs 2026-11-08-keeper-snapshots.md R21, where
+# requests for a hash that isn't local wait for its download or build. Here they wait
+# for at most SNAPSHOT_REQUEST_WAIT_SECONDS, then get snapshot-not-available (and the
+# client re-pins to `current`), so request threads, shared with every other endpoint,
+# are never held for a whole build.
+
 
 def request_wait_seconds() -> float:
     return float(os.environ.get("SNAPSHOT_REQUEST_WAIT_SECONDS", 3))
