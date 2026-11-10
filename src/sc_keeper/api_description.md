@@ -73,8 +73,9 @@ of the database it was built from:
 
 To read several tables from the same version, use the `/snapshot` endpoints
 (API key required). They serve each table as a file pinned to a database hash,
-split by vendor, e.g. `/snapshot/{hash}/server_price/aws`, with only available
-records and prices in USD. The responses are columnar JSON (one array per
+with tables that reference a vendor split by vendor, e.g.
+`/snapshot/{hash}/server_price/aws`, with only available records and prices in
+USD. The responses are columnar JSON (one array per
 column, with one element per row), sent gzipped: send `Accept-Encoding: gzip`
 (curl: `--compressed`). `/snapshot/{hash}` lists every file of a hash with a
 checksum, so you can skip files that didn't change since your last refresh.

@@ -49,6 +49,20 @@ Furthermore, the number of concurrent heavy jobs can be limited to avoid overloa
 - `HEAVY_JOBS_MAX_CONCURRENT` - Maximum number of concurrent heavy jobs (default: `2`)
 - `HEAVY_JOBS_ACQUIRE_TIMEOUT_SEC` - Timeout in seconds for acquiring a heavy job permit (default: `2.0`)
 
+The `/snapshot` endpoints serve files built when a database is loaded, kept on
+local disk, and optionally shared between instances through S3 (needs the `s3`
+extra), where the first instance that loads a database uploads them and the
+others download them:
+
+- `SNAPSHOT_S3_URI` - Shared storage as `s3://bucket/prefix` (default: none,
+  local files only). The bucket should delete objects after a day.
+- `SNAPSHOT_DIR` - Local directory of the snapshots (default:
+  `sc-keeper-snapshots` in the system temp directory)
+- `SNAPSHOT_LOCAL_RETENTION_SECONDS` - Delete the local snapshots of databases
+  loaded or downloaded this long ago, except the current one's (default: `21600`)
+- `SNAPSHOT_REQUEST_WAIT_SECONDS` - How long a request for a snapshot that isn't
+  local waits for its background download or build (default: `3`)
+
 Authentication supports four independent Bearer verification methods. Token
 validation is enabled when any method group is fully configured.
 

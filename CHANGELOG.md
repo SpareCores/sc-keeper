@@ -12,6 +12,8 @@ New feature(s):
   (`SNAPSHOT_S3_URI`).
 - `/healthcheck` lists the database hashes with snapshots on the instance in
   `snapshot_hashes`.
+- Add `/ping`, a liveness check that answers as long as the process does, without the
+  database or the thread pool shared by the other endpoints (unlike `/healthcheck`).
 
 ## October 2026
 

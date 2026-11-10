@@ -1,7 +1,8 @@
 """Database table snapshots pinned to a hash.
 
-Every route serves a columnar JSON file built in advance, gzipped, including all
-active records, without the `observed_at` timestamp.
+Every route serves a columnar JSON file built in advance, gzipped, including the
+available records (active or planned for retirement, whose references are available
+too), without the `observed_at` timestamp.
 """
 
 import gzip
