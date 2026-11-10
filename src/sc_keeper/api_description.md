@@ -61,6 +61,34 @@ cache TTL for most endpoints. For real-time access, lower-latency
 requirements, or custom caching strategies, feel free to reach out -- we are
 happy to discuss what works best for your use case.
 
+## Data Versions and Snapshots
+
+The data is refreshed several times an hour. Every response says which version
+of the database it was built from:
+
+- `SC-Data-Hash`: the hash of the database, also returned as `database_hash`
+  by `/healthcheck`
+- `SC-Data-Published-At`: when that version was published, e.g.
+  `2026-11-07T22:47:08Z`
+
+To read several tables from the same version, use the `/snapshot` endpoints
+(API key required). They serve each table as a file pinned to a database hash,
+split by vendor, e.g. `/snapshot/{hash}/server_price/aws`, with only available
+records and prices in USD. The responses are columnar JSON (one array per
+column, with one element per row), sent gzipped: send `Accept-Encoding: gzip`
+(curl: `--compressed`). `/snapshot/{hash}` lists every file of a hash with a
+checksum, so you can skip files that didn't change since your last refresh.
+
+1. Take `database_hash` from `/healthcheck`, and fetch every snapshot with it.
+2. On a 404 of type `/problems/snapshot-not-available`, switch to the
+   `current` hash in the response body, and fetch again what you already
+   fetched. If that also returns 404, try again later.
+3. Any other 404 (type `/problems/not-found`) is an unknown table, vendor or
+   id: don't retry.
+
+A hash's snapshots stay available for at least a day after they were first
+built.
+
 ## Rate Limiting
 
 Credit-based rate limiting with a 1-minute sliding window:
