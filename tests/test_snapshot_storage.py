@@ -4,6 +4,8 @@ import gzip
 import io
 import json
 import shutil
+import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -180,3 +182,48 @@ def test_ensure(built_dir, local_dir, fake_store, monkeypatch):
 
 def _fail(*args, **kwargs):
     raise RuntimeError("should not build")
+
+
+def test_available_serves_a_quick_download(built_dir, local_dir, fake_store):
+    """R21: a download that finishes within the wait is served right away."""
+    fake_store.upload("in-s3", built_dir)
+    assert snapshot_storage.available("in-s3", "current", session.engine, None, wait=5)
+
+
+def test_available_doesnt_wait_for_a_build(local_dir, fake_store, monkeypatch):
+    """R21: a build longer than the wait runs in the background, once per hash."""
+    started, release = threading.Event(), threading.Event()
+    builds = []
+
+    def slow_build(conn, hash_dir, _):
+        builds.append(hash_dir.name)
+        started.set()
+        release.wait(10)
+        _small_build(hash_dir)
+
+    monkeypatch.setattr(snapshots, "build", slow_build)
+    t0 = time.time()
+    assert not snapshot_storage.available(
+        "current", "current", session.engine, None, wait=0.2
+    )
+    assert not snapshot_storage.available(
+        "current", "current", session.engine, None, wait=0.2
+    )
+    assert time.time() - t0 < 2
+    assert started.wait(5)
+    release.set()
+    for _ in range(50):
+        if snapshots.is_complete(local_dir / "current"):
+            break
+        time.sleep(0.1)
+    assert snapshot_storage.available(
+        "current", "current", session.engine, None, wait=0
+    )
+    assert builds == ["current"]
+
+
+def test_available_never_builds_another_hash(local_dir, fake_store, monkeypatch):
+    monkeypatch.setattr(snapshots, "build", _fail)
+    assert not snapshot_storage.available(
+        "other", "current", session.engine, None, wait=1
+    )

@@ -197,7 +197,7 @@ def _serve(
     hash_dir = snapshots.snapshot_dir() / db_hash
     target = snapshots.file_path(hash_dir, path)
     if not target.is_file():
-        complete = snapshot_storage.ensure(
+        complete = snapshot_storage.available(
             db_hash,
             current,
             version.engine if version else None,

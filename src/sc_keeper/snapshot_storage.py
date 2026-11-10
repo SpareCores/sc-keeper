@@ -15,7 +15,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock, Thread
 from typing import IO, Optional
 from urllib.parse import urlparse
 
@@ -231,3 +231,67 @@ def ensure(
         if db_hash == current_hash and engine is not None:
             return _build_and_upload(engine, db_hash, hash_dir, published_at)
     return False
+
+
+# ##############################################################################
+# Serving without holding request threads
+
+
+def request_wait_seconds() -> float:
+    return float(os.environ.get("SNAPSHOT_REQUEST_WAIT_SECONDS", 3))
+
+
+_jobs: dict[str, Event] = {}
+_jobs_lock = Lock()
+
+
+def _job(
+    db_hash: str,
+    current_hash: Optional[str],
+    engine: Optional[Engine],
+    published_at: Optional[datetime],
+    done: Event,
+) -> None:
+    try:
+        ensure(db_hash, current_hash, engine, published_at)
+    except Exception:
+        logger.exception(f"Failed to make the snapshots of {db_hash} available")
+    finally:
+        with _jobs_lock:
+            _jobs.pop(db_hash, None)
+        done.set()
+
+
+def available(
+    db_hash: str,
+    current_hash: Optional[str],
+    engine: Optional[Engine],
+    published_at: Optional[datetime],
+    wait: Optional[float] = None,
+) -> bool:
+    """Whether a hash's build is complete locally, for serving (R21).
+
+    If it isn't, a background job downloads it from S3, or builds the replica's
+    current database once (see `ensure`), and this waits for that job for at most
+    `wait` seconds (`SNAPSHOT_REQUEST_WAIT_SECONDS`, default 3). Request threads
+    never wait on the per-hash lock nor for a whole build, so a burst of snapshot
+    requests can't use up the thread pool that serves every other endpoint. A
+    download usually finishes within the wait; a build (about 25 seconds) doesn't,
+    and the request is answered as not available.
+    """
+    hash_dir = snapshots.snapshot_dir() / db_hash
+    if snapshots.is_complete(hash_dir):
+        return True
+    with _jobs_lock:
+        done = _jobs.get(db_hash)
+        if done is None:
+            done = Event()
+            _jobs[db_hash] = done
+            Thread(
+                target=_job,
+                args=(db_hash, current_hash, engine, published_at, done),
+                name=f"snapshot-{db_hash[:12]}",
+                daemon=True,
+            ).start()
+    done.wait(request_wait_seconds() if wait is None else wait)
+    return snapshots.is_complete(hash_dir)

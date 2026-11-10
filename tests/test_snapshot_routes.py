@@ -1,5 +1,8 @@
 """/snapshot routes (sc-specs 2026-11-08-keeper-snapshots.md R5, R13-R18, R21)."""
 
+import threading
+import time
+
 import pytest
 from conftest import create_app_with_auth, mock_token_introspection
 from fastapi.testclient import TestClient
@@ -183,3 +186,21 @@ def test_openapi(client):
     assert schema["$ref"].endswith("ServerPriceSnapshot")
     properties = spec["components"]["schemas"]["ServerPriceSnapshot"]["properties"]
     assert "price_monthly" in properties and "observed_at" not in properties
+
+
+def test_rebuild_doesnt_hold_the_request(client, db_hash, tmp_path, monkeypatch):
+    """R21: a rebuild runs in the background; the request isn't held for it."""
+    monkeypatch.setenv("SNAPSHOT_DIR", str(tmp_path))
+    monkeypatch.setenv("SNAPSHOT_REQUEST_WAIT_SECONDS", "0.2")
+    release = threading.Event()
+
+    def slow_build(conn, hash_dir, published_at):
+        release.wait(10)
+
+    monkeypatch.setattr(snapshots, "build", slow_build)
+    t0 = time.time()
+    response = _get(client, f"/snapshot/{db_hash}/country")
+    release.set()
+    assert time.time() - t0 < 3
+    assert response.status_code == 404
+    assert response.json()["type"] == NOT_AVAILABLE
