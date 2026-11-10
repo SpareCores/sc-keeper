@@ -78,3 +78,36 @@ def test_read_published_at():
     )
     # the version carries the engine of the same database
     assert session.version.engine is session.engine
+
+
+def test_session_uses_the_version_the_request_started_on(monkeypatch):
+    """A database switch while a request waits doesn't mix data and headers: the
+    session is opened on the version captured when the request arrived."""
+    from fastapi import Depends, FastAPI
+    from fastapi.testclient import TestClient
+    from sqlmodel import Session, create_engine
+
+    from sc_keeper.data_version import DataVersionMiddleware
+    from sc_keeper.database import get_db
+
+    other_engine = create_engine("sqlite://")
+    started_on = DataVersion(hash="started-on", published_at=None, engine=other_engine)
+
+    app = FastAPI()
+    app.add_middleware(DataVersionMiddleware)
+
+    @app.get("/bind")
+    def bind(db: Session = Depends(get_db)):  # sync: runs in the thread pool
+        return {"engine": str(db.get_bind().url)}
+
+    monkeypatch.setattr(session, "version", started_on)
+    response = TestClient(app).get("/bind")
+    assert response.json() == {"engine": "sqlite://"}
+    assert response.headers[DATA_HASH_HEADER] == "started-on"
+
+
+def test_get_db_outside_requests_uses_the_current_database():
+    from sc_keeper.database import get_db
+
+    with next(get_db()) as db:
+        assert db.get_bind() is session.engine

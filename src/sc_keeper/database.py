@@ -1,5 +1,6 @@
 import logging
 from collections import deque
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from os import environ, unlink
@@ -183,8 +184,25 @@ safe_exit.register(session.cleanup)
 session.updated.wait()
 
 
+# the database version a request started on, set by DataVersionMiddleware
+request_version: ContextVar[Optional[DataVersion]] = ContextVar(
+    "request_version", default=None
+)
+
+
 def get_db():
-    db = session.sessionmaker
+    """A session on the database the request started on, or the current one outside
+    of requests.
+
+    A request can wait for a thread of the pool while the database switches; using
+    the version the request started on keeps its data and its SC-Data-Hash header
+    in sync. The previous database file is kept until the next switch.
+    """
+    version = request_version.get()
+    if version is not None and version.engine is not None:
+        db = Session(autocommit=False, autoflush=False, bind=version.engine)
+    else:
+        db = session.sessionmaker
     try:
         yield db
     finally:

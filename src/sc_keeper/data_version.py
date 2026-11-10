@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from .database import DataVersion, session
+from .database import DataVersion, request_version, session
 
 DATA_HASH_HEADER = "SC-Data-Hash"
 DATA_PUBLISHED_AT_HEADER = "SC-Data-Published-At"
@@ -29,11 +29,9 @@ class DataVersionMiddleware(BaseHTTPMiddleware):
     """Set `SC-Data-Hash` and `SC-Data-Published-At` on every response.
 
     The version is captured when the request arrives, before any query runs, and
-    used for the response even if the database is switched in the meantime: a
-    request's session keeps reading the database file it was opened on. The only
-    gap is a switch between this point and the endpoint opening its session (the
-    time to run the other middlewares and resolve dependencies), which would label
-    a response from the new database with the previous version.
+    `get_db()` opens the request's session on that same version, even if the
+    database is switched while the request waits for a thread of the pool, so the
+    headers always describe the data in the response.
 
     An endpoint that sets `SC-Data-Hash` itself (`/snapshot` responses, describing
     the snapshot's own version) gets neither header from here, so a response never
@@ -42,7 +40,12 @@ class DataVersionMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request, call_next):
         version = session.version
-        response = await call_next(request)
+        # get_db() opens the request's session on this same version
+        token = request_version.set(version)
+        try:
+            response = await call_next(request)
+        finally:
+            request_version.reset(token)
         if version is not None and DATA_HASH_HEADER not in response.headers:
             response.headers.update(data_version_headers(version))
         return response
