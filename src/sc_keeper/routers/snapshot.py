@@ -182,6 +182,18 @@ def _headers(db_hash: str, mtime: int) -> dict[str, str]:
     return headers
 
 
+class _SnapshotFileResponse(FileResponse):
+    """A file response without ETag and Last-Modified.
+
+    Those would come from the local file's modification time, so they would differ
+    between replicas for the same content. The hash in the path and the manifest's
+    checksums identify the content instead.
+    """
+
+    def set_stat_headers(self, stat_result) -> None:
+        self.headers.setdefault("content-length", str(stat_result.st_size))
+
+
 _vendor_cache: dict[Path, frozenset[str]] = {}
 _vendor_cache_lock = Lock()
 
@@ -253,7 +265,7 @@ def _serve(
                 )
             return _not_found()
 
-    return FileResponse(
+    return _SnapshotFileResponse(
         target,
         media_type="application/json",
         headers=_headers(db_hash, _gzip_mtime(target)),

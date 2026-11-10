@@ -94,6 +94,16 @@ def test_manifest(client, db_hash):
     assert "server/aws" in manifest["path"]
 
 
+def test_no_per_replica_validators(client, db_hash):
+    """ETag and Last-Modified would come from the local file, so differ per replica."""
+    for path in ["", "/server/aws"]:
+        response = _get(client, f"/snapshot/{db_hash}{path}")
+        assert response.status_code == 200
+        assert "ETag" not in response.headers
+        assert "Last-Modified" not in response.headers
+        assert "Content-Length" in response.headers
+
+
 def test_vendor_table(client, db_hash):
     response = _get(client, f"/snapshot/{db_hash}/server/aws")
     assert response.status_code == 200
