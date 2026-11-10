@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import tempfile
+import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -163,15 +164,26 @@ def _download(db_hash: str, hash_dir: Path) -> bool:
         return False
 
 
+# after a failed build, don't build the same hash again for this long: requests
+# would otherwise start one ~25 second build after the other while it keeps failing
+BUILD_RETRY_SECONDS = 5 * 60
+_failed_builds: dict[str, float] = {}
+
+
 def _build_and_upload(
     engine: Engine, db_hash: str, hash_dir: Path, published_at: Optional[datetime]
 ) -> bool:
+    failed = _failed_builds.get(db_hash)
+    if failed is not None and time.time() - failed < BUILD_RETRY_SECONDS:
+        return False
     try:
         with engine.connect() as conn:
             snapshots.build(conn, hash_dir, published_at)
     except Exception:
         logger.exception(f"Failed to build the snapshots of {db_hash}")
+        _failed_builds[db_hash] = time.time()
         return False
+    _failed_builds.pop(db_hash, None)
     shared = store()
     if shared is not None:
         try:

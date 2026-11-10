@@ -227,3 +227,26 @@ def test_available_never_builds_another_hash(local_dir, fake_store, monkeypatch)
     assert not snapshot_storage.available(
         "other", "current", session.engine, None, wait=1
     )
+
+
+def test_failed_build_isnt_retried_right_away(local_dir, monkeypatch):
+    """After a failed build, the same hash isn't built again for a while."""
+    attempts = []
+
+    def failing_build(conn, hash_dir, _):
+        attempts.append(hash_dir.name)
+        raise RuntimeError("build failed")
+
+    monkeypatch.setattr(snapshot_storage, "store", lambda: None)
+    monkeypatch.setattr(snapshots, "build", failing_build)
+    monkeypatch.setattr(snapshot_storage, "_failed_builds", {})
+    assert not snapshot_storage.ensure("current", "current", session.engine, None)
+    assert not snapshot_storage.ensure("current", "current", session.engine, None)
+    assert attempts == ["current"]
+    # once the retry interval passed, it's built again
+    snapshot_storage._failed_builds["current"] -= snapshot_storage.BUILD_RETRY_SECONDS
+    monkeypatch.setattr(
+        snapshots, "build", lambda conn, hash_dir, _: _small_build(hash_dir)
+    )
+    assert snapshot_storage.ensure("current", "current", session.engine, None)
+    assert "current" not in snapshot_storage._failed_builds
