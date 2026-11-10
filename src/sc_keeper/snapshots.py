@@ -256,6 +256,9 @@ def _refers_to(row, local, keys) -> bool:
 # Encoding
 
 
+_unconvertible_currencies: set[str] = set()
+
+
 def _to_usd(row: dict) -> dict:
     """Convert a price row to USD (R9), unrounded."""
     currency = row.get("currency")
@@ -281,7 +284,12 @@ def _to_usd(row: dict) -> dict:
                 )
             )
     except ValueError:
-        logger.error(f"Cannot convert {currency} to USD, kept as is: {row}")
+        if currency not in _unconvertible_currencies:
+            # once per currency and build, not per row (each would reach Sentry)
+            _unconvertible_currencies.add(currency)
+            logger.error(
+                f"Cannot convert {currency} to USD, keeping those prices as is"
+            )
         return row
     row["currency"] = "USD"
     return row
@@ -366,6 +374,7 @@ def build(
 ) -> list[SnapshotFile]:
     """Build every snapshot file of a database, then its manifest (R13)."""
     started = time.time()
+    _unconvertible_currencies.clear()
     mtime = gzip_mtime(published_at)
     files: list[SnapshotFile] = []
 
