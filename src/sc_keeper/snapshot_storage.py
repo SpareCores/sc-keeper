@@ -210,10 +210,14 @@ def prepare(
 def ensure(
     db_hash: str,
     current_hash: Optional[str],
-    engine: Engine,
+    engine: Optional[Engine],
     published_at: Optional[datetime],
 ) -> bool:
     """Make a hash's snapshots available locally, if possible (R21).
+
+    `current_hash`, `engine` and `published_at` must come from the same version of
+    the replica's database: building a hash from another database's engine would
+    write (and upload) wrong data under that hash.
 
     Download them from S3, or, for the replica's current database, build them once.
     Returns whether the hash's build is complete locally.
@@ -224,6 +228,6 @@ def ensure(
     with _lock(db_hash):
         if snapshots.is_complete(hash_dir) or _download(db_hash, hash_dir):
             return True
-        if db_hash == current_hash:
+        if db_hash == current_hash and engine is not None:
             return _build_and_upload(engine, db_hash, hash_dir, published_at)
     return False

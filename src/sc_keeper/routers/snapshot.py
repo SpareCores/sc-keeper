@@ -188,6 +188,7 @@ def _serve(
     """Serve a snapshot file from the first source that has it (R21)."""
     if not accepts_gzip(request.headers.get("accept-encoding")):
         return _problem(406, "Send Accept-Encoding: gzip")
+    # one read: the current hash and its engine always match, even across a switch
     version = session.version
     current = version.hash if version else None
     if not _HASH.match(db_hash):
@@ -199,7 +200,7 @@ def _serve(
         complete = snapshot_storage.ensure(
             db_hash,
             current,
-            session.engine,
+            version.engine if version else None,
             version.published_at if version else None,
         )
         if not target.is_file():

@@ -1,6 +1,6 @@
 import logging
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from os import environ, unlink
 from os.path import abspath
@@ -12,6 +12,7 @@ from typing import Optional
 
 import safe_exit
 from sc_data import db
+from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import Session, create_engine, delete, insert, text
 
@@ -31,6 +32,9 @@ class DataVersion:
     """None when sc-data doesn't track a hash, e.g. with a custom `SC_DATA_DB_PATH`."""
     published_at: Optional[datetime]
     """When the sc-data file was published (`_metadata.published_at`), in UTC."""
+    engine: Optional[Engine] = field(default=None, compare=False, repr=False)
+    """The engine of the loaded file, swapped together with the version, so a single
+    read gives a matching hash and engine."""
 
 
 def read_published_at(conn) -> Optional[datetime]:
@@ -140,7 +144,9 @@ class Database(Thread):
             with self.lock:
                 self.engine = engine
                 self.db_hash = new_hash
-                self.version = DataVersion(hash=new_hash, published_at=published_at)
+                self.version = DataVersion(
+                    hash=new_hash, published_at=published_at, engine=engine
+                )
                 self.last_updated = time()
                 self.updated.set()
             # keep up to 2 files so that queries can run

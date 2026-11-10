@@ -76,3 +76,5 @@ def test_read_published_at():
     assert session.version == DataVersion(
         hash=session.db_hash, published_at=published_at
     )
+    # the version carries the engine of the same database
+    assert session.version.engine is session.engine
