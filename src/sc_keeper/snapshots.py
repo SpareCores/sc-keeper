@@ -1,8 +1,5 @@
 """Database snapshots: tables pinned to a database hash, served as files.
 
-See sc-specs 2026-11-08-keeper-snapshots.md. Rule numbers (R6, R12, ...) refer to
-that ADR.
-
 A hash's snapshots are one directory, `<SNAPSHOT_DIR>/<hash>/`, holding one
 gzipped columnar JSON file per route below `/snapshot/<hash>/` (e.g.
 `server_price/aws.json.gz`), plus `manifest.json.gz`. The manifest is written last,

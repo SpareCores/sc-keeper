@@ -1,9 +1,9 @@
-"""Where snapshots come from: local files, a shared S3 bucket, or a build.
+"""Snapshot storage: local files, a shared S3 bucket, or on-the-fly build.
 
-See sc-specs 2026-11-08-keeper-snapshots.md R19-R22. Each hash is one zip
-archive in S3, `<SNAPSHOT_S3_URI>/<hash>.zip`, holding the hash's local files as
-they are (already gzipped, stored without recompression) and its manifest. The
-first replica that loads a hash builds and uploads it; the others download it.
+Each hash is one zip archive in S3, `<SNAPSHOT_S3_URI>/<hash>.zip`, holding the
+hash's local files as they are (already gzipped, stored without recompression)
+and its manifest. The first replica that loads a hash builds and uploads it; the
+others download it.
 """
 
 import gzip
