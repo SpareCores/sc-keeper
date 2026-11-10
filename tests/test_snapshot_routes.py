@@ -280,3 +280,21 @@ def test_unknown_routes_require_api_key(client, db_hash):
 def test_unknown_routes_are_not_documented(client):
     paths = client.get("/openapi.json").json()["paths"]
     assert not any("{rest" in p for p in paths)
+
+
+def test_problem_names_the_request_version(client, db_hash, monkeypatch):
+    """A switch while the request waits doesn't make the body's `current` disagree
+    with the response's SC-Data-Hash header."""
+    from sc_keeper.database import DataVersion
+    from sc_keeper.routers import snapshot as router
+
+    switched = DataVersion(hash="switched", published_at=None)
+
+    def switch_then_accept(header):
+        monkeypatch.setattr(session, "version", switched)
+        return True
+
+    monkeypatch.setattr(router, "accepts_gzip", switch_then_accept)
+    response = _get(client, f"/snapshot/{UNKNOWN_HASH}/country")
+    assert response.status_code == 404
+    assert response.json()["current"] == response.headers[DATA_HASH_HEADER] == db_hash

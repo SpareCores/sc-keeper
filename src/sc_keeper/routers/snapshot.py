@@ -26,7 +26,7 @@ from ..data_version import (
     DATA_PUBLISHED_AT_HEADER,
     format_published_at,
 )
-from ..database import session
+from ..database import request_version, session
 from ..references import SnapshotManifest
 
 router = APIRouter()
@@ -231,8 +231,9 @@ def _serve(
     """Serve a snapshot file from the first source that has it (R21)."""
     if not accepts_gzip(request.headers.get("accept-encoding")):
         return _problem(406, "Send Accept-Encoding: gzip")
-    # one read: the current hash and its engine always match, even across a switch
-    version = session.version
+    # the version the request started on, as in its SC-Data-* headers, so a problem's
+    # `current` matches them; one read, so its hash and engine always match
+    version = request_version.get() or session.version
     current = version.hash if version else None
     if not _HASH.match(db_hash):
         return _not_available(db_hash, current)
