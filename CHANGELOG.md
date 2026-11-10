@@ -11,7 +11,8 @@ New feature(s):
   checksums. Snapshots are built once per hash and shared between instances through S3
   (`SNAPSHOT_S3_URI`).
 - `/healthcheck` lists the database hashes with snapshots on the instance in
-  `snapshot_hashes`.
+  `snapshot_hashes`, and returns the publication time of the database in
+  `database_published_at`.
 - Add `/ping`, a liveness check that answers as long as the process does, without the
   database or the thread pool shared by the other endpoints (unlike `/healthcheck`).
 

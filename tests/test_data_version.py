@@ -51,7 +51,28 @@ def test_data_version_headers(client, make_request, status_code):  # noqa: F811
 def test_healthcheck_matches_header(client):  # noqa: F811
     """A client pinning the hash from the healthcheck body gets the header's hash."""
     response = client.get("/healthcheck")
-    assert response.json()["database_hash"] == response.headers[DATA_HASH_HEADER]
+    body = response.json()
+    assert body["database_hash"] == response.headers[DATA_HASH_HEADER]
+    assert body["database_published_at"] == response.headers[DATA_PUBLISHED_AT_HEADER]
+
+
+def test_healthcheck_uses_the_request_version(client, monkeypatch):  # noqa: F811
+    """During a switch, the body describes the version the request started on, like
+    its headers."""
+    started_on = DataVersion(
+        hash="started-on",
+        published_at=datetime(2026, 11, 7, 22, 47, 8, tzinfo=timezone.utc),
+        engine=session.engine,
+    )
+    monkeypatch.setattr(session, "version", started_on)
+    response = client.get("/healthcheck")
+    body = response.json()
+    assert body["database_hash"] == response.headers[DATA_HASH_HEADER] == "started-on"
+    assert (
+        body["database_published_at"]
+        == response.headers[DATA_PUBLISHED_AT_HEADER]
+        == "2026-11-07T22:47:08Z"
+    )
 
 
 def test_data_version_exposed_to_browsers(client):  # noqa: F811

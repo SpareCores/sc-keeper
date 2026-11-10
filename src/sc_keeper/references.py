@@ -190,6 +190,13 @@ class HealthcheckResponse(BaseModel):
     packages: dict
     database_last_updated: float
     database_hash: str
+    database_published_at: Optional[str] = Field(
+        default=None,
+        description=(
+            "When the loaded sc-data file was published, in UTC, formatted as in the "
+            "SC-Data-Published-At header, e.g. 2026-11-07T22:47:08Z."
+        ),
+    )
     database_alembic_version: str
     inspector_rules: str
     snapshot_hashes: List[str] = Field(
@@ -204,6 +211,7 @@ HealthcheckResponse.model_config["json_schema_extra"] = {
             "packages": {"sparecores-crawler": "1.0.0"},
             "database_last_updated": time(),
             "database_hash": "foo",
+            "database_published_at": "2026-11-07T22:47:08Z",
             "database_alembic_version": "bar",
             "inspector_rules": "github@0123456789abcdef0123456789abcdef01234567",
             "snapshot_hashes": ["foo"],
