@@ -1,11 +1,14 @@
 import logging
 from collections import deque
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from os import environ, unlink
 from os.path import abspath
 from shutil import copyfile
 from tempfile import NamedTemporaryFile
 from threading import Event, Lock, Thread
 from time import sleep, time
+from typing import Optional
 
 import safe_exit
 from sc_data import db
@@ -19,6 +22,33 @@ from .views import views
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class DataVersion:
+    """The sc-data file a database was loaded from."""
+
+    hash: Optional[str]
+    """None when sc-data doesn't track a hash, e.g. with a custom `SC_DATA_DB_PATH`."""
+    published_at: Optional[datetime]
+    """When the sc-data file was published (`_metadata.published_at`), in UTC."""
+
+
+def read_published_at(conn) -> Optional[datetime]:
+    """Read the publication time of an sc-data file from its `_metadata` table."""
+    try:
+        value = conn.execute(
+            text("SELECT value FROM _metadata WHERE key = 'published_at'")
+        ).scalar()
+        if value is None:
+            return None
+        published_at = datetime.fromisoformat(value)
+        if published_at.tzinfo is None:
+            published_at = published_at.replace(tzinfo=timezone.utc)
+        return published_at.astimezone(timezone.utc)
+    except Exception:
+        logger.warning("Could not read published_at from _metadata", exc_info=True)
+        return None
+
+
 class Database(Thread):
     daemon = True
 
@@ -29,6 +59,7 @@ class Database(Thread):
         self.updated = Event()
         self.last_updated = None
         self.engine = None
+        self.version: Optional[DataVersion] = None
         super().__init__(*args, **kwargs)
 
     @property
@@ -51,6 +82,8 @@ class Database(Thread):
             logger.info(
                 f"Found a new version of the SQLite database at {db.path} [{db.hash}]"
             )
+            # read the hash once: sc-data may switch to a newer file during the rebuild
+            new_hash = db.hash
             # delete=False due to Windows support
             tmpfile = NamedTemporaryFile(delete=False).name
             logger.info(f"Copying {db.path} to {tmpfile}")
@@ -99,10 +132,12 @@ class Database(Thread):
                         conn.commit()
                 conn.execute(text("VACUUM"))
                 conn.execute(text("ANALYZE"))
+                published_at = read_published_at(conn)
             logger.info(f"SQLite database updated {tmpfile}")
             with self.lock:
                 self.engine = engine
-                self.db_hash = db.hash
+                self.db_hash = new_hash
+                self.version = DataVersion(hash=new_hash, published_at=published_at)
                 self.last_updated = time()
                 self.updated.set()
             # keep up to 2 files so that queries can run
