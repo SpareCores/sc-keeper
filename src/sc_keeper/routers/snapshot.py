@@ -217,6 +217,48 @@ def _serve(
 
 
 # ##############################################################################
+# Route descriptions
+
+_CONSISTENCY = """Snapshots let you read several tables from the same version of the database:
+every file of one `{hash}` comes from the same database, so references between them
+always resolve, e.g. every price's server is in the `server` snapshot of that hash.
+Pin `database_hash` from `/healthcheck` at the start of a refresh, and fetch every file
+with it. `/snapshot/{hash}` lists the files with checksums, so you can skip the ones
+that didn't change since your last refresh."""
+
+_USAGE = """The response is immutable for a hash, requires an API key, and is sent gzipped only:
+send `Accept-Encoding: gzip` (e.g. `curl --compressed`), or you get a `406`. A `404` of
+type `/problems/snapshot-not-available` means the hash isn't available: switch to the
+`current` hash in the response body, and fetch again the files you already fetched. A
+`404` of type `/problems/not-found` is an unknown table, vendor or id: don't retry."""
+
+
+def _contents(prices: bool = False) -> str:
+    lines = [
+        "- Only available records: status `active` or `planned-for-retirement`. "
+        "Inactive and retired records are left out, and so are rows that reference "
+        "them (e.g. the prices of a retired server, or of an inactive zone).",
+        "- Every column of the table except `observed_at`: the hash already identifies "
+        "the data version. For per-row timestamps, use `/table/*`.",
+    ]
+    if prices:
+        lines.append(
+            "- Prices (`price`, `price_upfront`, `price_monthly` and the tiers of "
+            "`price_tiered`) converted to USD, unrounded, with `currency` set to `USD`."
+        )
+    lines += [
+        "- Sorted by the table's primary key.",
+        "- Columnar JSON: one array per column, with one element per row, all arrays "
+        "of the same length.",
+    ]
+    return "\n".join(lines)
+
+
+def _description(intro: str, prices: bool = False) -> str:
+    return f"{intro}\n\n{_CONSISTENCY}\n\nContents:\n\n{_contents(prices)}\n\n{_USAGE}"
+
+
+# ##############################################################################
 # Routes
 
 
@@ -225,18 +267,19 @@ def _serve(
     response_model=SnapshotManifest,
     responses=ERROR_RESPONSES,
     summary="Snapshot manifest",
+    description=(
+        "Every snapshot file of a database hash, sorted by path: its route below "
+        "`/snapshot/{hash}/` (`path`), its number of rows (`rows`), and the SHA-256 of "
+        "its uncompressed JSON (`sha256`). Compare the checksums with your last refresh "
+        "to skip files that didn't change, e.g. specs, regions and zones, which rarely "
+        "do. The manifest also lists which tables, vendors and benchmarks the hash "
+        "has.\n\n" + _CONSISTENCY + "\n\n" + _USAGE
+    ),
 )
 def snapshot_manifest(
     request: Request, hash: options.snapshot_hash, user: User = Security(current_user)
 ) -> Response:
-    """List every snapshot file of a database hash, with its number of rows and the
-    SHA-256 of its uncompressed JSON, so clients can skip files that didn't change.
-
-    All `/snapshot` routes require an API key, answer only to `Accept-Encoding: gzip`,
-    and serve immutable, columnar JSON: one array per column, with one element per
-    row. Pin the hash from `/healthcheck` at the start of a refresh, and on a `404`
-    of type `/problems/snapshot-not-available`, switch to its `current` hash.
-    """
+    """List every snapshot file of a database hash."""
     return _serve(request, hash, snapshots.MANIFEST_PATH)
 
 
@@ -250,10 +293,11 @@ def _add_global_route(model) -> None:
     ) -> Response:
         return _serve(request, hash, table)
 
-    endpoint.__doc__ = f"Snapshot of the `{table}` table: available rows, every column."
+    endpoint.__doc__ = f"Snapshot of the `{table}` table."
     router.add_api_route(
         f"/{{hash}}/{table}",
         endpoint,
+        description=_description(f"Snapshot of the `{table}` table."),
         methods=["GET"],
         response_model=columnar_model(model),
         responses=ERROR_RESPONSES,
@@ -275,15 +319,15 @@ def _add_vendor_route(model) -> None:
             return _not_found()
         return _serve(request, hash, f"{table}/{vendor}")
 
-    endpoint.__doc__ = (
-        f"Snapshot of the `{table}` table for one vendor: available rows whose "
-        "references are available too, every column except `observed_at`, sorted by "
-        "primary key."
-        + (" Prices are in USD." if table in snapshots.PRICE_TABLES else "")
-    )
+    endpoint.__doc__ = f"Snapshot of the `{table}` table for one vendor."
     router.add_api_route(
         f"/{{hash}}/{table}/{{vendor}}",
         endpoint,
+        description=_description(
+            f"Snapshot of the `{table}` table for one vendor. A vendor without rows in "
+            "the table gets empty arrays.",
+            prices=table in snapshots.PRICE_TABLES,
+        ),
         methods=["GET"],
         response_model=columnar_model(model),
         responses=ERROR_RESPONSES,
@@ -305,6 +349,14 @@ _score_columns = snapshots._columns(snapshots.SCORE_TABLE.__table__)
     response_model=columnar_model(snapshots.SCORE_TABLE),
     responses=ERROR_RESPONSES,
     summary="Snapshot of benchmark_score",
+    description=_description(
+        "Benchmark scores of one vendor and benchmark, with every config, for servers "
+        "and databases (`resource_type`). Tell configs apart by the `config` column, "
+        "and join `resource_id` to the `server_id` of the `server` snapshot (or the "
+        "`database_id` of the `database` snapshot), e.g. to get `api_reference`, which "
+        "differs from the id at some vendors. A benchmark without rows for the vendor "
+        "gets empty arrays. The `benchmark` snapshot lists every benchmark."
+    ),
 )
 def snapshot_benchmark_score(
     request: Request,
@@ -313,10 +365,7 @@ def snapshot_benchmark_score(
     benchmark_id: options.snapshot_benchmark_id,
     user: User = Security(current_user),
 ) -> Response:
-    """Scores of one vendor and benchmark, with every config, for servers and
-    databases: tell configs apart by the `config` column, and join `resource_id` to
-    the `server` or `database` snapshot. A benchmark without rows for the vendor gets
-    empty arrays."""
+    """Scores of one vendor and benchmark, with every config."""
     if not _ID.match(vendor) or not _ID.match(benchmark_id):
         return _not_found()
     return _serve(
