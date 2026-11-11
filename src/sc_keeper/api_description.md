@@ -88,8 +88,8 @@ checksum, so you can skip files that didn't change since your last refresh.
 3. On a 404 of type `/problems/snapshot-not-available`, switch to the
    `current` hash in the response body, and fetch again what you already
    fetched. If that also returns 404, try again later.
-4. Any other 404 (type `/problems/not-found`) is an unknown table, vendor or
-   id: don't retry.
+4. Any other 404 (type `/problems/not-found`) is an unknown table or vendor, or
+   a malformed id: don't retry. A benchmark without scores gets empty arrays.
 
 A hash's snapshots stay available for at least a day after they were first
 built.
