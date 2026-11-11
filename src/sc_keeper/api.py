@@ -42,6 +42,11 @@ from .auth import AuthGuardMiddleware, AuthMiddleware
 from .cache import CacheHeaderMiddleware
 from .crawler_extend import calculate_tiered_price
 from .currency import currency_converter
+from .data_version import (
+    DATA_HASH_HEADER,
+    DATA_PUBLISHED_AT_HEADER,
+    DataVersionMiddleware,
+)
 from .database import get_db
 from .helpers import (
     _MONTHLY_PRICE_NDIGITS,
@@ -306,6 +311,8 @@ app.add_middleware(
         "X-RateLimit-Limit",
         "X-RateLimit-Cost",
         "X-RateLimit-Remaining",
+        DATA_HASH_HEADER,
+        DATA_PUBLISHED_AT_HEADER,
     ],
 )
 
@@ -320,17 +327,27 @@ app.add_middleware(LogMiddleware)
 # extract user early from access token (if provided) and before logging and rate limiting
 app.add_middleware(AuthMiddleware)
 
+# data version headers: outermost, so that every response gets them, including early
+# responses of the other middlewares (preflight, 401, 429), and the version is captured
+# before any query runs
+app.add_middleware(DataVersionMiddleware)
+
 # ##############################################################################
 # API endpoints
 
 
-app.include_router(routers.administrative.router, tags=["Administrative endpoints"])
-app.include_router(routers.tables.router, prefix="/table", tags=["Table dumps"])
+app.include_router(routers.administrative.router, tags=["Administrative Endpoints"])
+app.include_router(routers.tables.router, prefix="/table", tags=["Table Dumps"])
 app.include_router(routers.table_metadata.router)
+app.include_router(
+    routers.snapshot.router, prefix="/snapshot", tags=["Table Snapshots"]
+)
 app.include_router(routers.server.router, tags=["Server Details"])
 app.include_router(routers.database.router, tags=["Database Details"])
-app.include_router(routers.ai.router, prefix="/ai", tags=["AI"])
-app.include_router(routers.inspector.router, prefix="/inspector", tags=["Inspector"])
+app.include_router(routers.ai.router, prefix="/ai", tags=["AI Helpers"])
+app.include_router(
+    routers.inspector.router, prefix="/inspector", tags=["Inspector (internal)"]
+)
 
 
 @app.get("/regions", tags=["Query Resources"])

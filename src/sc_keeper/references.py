@@ -189,9 +189,23 @@ with session.sessionmaker as db:
 class HealthcheckResponse(BaseModel):
     packages: dict
     database_last_updated: float
-    database_hash: str
+    database_hash: Optional[str] = Field(
+        default=None,
+        description="The hash of the loaded sc-data file, as in the SC-Data-Hash header.",
+    )
+    database_published_at: Optional[str] = Field(
+        default=None,
+        description=(
+            "When the loaded sc-data file was published, in UTC, formatted as in the "
+            "SC-Data-Published-At header, e.g. 2026-11-07T22:47:08Z."
+        ),
+    )
     database_alembic_version: str
     inspector_rules: str
+    snapshot_hashes: List[str] = Field(
+        default=[],
+        description="Database hashes with snapshots on this replica, newest first.",
+    )
 
 
 HealthcheckResponse.model_config["json_schema_extra"] = {
@@ -200,8 +214,50 @@ HealthcheckResponse.model_config["json_schema_extra"] = {
             "packages": {"sparecores-crawler": "1.0.0"},
             "database_last_updated": time(),
             "database_hash": "foo",
+            "database_published_at": "2026-11-07T22:47:08Z",
             "database_alembic_version": "bar",
             "inspector_rules": "github@0123456789abcdef0123456789abcdef01234567",
+            "snapshot_hashes": ["foo"],
+        }
+    ]
+}
+
+
+class PingResponse(BaseModel):
+    status: str = Field(description="Always `ok`.")
+
+
+PingResponse.model_config["json_schema_extra"] = {"examples": [{"status": "ok"}]}
+
+
+class SnapshotManifest(BaseModel):
+    """Every file of a database hash's snapshots, sorted by path."""
+
+    path: List[str] = Field(
+        description="Route below `/snapshot/{hash}/`, e.g. `server_price/aws`."
+    )
+    rows: List[int] = Field(description="Number of rows in the file.")
+    sha256: List[str] = Field(
+        description="SHA-256 of the file's uncompressed JSON, in lowercase hex."
+    )
+
+
+SnapshotManifest.model_config["json_schema_extra"] = {
+    "examples": [
+        {
+            "path": [
+                "benchmark_score/aws/stress_ng:bestn",
+                "country",
+                "server/aws",
+                "server_price/aws",
+            ],
+            "rows": [1191, 54, 1419, 135240],
+            "sha256": [
+                "9f2c5d4e0a1b3c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d",
+                "41d0b2e5c8f1a4d7b0e3c6f9a2d5b8e1c4f7a0d3b6e9c2f5a8d1b4e7c0f3a6d9",
+                "7ab3c9e2f5a8d1b4e7c0f3a6d9b2e5c8f1a4d7b0e3c6f9a2d5b8e1c4f7a0d3b6",
+                "e05c1a4d7b0e3c6f9a2d5b8e1c4f7a0d3b6e9c2f5a8d1b4e7c0f3a6d9b2e5c8f",
+            ],
         }
     ]
 }

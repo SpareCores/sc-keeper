@@ -1397,3 +1397,22 @@ inspector_tasks = Annotated[
     List[str],
     Query(description="Inspector task names to evaluate."),
 ]
+
+# path parameters of the /snapshot routes
+
+snapshot_hash = Annotated[
+    str,
+    Path(
+        title="Database hash",
+        description="Database hash, e.g. `database_hash` of `/healthcheck`.",
+    ),
+]
+
+snapshot_vendor = Annotated[
+    str, Path(title="Vendor", description="Vendor id, e.g. `aws`.")
+]
+
+snapshot_benchmark_id = Annotated[
+    str,
+    Path(title="Benchmark", description="Benchmark id, e.g. `stress_ng:bestn`."),
+]

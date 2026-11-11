@@ -1,3 +1,21 @@
+## November 2026
+
+New feature(s):
+
+- Every response has `SC-Data-Hash` and `SC-Data-Published-At` headers: the hash and the
+  publication time of the database it was built from.
+- Add `/snapshot/{hash}/...` endpoints (API key required): every table pinned to a
+  database hash, tables that reference a vendor split by vendor (scores by vendor and
+  benchmark), with available records only, prices in USD and every column except
+  `observed_at`, as gzipped columnar JSON. `/snapshot/{hash}` lists the files with
+  checksums. Snapshots are built once per hash and shared between instances through S3
+  (`SNAPSHOT_S3_URI`).
+- `/healthcheck` lists the database hashes with snapshots on the instance in
+  `snapshot_hashes`, and returns the publication time of the database in
+  `database_published_at`.
+- Add `/ping`, a liveness check that answers as long as the process does, without the
+  database or the thread pool shared by the other endpoints (unlike `/healthcheck`).
+
 ## October 2026
 
 Breaking change(s):
