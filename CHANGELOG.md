@@ -2,6 +2,10 @@
 
 New feature(s):
 
+- Records with the new `ARCHIVED` status (replaced or deliberately dropped records, e.g.
+  the old Hetzner datacenter regions) are never returned by any endpoint, including
+  `/regions`, the `/table/...` endpoints and `only_orderable=false` or `only_active=false`
+  queries; there is no parameter to include them.
 - Every response has `SC-Data-Hash` and `SC-Data-Published-At` headers: the hash and the
   publication time of the database it was built from.
 - Add `/snapshot/{hash}/...` endpoints (API key required): every table pinned to a

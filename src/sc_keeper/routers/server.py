@@ -29,6 +29,7 @@ from ..helpers import (
     get_server_dict,
     get_server_pks,
     get_sort_key_for_benchmark_configs,
+    not_archived,
     update_server_price_currency,
     vendor_region_filter,
 )
@@ -407,6 +408,8 @@ def get_server_prices(
     )
     if only_active:
         query = query.where(ServerPrice.status == Status.ACTIVE)
+    else:
+        query = query.where(not_archived(ServerPrice.status))
     if countries:
         query = query.join(ServerPrice.region)
         query = query.where(Region.country_id.in_(countries))
@@ -463,6 +466,7 @@ def get_server_descriptions(
         select(ServerDescription)
         .where(ServerDescription.vendor_id == vendor_id)
         .where(ServerDescription.server_id == server_id)
+        .where(not_archived(ServerDescription.status))
     ).one_or_none()
 
     if description is None:
