@@ -16,6 +16,13 @@ New feature(s):
 - Add `/ping`, a liveness check that answers as long as the process does, without the
   database or the thread pool shared by the other endpoints (unlike `/healthcheck`).
 
+Fix(es):
+
+- The `family` method of `/server/{vendor}/{server}/similar_servers/{by}/{num}` returns
+  the servers of the same series (e.g. `t2d`), and falls back to the same family (a broad
+  category at most vendors, e.g. "General Purpose") only when the series is unknown or
+  has fewer than 3 other servers.
+
 ## October 2026
 
 Breaking change(s):

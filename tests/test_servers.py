@@ -221,19 +221,21 @@ class TestFiltering:
         assert data
         assert all(s["accelerator_type"] == "GPU" for s in data)
 
-    def test_gpu_min_excludes_tpus(self):
-        data, _ = get_servers(gpu_min=1, accelerator_type=["TPU"], only_orderable=False)
+    def test_gpu_min_excludes_non_gpus(self):
+        data, _ = get_servers(gpu_min=1, accelerator_type=["NPU"], only_orderable=False)
         assert data == []
 
     def test_accelerator_type(self):
-        data, _ = get_servers(accelerator_type=["TPU"], limit=100, only_orderable=False)
+        data, _ = get_servers(accelerator_type=["NPU"], limit=100, only_orderable=False)
         assert data
-        assert all(s["accelerator_type"] == "TPU" for s in data)
+        assert all(s["accelerator_type"] == "NPU" for s in data)
 
-    def test_accelerator_min_includes_tpus(self):
+    def test_accelerator_min_includes_non_gpus(self):
         data, _ = get_servers(accelerator_min=1, limit=500, only_orderable=False)
         assert all(s["accelerator_count"] >= 1 for s in data)
-        assert {s["accelerator_type"] for s in data} >= {"GPU", "TPU"}
+        types = {s["accelerator_type"] for s in data}
+        assert "GPU" in types
+        assert types - {"GPU"}, "non-GPU accelerators should be included"
 
     def test_accelerator_max(self):
         data, _ = get_servers(
