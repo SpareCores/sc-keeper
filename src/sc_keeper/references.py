@@ -33,10 +33,21 @@ from .database import session
 with session.sessionmaker as db:
     Countries = StrEnum(
         "Countries",
-        {m.country_id: m.country_id for m in db.exec(select(Country)).all()},
+        {
+            m.country_id: m.country_id
+            for m in db.exec(
+                select(Country).where(Country.status != Status.ARCHIVED)
+            ).all()
+        },
     )
     Vendors = StrEnum(
-        "Vendors", {m.vendor_id: m.vendor_id for m in db.exec(select(Vendor)).all()}
+        "Vendors",
+        {
+            m.vendor_id: m.vendor_id
+            for m in db.exec(
+                select(Vendor).where(Vendor.status != Status.ARCHIVED)
+            ).all()
+        },
     )
     VendorRegions = StrEnum(
         "VendorRegions",
@@ -60,7 +71,11 @@ with session.sessionmaker as db:
         "ComplianceFrameworks",
         {
             m.compliance_framework_id: m.compliance_framework_id
-            for m in db.exec(select(ComplianceFramework)).all()
+            for m in db.exec(
+                select(ComplianceFramework).where(
+                    ComplianceFramework.status != Status.ARCHIVED
+                )
+            ).all()
         },
     )
     CpuManufacturers = StrEnum(

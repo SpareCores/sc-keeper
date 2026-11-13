@@ -22,6 +22,7 @@ from .. import snapshots
 from ..auth import User, current_user
 from ..data_version import format_published_at
 from ..database import get_db, request_version, session
+from ..helpers import not_archived
 from ..limits import heavy_job_dep
 from ..references import (
     BenchmarkHistogram,
@@ -101,6 +102,7 @@ def get_stats(
     def _count(table):
         """Execute count query with optional vendor and status filters."""
         query = select(func.count()).select_from(table)
+        query = query.where(not_archived(table.status))
         if vendor:
             query = query.where(table.vendor_id.in_(vendor))
         if only_active:
@@ -133,6 +135,7 @@ def get_debug_info(db: Session = Depends(get_db)) -> DebugInfoResponse:
             & (Server.server_id == ServerExtra.server_id),
             isouter=True,
         )
+        .where(not_archived(Server.status))
         .order_by(Server.vendor_id, Server.server_id)
     )
     servers_data = db.exec(servers_query).all()
@@ -314,7 +317,11 @@ def get_benchmark_score_stats(
     Due to the complexity of the query, not using sqlalchemy markup.
     """
 
-    benchmarks = db.exec(select(Benchmark).order_by(Benchmark.benchmark_id)).all()
+    benchmarks = db.exec(
+        select(Benchmark)
+        .where(not_archived(Benchmark.status))
+        .order_by(Benchmark.benchmark_id)
+    ).all()
 
     agg_rows = db.exec(_AGGREGATE_SCORES_SQL).all()
     agg_by_benchmark = {row[0]: row for row in agg_rows}
