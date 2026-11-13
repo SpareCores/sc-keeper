@@ -17,4 +17,4 @@ jobs:
       - name: Linters
         run: tox -e lint
       - name: Tests
-        run: tox
+        run: tox -e py313
