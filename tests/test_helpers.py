@@ -71,3 +71,39 @@ def test_benchmark_configs_config_order_within_benchmark():
         ("pgbench:heavy_read_only", {"concurrency": "single"}),
         ("pgbench:heavy_read_only", {"concurrency": "peak"}),
     ]
+
+
+def test_status_filter_never_returns_archived():
+    from sc_crawler.table_fields import Status
+    from sc_crawler.tables import Region
+    from sqlalchemy import create_engine
+    from sqlmodel import Session, select
+
+    from sc_keeper.helpers import not_archived, status_filter
+
+    engine = create_engine("sqlite://")
+    Region.__table__.create(engine)
+    with Session(engine) as db:
+        for status in Status:
+            db.execute(
+                Region.__table__.insert().values(
+                    vendor_id="v",
+                    region_id=status.name,
+                    name=status.name,
+                    api_reference=status.name,
+                    display_name=status.name,
+                    aliases=[],
+                    country_id="US",
+                    lon=0,
+                    lat=0,
+                    status=status,
+                )
+            )
+
+        def ids(cond):
+            return {r.region_id for r in db.exec(select(Region).where(cond)).all()}
+
+        assert "ARCHIVED" not in ids(not_archived(Region.status))
+        assert status_filter(Region.status, False, False) is None
+        assert ids(status_filter(Region.status, True, False)) == {"ACTIVE"}
+        assert "ARCHIVED" not in ids(status_filter(Region.status, False, True))

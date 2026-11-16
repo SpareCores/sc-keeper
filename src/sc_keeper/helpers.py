@@ -21,8 +21,17 @@ _PRICE_NDIGITS = 4
 _MONTHLY_PRICE_NDIGITS = 2
 
 
+def not_archived(status_column):
+    """Return the condition that leaves out ARCHIVED records, shared by all endpoints."""
+    return status_column != Status.ARCHIVED
+
+
 def status_filter(status_column, only_active: bool | None, only_orderable: bool | None):
-    """Return a SQLAlchemy status filter, or None if neither flag applies."""
+    """Return a SQLAlchemy status filter, or None if neither flag applies.
+
+    Both flags leave out ARCHIVED records, but with neither set the caller still has to
+    add ``not_archived`` itself, as a non-None filter also implies a price requirement.
+    """
     if only_active:
         return status_column == Status.ACTIVE
     if only_orderable:
@@ -33,7 +42,7 @@ def status_filter(status_column, only_active: bool | None, only_orderable: bool 
 @cachier(stale_after=timedelta(minutes=10), backend="memory")
 def get_server_dicts():
     with next(get_db()) as db:
-        server_rows = db.exec(select(Server)).all()
+        server_rows = db.exec(select(Server).where(not_archived(Server.status))).all()
     servers = nesteddefaultdict()
     for server_row in server_rows:
         serverobj = server_row.model_dump()
@@ -66,6 +75,7 @@ def get_server_pks(vendor: str, server: str, db: Session) -> ServerPKs:
             select(Server)
             .where(Server.vendor_id == vendor)
             .where((Server.server_id == server) | (Server.api_reference == server))
+            .where(not_archived(Server.status))
             .join(Server.vendor)
             .options(contains_eager(Server.vendor))
         ).one()
@@ -76,7 +86,9 @@ def get_server_pks(vendor: str, server: str, db: Session) -> ServerPKs:
 @cachier(stale_after=timedelta(minutes=10), backend="memory")
 def get_database_dicts():
     with next(get_db()) as db:
-        database_rows = db.exec(select(Database)).all()
+        database_rows = db.exec(
+            select(Database).where(not_archived(Database.status))
+        ).all()
     databases = nesteddefaultdict()
     for database_row in database_rows:
         databaseobj = database_row.model_dump()
@@ -98,6 +110,7 @@ def get_database_base(vendor_id: str, database_id: str, db: Session) -> Database
             select(Database)
             .where(Database.vendor_id == vendor_id)
             .where(Database.database_id == database_id)
+            .where(not_archived(Database.status))
         ).one()
     except NoResultFound as e:
         raise HTTPException(status_code=404, detail="Database not found") from e
@@ -112,6 +125,7 @@ def get_database_pks(vendor: str, database: str, db: Session) -> DatabasePKs:
                 (Database.database_id == database)
                 | (Database.api_reference == database)
             )
+            .where(not_archived(Database.status))
             .join(Database.vendor)
             .options(contains_eager(Database.vendor))
         ).one()

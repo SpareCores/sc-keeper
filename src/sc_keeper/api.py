@@ -54,6 +54,7 @@ from .helpers import (
     add_extra_to_price,
     get_sort_key_for_benchmark_configs,
     mapped_class_has_column,
+    not_archived,
     status_filter,
     update_database_price_currency,
     update_server_price_currency,
@@ -355,7 +356,11 @@ def search_regions(
     vendor: options.vendor = None,
     db: Session = Depends(get_db),
 ) -> List[RegionPKs]:
-    query = select(Region).options(selectinload(Region.vendor))
+    query = (
+        select(Region)
+        .options(selectinload(Region.vendor))
+        .where(not_archived(Region.status))
+    )
     if vendor:
         query = query.where(Region.vendor_id.in_(vendor))
     return db.exec(query).all()
@@ -750,6 +755,7 @@ def search_servers(
             best_price_ref <= currency_converter.convert(price_max, currency, "USD")
         )
 
+    conditions.add(not_archived(Server.status))
     server_status = status_filter(Server.status, only_active, only_orderable)
     if server_status is not None:
         conditions.add(server_status)
@@ -1331,6 +1337,7 @@ def search_databases(
             >= benchmark_score_per_price_min
         )
 
+    conditions.add(not_archived(Database.status))
     database_status = status_filter(Database.status, only_active, only_orderable)
     if database_status is not None:
         conditions.add(database_status)
@@ -1726,6 +1733,7 @@ def search_server_prices(
         conditions.add(Server.accelerator_family.in_(gpu_family))
     if gpu_model:
         conditions.add(Server.accelerator_model.in_(gpu_model))
+    conditions.add(not_archived(ServerPrice.status))
     if only_active:
         joins.add(ServerPrice.server)
         conditions.add(Server.status == Status.ACTIVE)

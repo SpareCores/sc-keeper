@@ -38,6 +38,7 @@ def test_table_dump(path, id_field):
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
+    assert all(row.get("status") != "ARCHIVED" for row in data)
     assert id_field in data[0]
 
 

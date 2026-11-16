@@ -23,61 +23,65 @@ from .. import parameters as options
 from ..auth import User, current_user
 from ..currency import currency_converter
 from ..database import get_db
-from ..helpers import vendor_region_filter
+from ..helpers import not_archived, vendor_region_filter
 
 router = APIRouter()
 
 
 @router.get("/benchmark")
 def table_benchmark(db: Session = Depends(get_db)) -> List[Benchmark]:
-    """Return the Benchmark table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Benchmark)).all()
+    """Return the Benchmark table without filtering options or relationships resolved; ARCHIVED records are left out."""
+    return db.exec(select(Benchmark).where(not_archived(Benchmark.status))).all()
 
 
 @router.get("/country")
 def table_country(db: Session = Depends(get_db)) -> List[Country]:
-    """Return the Country table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Country)).all()
+    """Return the Country table without filtering options or relationships resolved; ARCHIVED records are left out."""
+    return db.exec(select(Country).where(not_archived(Country.status))).all()
 
 
 @router.get("/compliance_framework")
 def table_compliance_frameworks(
     db: Session = Depends(get_db),
 ) -> List[ComplianceFramework]:
-    """Return the ComplianceFramework table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(ComplianceFramework)).all()
+    """Return the ComplianceFramework table without filtering options or relationships resolved; ARCHIVED records are left out."""
+    return db.exec(
+        select(ComplianceFramework).where(not_archived(ComplianceFramework.status))
+    ).all()
 
 
 @router.get("/vendor_compliance_link")
 def table_vendor_compliance_link(
     db: Session = Depends(get_db),
 ) -> List[VendorComplianceLink]:
-    """Return the VendorComplianceLink table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(VendorComplianceLink)).all()
+    """Return the VendorComplianceLink table without filtering options or relationships resolved; ARCHIVED records are left out."""
+    return db.exec(
+        select(VendorComplianceLink).where(not_archived(VendorComplianceLink.status))
+    ).all()
 
 
 @router.get("/vendor")
 def table_vendor(db: Session = Depends(get_db)) -> List[Vendor]:
-    """Return the Vendor table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Vendor)).all()
+    """Return the Vendor table without filtering options or relationships resolved; ARCHIVED records are left out."""
+    return db.exec(select(Vendor).where(not_archived(Vendor.status))).all()
 
 
 @router.get("/region")
 def table_region(db: Session = Depends(get_db)) -> List[Region]:
-    """Return the Region table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Region)).all()
+    """Return the Region table without filtering options or relationships resolved; ARCHIVED records are left out."""
+    return db.exec(select(Region).where(not_archived(Region.status))).all()
 
 
 @router.get("/zone")
 def table_zone(db: Session = Depends(get_db)) -> List[Zone]:
-    """Return the Zone table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Zone)).all()
+    """Return the Zone table without filtering options or relationships resolved; ARCHIVED records are left out."""
+    return db.exec(select(Zone).where(not_archived(Zone.status))).all()
 
 
 @router.get("/server")
 def table_server(db: Session = Depends(get_db)) -> List[Server]:
-    """Return the Server table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Server)).all()
+    """Return the Server table without filtering options or relationships resolved; ARCHIVED records are left out."""
+    return db.exec(select(Server).where(not_archived(Server.status))).all()
 
 
 @router.get("/server/select")
@@ -86,10 +90,13 @@ def table_server_select(
 ) -> List[Dict]:
     """Return the Server table with column selection."""
     if not columns:
-        return [row.model_dump() for row in db.exec(select(Server)).all()]
+        return [
+            row.model_dump()
+            for row in db.exec(select(Server).where(not_archived(Server.status))).all()
+        ]
 
     col_attrs = [getattr(Server, col) for col in columns]
-    rows = db.exec(select(*col_attrs)).all()
+    rows = db.exec(select(*col_attrs).where(not_archived(Server.status))).all()
 
     if len(columns) == 1:
         return [{columns[0]: val} for val in rows]
@@ -121,6 +128,8 @@ def table_server_prices(
         query = query.where(ServerPrice.allocation == allocation)
     if only_active:
         query = query.where(ServerPrice.status == Status.ACTIVE)
+    else:
+        query = query.where(not_archived(ServerPrice.status))
     prices = db.exec(query).all()
     if currency:
         for price in prices:
@@ -143,14 +152,14 @@ def table_server_prices(
 
 @router.get("/storage")
 def table_storage(db: Session = Depends(get_db)) -> List[Storage]:
-    """Return the Storage table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Storage)).all()
+    """Return the Storage table without filtering options or relationships resolved; ARCHIVED records are left out."""
+    return db.exec(select(Storage).where(not_archived(Storage.status))).all()
 
 
 @router.get("/database")
 def table_database(db: Session = Depends(get_db)) -> List[Database]:
-    """Return the Database table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(Database)).all()
+    """Return the Database table without filtering options or relationships resolved; ARCHIVED records are left out."""
+    return db.exec(select(Database).where(not_archived(Database.status))).all()
 
 
 @router.get("/database_price")
@@ -176,6 +185,8 @@ def table_database_price(
         query = query.where(DatabasePrice.allocation == allocation)
     if only_active:
         query = query.where(DatabasePrice.status == Status.ACTIVE)
+    else:
+        query = query.where(not_archived(DatabasePrice.status))
     prices = db.exec(query).all()
     if currency:
         for price in prices:
@@ -198,5 +209,7 @@ def table_database_price(
 
 @router.get("/database_storage")
 def table_database_storage(db: Session = Depends(get_db)) -> List[DatabaseStorage]:
-    """Return the DatabaseStorage table as-is, without filtering options or relationships resolved."""
-    return db.exec(select(DatabaseStorage)).all()
+    """Return the DatabaseStorage table without filtering options or relationships resolved; ARCHIVED records are left out."""
+    return db.exec(
+        select(DatabaseStorage).where(not_archived(DatabaseStorage.status))
+    ).all()
