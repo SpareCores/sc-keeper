@@ -130,7 +130,7 @@ Authentication is optional for most exploratory use cases, but required for:
 - Access to premium endpoints
 - Commercial and partnership use cases
 
-Tokens are issued on request. To authenticate, send your token in the
+Tokens are issued on request. To authenticate, send your access token in the
 `Authorization` header of each request: `Authorization: Bearer <token>`. An
 invalid token returns a 401 response.
 
