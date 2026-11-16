@@ -96,7 +96,13 @@ ZONE2_DATA = {
 
 
 def _make_server(
-    sid: str, *, vcpus: int, memory: int, gpu: float = 0, family: str = "general"
+    sid: str,
+    *,
+    vcpus: int,
+    memory: int,
+    gpu: float = 0,
+    family: str = "general",
+    series: str | None = None,
 ):
     return {
         "vendor_id": "test",
@@ -106,6 +112,7 @@ def _make_server(
         "display_name": sid,
         "description": f"Test server {sid}",
         "family": family,
+        "series": series,
         "vcpus": vcpus,
         "memory_amount": memory,
         "accelerator_count": gpu,
@@ -119,14 +126,19 @@ def _make_server(
 # 10 servers with varied specs/scores/prices for deterministic assertions
 _SERVERS = [
     # sid        vcpus  mem    gpu   family
-    _make_server("s1", vcpus=2, memory=4096, family="general"),
-    _make_server("s2", vcpus=4, memory=8192, family="general"),
-    _make_server("s3", vcpus=8, memory=16384, family="general"),
+    _make_server("s1", vcpus=2, memory=4096, family="general", series="g1"),
+    _make_server("s2", vcpus=4, memory=8192, family="general", series="g2"),
+    _make_server("s3", vcpus=8, memory=16384, family="general", series="g1"),
     _make_server("s4", vcpus=16, memory=32768, family="compute"),
     _make_server("s5", vcpus=32, memory=65536, family="compute"),
     _make_server("s6", vcpus=4, memory=16384, family="memory"),
     _make_server("s7", vcpus=8, memory=65536, family="memory"),
     _make_server("s8", vcpus=2, memory=4096, gpu=1, family="gpu"),
+    # a series large enough to be preferred over its family
+    _make_server("s11", vcpus=2, memory=8192, family="memory", series="m1"),
+    _make_server("s12", vcpus=4, memory=32768, family="memory", series="m1"),
+    _make_server("s13", vcpus=8, memory=32768, family="memory", series="m1"),
+    _make_server("s14", vcpus=16, memory=131072, family="memory", series="m1"),
     _make_server("s9", vcpus=4, memory=8192, gpu=2, family="gpu"),
     _make_server("s10", vcpus=8, memory=16384, gpu=4, family="gpu"),
 ]
@@ -452,6 +464,31 @@ class TestSimilarByFamily:
         assert "s8" not in sids
         for d in data:
             assert d["family"] == "gpu"
+
+
+# ===========================================================================
+# Tests: by=family, with a series
+# ===========================================================================
+
+
+class TestSimilarByFamilyPrefersSeries:
+    def test_returns_same_series_only(self, client):
+        """m1 has 3 other servers, so s6/s7 of the memory family are left out."""
+        resp = client.get(_url("s11", "family", 10))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert [d["server_id"] for d in data] == ["s12", "s13", "s14"]
+        assert {d["series"] for d in data} == {"m1"}
+
+    def test_falls_back_to_family_for_small_series(self, client):
+        """g1 has a single other server, so the general family is returned."""
+        resp = client.get(_url("s1", "family", 10))
+        assert {d["server_id"] for d in resp.json()} == {"s2", "s3"}
+
+    def test_falls_back_to_family_without_series(self, client):
+        resp = client.get(_url("s6", "family", 10))
+        sids = {d["server_id"] for d in resp.json()}
+        assert sids == {"s7", "s11", "s12", "s13", "s14"}
 
 
 # ===========================================================================
