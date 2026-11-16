@@ -38,6 +38,9 @@ from ..validators import check_currency, check_filter_limits
 
 router = APIRouter()
 
+# other servers needed in a series to list it instead of the (broader) family
+MIN_SAME_SERIES_SERVERS = 3
+
 
 @router.get("/v2/server/{vendor}/{server}")
 def get_server_without_relations(server_args: options.server_args) -> ServerBase:
@@ -77,8 +80,12 @@ def get_similar_servers(
 ) -> List[ServerPKs]:
     """Search similar servers to the provided one.
 
-    The "family" method returns all servers from the same family of
-    the same vendor.
+    The "family" method returns the servers from the same series of
+    the same vendor (e.g. "t2d" or "m8g"), so the other sizes of the
+    same instance type. When the series of the provided server is
+    unknown or has only a few other servers, it falls back to the
+    servers from the same family (e.g. "General Purpose"), which is a
+    broader category.
 
     The "specs" approach will prioritize the number of
     GPUs, then CPUs, lastly the amount of memory.
@@ -156,9 +163,23 @@ def get_similar_servers(
     ).where(Server.status == Status.ACTIVE)
 
     if by == "family":
+        same_series = and_(
+            Server.vendor_id == serverobj.vendor_id,
+            Server.series == serverobj.series,
+        )
+        # the server itself is counted as well
+        use_series = bool(serverobj.series) and (
+            db.exec(
+                select(func.count())
+                .select_from(Server)
+                .where(same_series)
+                .where(Server.status == Status.ACTIVE)
+            ).one()
+            > MIN_SAME_SERIES_SERVERS
+        )
         query = (
             query.where(Server.vendor_id == serverobj.vendor_id)
-            .where(Server.family == serverobj.family)
+            .where(same_series if use_series else Server.family == serverobj.family)
             .order_by(Server.vcpus, Server.accelerator_count, Server.memory_amount)
         )
 

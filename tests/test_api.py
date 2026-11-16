@@ -201,6 +201,17 @@ def test_server_similar_family():
         assert data[i]["server_id"] != data[2]["server_id"]
 
 
+def test_server_similar_series():
+    response = client.get("/server/aws/t3.nano/similar_servers/family/3")
+    assert response.status_code == 200
+    assert response.elapsed.total_seconds() < 1
+    data = response.json()
+    assert len(data) == 3
+    for server in data:
+        assert server["vendor_id"] == "aws"
+        assert server["series"] == "t3"
+
+
 def test_server_similar_specs():
     response = client.get("/server/aws/t3.nano/similar_servers/specs/5")
     # expect OK status within a reasonable time
