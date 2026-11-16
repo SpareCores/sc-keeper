@@ -404,8 +404,12 @@ class TrafficPriceWithPKsWithMonthlyTraffic(TrafficPriceWithPKs):
 
 
 class OrderDir(Enum):
+    """Sort direction of the results."""
+
     ASC = "asc"
+    """Ascending: smallest value first."""
     DESC = "desc"
+    """Descending: largest value first."""
 
 
 class CommonFilterCategory(Enum):
@@ -629,17 +633,24 @@ class BestPriceAllocation(StrEnum):
     """Controls how the server's "best price" is computed: use only spot prices, only on-demand prices, or the lowest available price from any allocation type."""
 
     ANY = "ANY"
+    """Lowest hourly price of any allocation type, spot or on-demand."""
     SPOT_ONLY = "SPOT_ONLY"
+    """Lowest hourly spot price."""
     ONDEMAND_ONLY = "ONDEMAND_ONLY"
+    """Lowest hourly on-demand price."""
     MONTHLY = "MONTHLY"
+    """Lowest monthly on-demand price: 730 hours, or less with the monthly cap of the vendor."""
 
 
 class BestDatabasePriceAllocation(StrEnum):
     """Controls how the database's "best price" is computed: on-demand hourly, monthly, or the lowest available on-demand price."""
 
     ANY = "ANY"
+    """Lowest hourly price of any allocation type (currently on-demand only)."""
     ONDEMAND_ONLY = "ONDEMAND_ONLY"
+    """Lowest hourly on-demand price."""
     MONTHLY = "MONTHLY"
+    """Lowest monthly on-demand price: 730 hours, or less with the monthly cap of the vendor."""
 
 
 class NetworkSpeedSnapPoints(Enum):
