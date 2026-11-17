@@ -62,6 +62,7 @@ from .helpers import (
 )
 from .limits import heavy_job_dep
 from .logger import LogMiddleware
+from .openapi_extras import add_enum_descriptions
 from .queries import (
     gen_benchmark_query,
     gen_database_live_price_query,
@@ -270,6 +271,20 @@ app = FastAPI(
     },
     lifespan=lifespan,
 )
+
+
+_generate_openapi = app.openapi
+
+
+def openapi() -> dict:
+    """The generated OpenAPI spec with the descriptions of the enum values."""
+    if app.openapi_schema is None:
+        # FastAPI caches the generated spec in app.openapi_schema
+        add_enum_descriptions(_generate_openapi())
+    return app.openapi_schema
+
+
+app.openapi = openapi
 
 
 @app.get("/redoc", include_in_schema=False)
