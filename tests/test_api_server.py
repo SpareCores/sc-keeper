@@ -490,6 +490,28 @@ class TestSimilarByFamilyPrefersSeries:
         sids = {d["server_id"] for d in resp.json()}
         assert sids == {"s7", "s11", "s12", "s13", "s14"}
 
+    def test_series_count_respects_region_filters(self, client):
+        """m1 servers have no prices in US, so the priced family members are returned."""
+        resp = client.get(_url("s11", "family", 10), params={"countries": ["US"]})
+        assert resp.status_code == 200
+        assert {d["server_id"] for d in resp.json()} == {"s6", "s7"}
+
+    def test_series_used_when_queried_server_is_inactive(self, client, test_engine):
+        """An inactive s11 still has 3 other active m1 servers, so the series is used."""
+        with Session(test_engine) as session:
+            server = session.get(Server, ("test", "s11"))
+            server.status = Status.INACTIVE
+            session.commit()
+        try:
+            resp = client.get(_url("s11", "family", 10))
+            assert resp.status_code == 200
+            assert [d["server_id"] for d in resp.json()] == ["s12", "s13", "s14"]
+        finally:
+            with Session(test_engine) as session:
+                server = session.get(Server, ("test", "s11"))
+                server.status = Status.ACTIVE
+                session.commit()
+
 
 # ===========================================================================
 # Tests: by=specs
