@@ -24,6 +24,7 @@ from ..auth import User, current_user
 from ..currency import currency_converter
 from ..database import get_db
 from ..helpers import not_archived, vendor_region_filter
+from ..views import Currency
 
 router = APIRouter()
 
@@ -213,3 +214,9 @@ def table_database_storage(db: Session = Depends(get_db)) -> List[DatabaseStorag
     return db.exec(
         select(DatabaseStorage).where(not_archived(DatabaseStorage.status))
     ).all()
+
+
+@router.get("/currency")
+def table_currency(db: Session = Depends(get_db)) -> List[Currency]:
+    """Return the Currency table without filtering options or relationships resolved."""
+    return db.exec(select(Currency)).all()
