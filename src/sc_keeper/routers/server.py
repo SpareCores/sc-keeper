@@ -168,16 +168,31 @@ def get_similar_servers(
             Server.vendor_id == serverobj.vendor_id,
             Server.series == serverobj.series,
         )
-        # the server itself is counted as well
-        use_series = bool(serverobj.series) and (
-            db.exec(
+        use_series = False
+        if serverobj.series:
+            # count the other active servers of the series that the final
+            # query could return, so the region filters must apply here too
+            series_count_query = (
                 select(func.count())
                 .select_from(Server)
                 .where(same_series)
                 .where(Server.status == Status.ACTIVE)
-            ).one()
-            > MIN_SAME_SERIES_SERVERS
-        )
+                .where(
+                    not_(
+                        and_(
+                            Server.vendor_id == serverobj.vendor_id,
+                            Server.server_id == serverobj.server_id,
+                        )
+                    )
+                )
+            )
+            if live_price_query is not None:
+                series_count_query = series_count_query.join(
+                    live_price_query,
+                    (Server.vendor_id == live_price_query.c.vendor_id)
+                    & (Server.server_id == live_price_query.c.server_id),
+                )
+            use_series = db.exec(series_count_query).one() >= MIN_SAME_SERIES_SERVERS
         query = (
             query.where(Server.vendor_id == serverobj.vendor_id)
             .where(same_series if use_series else Server.family == serverobj.family)
