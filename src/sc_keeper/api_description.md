@@ -71,14 +71,14 @@ of the database it was built from:
 - `SC-Data-Published-At`: when that version was published, e.g.
   `2026-11-07T22:47:08Z`
 
-To read several tables from the same version, use the `/snapshot` endpoints
-(API key required). They serve each table as a file pinned to a database hash,
-with tables that reference a vendor split by vendor, e.g.
+To read several tables from the same version, use the `/snapshot` endpoints (API
+key required, see Authentication below). They serve each table as a file pinned
+to a database hash, with tables that reference a vendor split by vendor, e.g.
 `/snapshot/{hash}/server_price/aws`, with only available records and prices in
-USD. The responses are columnar JSON (one array per
-column, with one element per row), sent gzipped: send `Accept-Encoding: gzip`
-(curl: `--compressed`). `/snapshot/{hash}` lists every file of a hash with a
-checksum, so you can skip files that didn't change since your last refresh.
+USD. The responses are columnar JSON (one array per column, with one element per
+row), sent gzipped: send `Accept-Encoding: gzip` (curl: `--compressed`).
+`/snapshot/{hash}` lists every file of a hash with a checksum, so you can skip
+files that didn't change since your last refresh.
 
 1. Take `database_hash` from `/healthcheck`, and fetch every snapshot with it.
 2. On a 503 of type `/problems/snapshot-preparing`, the instance is still
@@ -124,15 +124,19 @@ responsibly.
 
 ## Authentication
 
-Authentication is optional for most exploratory use cases, but required for:
+Authentication is optional for most exploratory use cases, but required for
+some endpoints, such as `/snapshot`.
 
-- Higher rate limits
-- Access to premium endpoints
-- Commercial and partnership use cases
+Personal API keys are free and self-serve: sign up for an individual account
+at <https://sparecores.com>, then create a long-lived API key in your account
+settings. Personal keys are covered by the fair use policy below.
 
-Tokens are issued on request. To authenticate, send your access token in the
-`Authorization` header of each request: `Authorization: Bearer <token>`. An
-invalid token returns a 401 response.
+Organization access, higher rate limits, and commercial use beyond fair use
+require a separate agreement -- contact us.
+
+To authenticate, send your API key in the `Authorization` header of each
+request: `Authorization: Bearer <token>`. An invalid token returns a 401
+response.
 
 ## Fair Use & Commercial Use
 
@@ -140,7 +144,7 @@ This public API is provided under a fair use policy to ensure availability
 for all users and to facilitate the evaluation of integrating the Navigator
 data into your products.
 
-Commercial use, high-volume access, open-source and integration partnerships
-are welcome. If you are experimenting, building a prototype, or considering
-deeper integration, we would love to hear what you are working on and help
-you find the best setup.
+Organization accounts, production-grade commercial use, high-volume access,
+integration partnerships are welcome, under a separate agreement. If you are
+experimenting, building a prototype, or considering deeper integration, we would
+love to hear what you are working on and help you find the best setup.
