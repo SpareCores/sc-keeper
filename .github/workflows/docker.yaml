@@ -80,3 +80,12 @@ jobs:
           DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
           aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
+      - name: Trigger docs rebuild
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.SC_DOCS_DISPATCH_TOKEN }}
+        run: >
+          gh workflow run deploy.yml
+          --repo SpareCores/sc-docusaurus
+          --ref main
+          -f source=sc-keeper
