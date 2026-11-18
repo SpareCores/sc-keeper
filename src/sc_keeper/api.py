@@ -371,6 +371,13 @@ def search_regions(
     vendor: options.vendor = None,
     db: Session = Depends(get_db),
 ) -> List[RegionPKs]:
+    """Regions of the vendors, with their location and vendor details.
+
+    Archived regions are excluded. Filter by `vendor` to list the regions of
+    specific vendors. Returns all matching regions in a single response, without
+    pagination. Use the returned IDs in the `regions` or `vendor_regions` filters
+    of the other search endpoints.
+    """
     query = (
         select(Region)
         .options(selectinload(Region.vendor))
@@ -463,6 +470,32 @@ def search_servers(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPKs]:
+    """Server types matching the filters, with their best price and benchmark scores.
+
+    Returns one item per server type, with its lowest price (`min_price`) found
+    across the selected regions, along with the spot and on-demand minimums and
+    a `price_breakdown`. The best price can include the cost of
+    `monthly_inbound_traffic`, `monthly_outbound_traffic` and
+    `extra_storage_size`, and `best_price_allocation` selects spot, on-demand or
+    any allocation. Prices are converted to the requested `currency` (USD by
+    default).
+
+    Key filters: `vcpus_min` (1 by default), `memory_min`, `architecture`,
+    `gpu_min` and other accelerator filters, `vendor`, `regions`,
+    `vendor_regions`, `countries`, `compliance_framework`, and `price_max`.
+    Only orderable servers are returned by default (`only_orderable`). To filter
+    or sort by a specific benchmark, set `benchmark_id` (and optionally
+    `benchmark_config`, see `/benchmark_configs`) together with
+    `benchmark_score_min` or `order_by=selected_benchmark_score`.
+
+    Results are ordered by `min_price` ascending by default. Returns 25 results
+    by default: use `limit` and `page` to paginate, and
+    `add_total_count_header=true` to get the number of all matching servers in
+    the `X-Total-Count` response header.
+
+    For the prices of a single server type in each region and zone, use
+    `/server/{vendor}/{server}/prices`.
+    """
     check_filter_limits(request, countries, regions, vendor_regions)
 
     check_currency(currency)
@@ -1181,6 +1214,24 @@ def search_databases(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[DatabasePKs]:
+    """Managed database types matching the filters, with their best price and benchmark scores.
+
+    Returns one item per database type, with its lowest price (`min_price`)
+    found across the selected regions, along with the on-demand hourly and
+    monthly minimums and a `price_breakdown`. The best price can include the
+    cost of `extra_storage_size`, and prices are converted to the requested
+    `currency` (USD by default).
+
+    Key filters: `partial_name_or_id`, `engine_version`, `vcpus_min` (1 by
+    default), `memory_min`, `ha`, the backup, monitoring and security feature
+    filters, `vendor`, `regions`, `vendor_regions` and `countries`. Only
+    orderable databases are returned by default (`only_orderable`). To filter or
+    sort by a specific benchmark, set `benchmark_id` (and optionally
+    `benchmark_config`, see `/benchmark_configs`).
+
+    Results are ordered by `min_price` ascending by default, and 25 results are
+    returned by default (see `limit` and `page`).
+    """
     check_filter_limits(request, countries, regions, vendor_regions)
     check_currency(currency)
 
@@ -1672,6 +1723,30 @@ def search_server_prices(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[ServerPriceWithPKs]:
+    """Prices of server types per region, zone and allocation (planned for retirement).
+
+    **Planned for retirement:** this endpoint will be removed in the future, so
+    do not build new integrations on it. Use `/servers` to search server types
+    with their best price, and `/server/{vendor}/{server}/prices` for the prices
+    of a single server type.
+
+    Returns one item per server type, zone and allocation (spot or on-demand)
+    combination, so a single server type can have many results. Prices are
+    hourly, converted to the requested `currency` (USD by default), and include
+    the monthly price (`price_monthly`) where available.
+
+    Key filters: `partial_name_or_id`, `vcpus_min` (1 by default),
+    `memory_min`, `architecture`, `gpu_min`, `allocation`, `price_max`,
+    `green_energy`, `vendor`, `regions`, `vendor_regions`, `countries` and
+    `compliance_framework`. Only active prices are returned by default
+    (`only_active`).
+
+    Results are ordered by `price` ascending by default. Returns 25 results by
+    default and at most 250 per page: use `limit` and `page` to paginate, and
+    `add_total_count_header=true` to get the number of all matching prices in
+    the `X-Total-Count` response header. Concurrent requests are limited, and a
+    503 response is returned when the limit is reached.
+    """
     check_currency(currency)
 
     # compliance frameworks are defined at the vendor level,
@@ -1963,6 +2038,16 @@ def search_storage_prices(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[StoragePriceWithPKs]:
+    """Prices of block storage types per region, with storage, vendor and region details.
+
+    Prices are per GB per month. Key filters: `storage_min` (minimum size), `storage_type`, `green_energy`,
+    `vendor`, `regions`, `vendor_regions`, `countries` and
+    `compliance_framework`. Prices are converted to the requested `currency`
+    (USD by default).
+
+    Results are ordered by `price` ascending by default, and 10 results are
+    returned by default (see `limit` and `page`).
+    """
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the storages table
     if compliance_framework:
@@ -2098,6 +2183,15 @@ def search_database_storage_prices(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[DatabaseStoragePriceWithPKs]:
+    """Prices of managed database storage types per region, with storage, vendor and region details.
+
+    Prices are per GB per month. Key filters: `storage_min` (minimum size), `green_energy`, `vendor`,
+    `regions`, `vendor_regions`, `countries` and `compliance_framework`. Prices
+    are converted to the requested `currency` (USD by default).
+
+    Results are ordered by `price` ascending by default, and 10 results are
+    returned by default (see `limit` and `page`).
+    """
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the storages table
     if compliance_framework:
@@ -2232,6 +2326,18 @@ def search_traffic_prices(
     add_total_count_header: options.add_total_count_header = False,
     db: Session = Depends(get_db),
 ) -> List[TrafficPriceWithPKsWithMonthlyTraffic]:
+    """Internet traffic prices per region, with the total cost of the given monthly traffic.
+
+    Returns the (possibly tiered) per-GB prices of each region, and
+    `price_monthly_traffic`, the cost of `monthly_traffic` GBs (1 by default)
+    calculated from the price tiers. Filter by `direction` (outbound by
+    default), `green_energy`, `vendor`, `regions`, `vendor_regions`,
+    `countries` and `compliance_framework`. Prices are converted to the
+    requested `currency` (USD by default).
+
+    Results are ordered by `price` ascending by default, and 10 results are
+    returned by default (see `limit` and `page`).
+    """
     # compliance frameworks are defined at the vendor level,
     # let's filter for vendors instead of exploding the storages table
     if compliance_framework:
@@ -2360,6 +2466,15 @@ def search_traffic_prices(
 def search_benchmark_configs(
     db: Session = Depends(get_db),
 ) -> List[BenchmarkConfig]:
+    """Benchmark IDs and configs with active scores, with their category and subcategory.
+
+    Returns all pairs of `benchmark_id` and `config` (as a JSON string) that
+    have active benchmark scores, ordered by category, subcategory, benchmark
+    and config. From the stress-ng benchmarks, only the `stress_ng:best*` scores
+    are included. Use the returned values in the `benchmark_id` and
+    `benchmark_config` parameters of `/servers` and `/databases` to filter or
+    sort by a benchmark score.
+    """
     query = (
         select(
             BenchmarkScore.benchmark_id,
