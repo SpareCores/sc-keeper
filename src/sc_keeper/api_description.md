@@ -22,7 +22,7 @@ with at least 8 vCPUs:
 curl "https://keeper.sparecores.net/servers?vcpus_min=8&limit=5"
 ```
 
-The search endpoints, such as `/servers` or `/server_prices`, share the
+The search endpoints, such as `/servers` or `/databases`, share the
 following query parameters:
 
 - `limit` and `page` for pagination (`limit=-1` returns all results)
