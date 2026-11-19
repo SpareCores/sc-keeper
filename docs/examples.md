@@ -146,7 +146,7 @@ The other methods are `family` (the other sizes of the same series),
 
 The same search with [Requests](https://requests.readthedocs.io/):
 
-```python
+```python repl
 import requests
 
 response = requests.get(
