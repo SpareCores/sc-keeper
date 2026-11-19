@@ -34,6 +34,9 @@ following query parameters:
 Invalid parameters return a 422 response, listing the problems in its
 `detail` field. For the 429 and 503 responses, see Rate Limiting below.
 
+For more example requests, such as ranking servers by a benchmark or looking
+up the prices of a server, see <https://docs.sparecores.com/api/examples>.
+
 The fields of most responses follow the database schema, described at
 <https://docs.sparecores.com/schemas>.
 
