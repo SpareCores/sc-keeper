@@ -22,7 +22,7 @@ with at least 8 vCPUs:
 curl "https://keeper.sparecores.net/servers?vcpus_min=8&limit=5"
 ```
 
-The search endpoints, such as `/servers` or `/server_prices`, share the
+The search endpoints, such as `/servers` or `/databases`, share the
 following query parameters:
 
 - `limit` and `page` for pagination (`limit=-1` returns all results)
@@ -33,6 +33,9 @@ following query parameters:
 
 Invalid parameters return a 422 response, listing the problems in its
 `detail` field. For the 429 and 503 responses, see Rate Limiting below.
+
+For more example requests, such as ranking servers by a benchmark or looking
+up the prices of a server, see <https://docs.sparecores.com/api/examples>.
 
 The fields of most responses follow the database schema, described at
 <https://docs.sparecores.com/schemas>.
@@ -63,7 +66,7 @@ happy to discuss what works best for your use case.
 
 ## Data Versions and Snapshots
 
-The data is refreshed several times an hour. Every response says which version
+The data is updated about once or twice an hour. Every response says which version
 of the database it was built from:
 
 - `SC-Data-Hash`: the hash of the database, also returned as `database_hash`
