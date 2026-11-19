@@ -66,7 +66,7 @@ happy to discuss what works best for your use case.
 
 ## Data Versions and Snapshots
 
-The data is refreshed several times an hour. Every response says which version
+The data is updated about once or twice an hour. Every response says which version
 of the database it was built from:
 
 - `SC-Data-Hash`: the hash of the database, also returned as `database_hash`

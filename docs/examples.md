@@ -47,8 +47,8 @@ curl -G -D - https://keeper.sparecores.net/servers \
 
 `best_price_allocation` sets which prices `min_price` uses: `ANY` (the
 default), `SPOT_ONLY`, `ONDEMAND_ONLY`, or `MONTHLY` for the monthly on-demand
-price. Prices are hourly, in USD by default; `currency` converts them, e.g.
-the cheapest spot prices in EUR:
+price. Prices are hourly (monthly with `MONTHLY`), in USD by default;
+`currency` converts them, e.g. the cheapest spot prices in EUR:
 
 ```shell
 curl -G https://keeper.sparecores.net/servers \
@@ -90,9 +90,12 @@ benchmarks.
 ## Rank servers by cost-efficiency
 
 Some benchmarks have a configuration, e.g. the model of the LLM inference
-speed benchmark. `benchmark_config` selects one, as JSON. For example, the
-servers that generate text with Llama 3.3 70B at the lowest cost, by the
-tokens generated per second per hourly price:
+speed benchmark. `benchmark_config` selects one, as JSON that must match the
+configuration's text exactly, including its spaces and the order of its keys:
+copy it from the `config` field of
+[`/benchmark_configs`](https://docs.sparecores.com/api/reference/search-benchmark-configs-benchmark-configs-get).
+For example, the servers that generate text with Llama 3.3 70B at the lowest
+cost, by the tokens generated per second per hourly price:
 
 ```shell
 curl -G https://keeper.sparecores.net/servers \
