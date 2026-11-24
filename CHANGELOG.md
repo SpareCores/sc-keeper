@@ -2,6 +2,10 @@
 
 New feature(s):
 
+- Upgrade to `sparecores-crawler` 0.12.0, adding `Server.retirement_date`,
+  `Database.retirement_date`, the bundled disk speeds of servers
+  (`storage_read_iops_max`, `storage_write_iops_max`, `storage_read_throughput_max`,
+  `storage_write_throughput_max`) and the same per-disk speeds in `Server.storages`.
 - Records with the new `ARCHIVED` status (replaced or deliberately dropped records, e.g.
   the old Hetzner datacenter regions) are never returned by any endpoint, including
   `/regions`, the `/table/...` endpoints and `only_orderable=false` or `only_active=false`
