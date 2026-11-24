@@ -28,6 +28,7 @@ def _get_category(server_column_name: str) -> str:
         "hw_virt",
         "average_time_to_start",
         "api_reference_object",
+        "retirement_date",
     ]:
         return "meta"
     if server_column_name in [
@@ -90,6 +91,10 @@ def _get_unit(server_column_name: str) -> str:
         "accelerator_memory_min": "MiB",
         "accelerator_memory_total": "MiB",
         "storage_size": "GB",
+        "storage_read_iops_max": "IOPS",
+        "storage_write_iops_max": "IOPS",
+        "storage_read_throughput_max": "MB/s",
+        "storage_write_throughput_max": "MB/s",
         "network_speed_baseline": "Gbps",
         "network_speed_max": "Gbps",
         "network_storage_speed_baseline": "Gbps",
