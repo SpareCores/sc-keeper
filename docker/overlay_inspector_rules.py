@@ -16,7 +16,6 @@ Usage: python overlay_inspector_rules.py [ref]
 import os
 import re
 import sys
-import tempfile
 import urllib.request
 from importlib.metadata import version
 from importlib.util import find_spec
@@ -55,11 +54,9 @@ def overlay(ref: str) -> str:
     target = Path(find_spec("sc_crawler.inspector_rules").origin)
     # write to a temp file and swap atomically so a failed write leaves the
     # installed rules intact
-    with tempfile.NamedTemporaryFile(
-        "w", dir=target.parent, suffix=".tmp", delete=False
-    ) as tmp:
-        tmp.write(rules)
-    os.replace(tmp.name, target)
+    tmp = target.with_name(target.name + ".tmp")
+    tmp.write_text(rules)
+    os.replace(tmp, target)
     print(f"Installed inspector rules from {REPO}@{sha} to {target}.")
     return f"github@{sha}"
 
