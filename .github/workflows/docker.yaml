@@ -61,6 +61,21 @@ jobs:
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
             KEEPER_VERSION=${{ env.KEEPER_VERSION }}
             INSPECTOR_RULES_REF=${{ inputs.crawler_ref || 'main' }}
+      - name: Create sc-infra deploy token
+        id: app
+        continue-on-error: true
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ vars.SC_INFRA_DEPLOY_APP_ID }}
+          private-key: ${{ secrets.SC_INFRA_DEPLOY_KEY }}
+          owner: SpareCores
+          repositories: sc-infra
+      - name: Deploy to frankenscube
+        if: steps.app.outcome == 'success'
+        continue-on-error: true
+        run: gh workflow run app-deploy.yml --repo SpareCores/sc-infra -f app=keeper
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
         with:
