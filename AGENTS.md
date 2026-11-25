@@ -343,7 +343,9 @@ from fastapi import Security
 def protected(user: User = Security(current_user)) -> ...: ...
 ```
 
-This also causes `CacheHeaderMiddleware` to set `Cache-Control: private, no-store` automatically.
+This also causes `CacheHeaderMiddleware` to set `Cache-Control: private, no-store`
+automatically, unless the endpoint sets its own `Cache-Control` header (see
+"Response Caching").
 
 Auth backends are configured by the `AUTH_*` environment variables (see below); see `auth.py` for details.
 
@@ -359,7 +361,10 @@ different TTL.
 - Responses also allow stale serving (`stale-while-revalidate`, `stale-if-error`),
   with a longer stale window for `/benchmark_score_stats` and `/debug`.
 - No caching (`private, no-store`) for authenticated requests, `/healthcheck`, `/ping`,
-  `/ai/assist*`, and error responses.
+  `/ai/assist*`, and responses with status 400, 401, 429, 500, 502, 503 or 504. Other
+  errors (e.g. 404, 422) get the default public TTL.
+- A `Cache-Control` header set by the endpoint itself is kept as is, and none of the
+  above applies (e.g. `/snapshot` files are `private, max-age=86400, immutable`).
 
 ---
 
@@ -412,7 +417,7 @@ Environment variables (all optional unless noted; never commit real values):
 | `AUTH_JWT_JWKS_URL` or `AUTH_JWT_PUBLIC_KEY` | JWT verification |
 | `AUTH_API_KEY_VERIFY_URL`, `AUTH_API_KEY_VERIFY_BEARER`, ... | API key verification against an external service |
 | `AUTH_STATIC_TOKENS` | JSON list of static tokens |
-| `AUTH_TOKEN_VALIDATION_CEL`, `AUTH_TOKEN_EXTRA_FIELDS_CEL` | CEL rules for validating tokens and extracting user fields |
+| `AUTH_TOKEN_VALIDATION_CEL`, `AUTH_TOKEN_EXTRA_FIELDS_CEL` | CEL rules for validating tokens and extracting user fields, applied to token introspection only (not JWT or API keys) |
 | `SNAPSHOT_DIR`, `SNAPSHOT_S3_URI`, `SNAPSHOT_LOCAL_RETENTION_SECONDS`, `SNAPSHOT_REQUEST_WAIT_SECONDS` | Snapshot storage |
 | `SENTRY_DSN` | Enable Sentry |
 

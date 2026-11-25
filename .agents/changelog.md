@@ -18,8 +18,8 @@ response fields and data they depend on.
   `Housekeeping:` subsection: list internal changes that API users notice (e.g.
   versioning, compression) under `Improvements:`, and leave out the rest.
 - Describe the net change of a batch of related work, not each commit: when something
-  is reworked over many commits, write one entry for the settled result, in the month
-  it settled.
+  is reworked over many commits or PRs, write one entry for the settled result, under
+  the month its last PR is merged.
 - Months are listed newest first. Skip a month with no entries.
 
 ## Crawler upgrades
