@@ -74,7 +74,7 @@ jobs:
         id: deploy
         if: steps.app.outcome == 'success'
         continue-on-error: true
-        run: gh workflow run app-deploy.yml --repo SpareCores/sc-infra -f app=keeper
+        run: gh workflow run app-deploy.yml --repo SpareCores/sc-infra --ref main -f app=keeper
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
       - name: Warn if the frankenscube trigger failed
