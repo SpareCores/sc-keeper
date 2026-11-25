@@ -267,7 +267,7 @@ Existing routers are already registered — just add endpoints to them.
 
 ### 6. Update the changelog
 
-Add the change to `CHANGELOG.md` (see "Versioning and Changelog").
+Document the change in `CHANGELOG.md`, following `.agents/changelog.md`.
 
 ---
 
@@ -428,15 +428,15 @@ ReDoc: http://localhost:8000/redoc
 
 The API is deployed on every push to `main` and is not versioned semantically.
 
-- `CHANGELOG.md` is grouped by month (`## October 2026`); add every user-facing change
-  to the current month's section, creating it if needed.
+- Every user-facing change must be documented in `CHANGELOG.md` in the same PR.
+- Read `.agents/changelog.md` before editing `CHANGELOG.md`.
 - The package version is **not bumped manually**. `pyproject.toml` holds the fixed
   placeholder `2026.0+dev` (never changed); the Docker build workflow sets it to
   `<year>.<month>+g<short sha>` (e.g. `2026.10+g5e02c8c`, month from the commit date,
   not zero-padded) via the `KEEPER_VERSION` build-arg. It shows up in the OpenAPI docs
   and `/healthcheck`.
 - The keeper version is independent of `sparecores-crawler`; bump the crawler pin in
-  `pyproject.toml` when needed and note breaking changes in the changelog.
+  `pyproject.toml` when needed.
 - Sentry releases use the full commit SHA (`SENTRY_RELEASE`), unrelated to the package
   version.
 
