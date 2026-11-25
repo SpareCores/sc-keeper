@@ -61,6 +61,25 @@ jobs:
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
             KEEPER_VERSION=${{ env.KEEPER_VERSION }}
             INSPECTOR_RULES_REF=${{ inputs.crawler_ref || 'main' }}
+      - name: Create sc-infra deploy token
+        id: app
+        continue-on-error: true
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ vars.SC_INFRA_DEPLOY_APP_ID }}
+          private-key: ${{ secrets.SC_INFRA_DEPLOY_KEY }}
+          owner: SpareCores
+          repositories: sc-infra
+      - name: Deploy to frankenscube
+        id: deploy
+        if: steps.app.outcome == 'success'
+        continue-on-error: true
+        run: gh workflow run app-deploy.yml --repo SpareCores/sc-infra -f app=keeper
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+      - name: Warn if the frankenscube trigger failed
+        if: steps.app.outcome != 'success' || steps.deploy.outcome == 'failure'
+        run: echo "::warning::frankenscube deploy trigger failed; sc-infra's 15-min app-deploy schedule will still roll out :main"
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
         with:
