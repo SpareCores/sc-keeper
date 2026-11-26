@@ -96,9 +96,9 @@ Fixes:
 - Correct `X-Total-Count` header for `/servers` with a non-default
   `best_price_allocation` and no filter for orderable servers (#101)
 - CORS headers in early 401 and 429 responses, so browsers can read them (#102)
-- No rate-limit credits charged and no tokens verified for CORS preflight requests
+- CORS preflight requests do not charge rate-limit credits or verify tokens
   (#102)
-- No caching of 401 and 429 responses and rejected preflight responses (#102)
+- 401, 429 and rejected preflight responses are not cached (#102)
 
 ## September 2026
 
@@ -240,14 +240,14 @@ Improvements:
   `cpu_l1i_cache_min`, `cpu_l1i_cache_total_min`, `cpu_l2_cache_min`,
   `cpu_l2_cache_total_min`, `cpu_l3_cache_min` and `cpu_l3_cache_total_min` filters on
   `/servers`, with predefined ranges (#63)
-- Aggressive content caching with a multi-layer CDN
+- Content cached by a multi-layer CDN
 - Stale cached content served while it is revalidated in the background, and on
   temporary origin errors
 
 Fixes:
 
 - Expired in-memory rate-limit keys cleaned up by a background thread (#65)
-- No content caching for error responses (#71)
+- Error responses are not cached (#71)
 - Sorted `/server/{vendor}/{server}/benchmarks` results (#69)
 - `/table/server/meta` units for the new CPU cache columns (#67)
 
@@ -359,9 +359,9 @@ Improvements:
 
 Fixes:
 
-- No duplicate rows from many-to-many relationships
+- Many-to-many relationships do not duplicate rows
 - Consistent active price filtering across endpoints
-- Correct tiered price calculation: only the delta of each tier is applied (#42)
+- Tiered price calculation applies only the delta of each tier (#42)
 - Outbound traffic prices by default (#43)
 
 ## August 2024
@@ -403,8 +403,8 @@ Fixes:
 - Correct example JSON on `/benchmark_scores` (#22)
 - Correct server ID references in subqueries (#22)
 - Missing `SCore` values handled in calculations (#26, #27)
-- No division by zero in price per score calculations (#26)
-- No missing `KeyValue` errors for the lowest prices (#26)
+- Price per score calculations avoid division by zero (#26)
+- Lowest prices do not raise `KeyValue` errors (#26)
 - Missing price information handled (#28)
 
 ## May 2024
@@ -443,8 +443,8 @@ Fixes:
 - Enum values not keyed by name, to avoid serialization issues (#20)
 - Filter conditions enforced in count queries
 - `X-Total-Count` header exposed via CORS (#11)
-- No duplicate servers in filtered results (#11)
-- Correct OpenAPI (Swagger) syntax, where a dict was used instead of an array (#18)
+- Filtered results contain no duplicate servers (#11)
+- OpenAPI (Swagger) syntax uses an array instead of a dict (#18)
 
 ## April 2024
 
