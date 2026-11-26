@@ -26,6 +26,7 @@ New feature(s):
 
 Fix(es):
 
+- Convert `Iops` to `IOPS` at `/table/server/meta` endpoint.
 - The `family` method of `/server/{vendor}/{server}/similar_servers/{by}/{num}` returns
   the servers of the same series (e.g. `t2d`), and falls back to the same family (a broad
   category at most vendors, e.g. "General Purpose") only when the series is unknown or
