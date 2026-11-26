@@ -435,6 +435,9 @@ The API is deployed on every push to `main` and is not versioned semantically.
 
 - Every user-facing change must be documented in `CHANGELOG.md` in the same PR.
 - Read `.agents/changelog.md` before editing `CHANGELOG.md`.
+- Internal information (e.g. the deployment and infrastructure overview in
+  `products.md` and `infrastructure.md`) is in the private `sc-docs` repo, for
+  maintainers with access. Never copy its content into this public repo.
 - The package version is **not bumped manually**. `pyproject.toml` holds the fixed
   placeholder `2026.0+dev` (never changed); the Docker build workflow sets it to
   `<year>.<month>+g<short sha>` (e.g. `2026.10+g5e02c8c`, month from the commit date,

@@ -28,8 +28,11 @@ response fields and data they depend on.
   changes the upgrade brings (new, renamed or removed fields, changed values), each
   under its own subsection, and name the crawler version in the entry, e.g.
   ``(`sparecores-crawler` 0.12.0)``.
-- Link the [crawler changelog](https://docs.sparecores.com/crawler/news) for changes
-  that need more detail than an API entry gives.
+- Link each crawler version to its release section in the
+  [crawler changelog](https://docs.sparecores.com/crawler/news), e.g.
+  ``([`sparecores-crawler` 0.12.0](https://docs.sparecores.com/crawler/news#v0120-november-21-2026))``.
+  The anchor is the release heading in lowercase, without dots, parentheses and commas,
+  and with spaces as hyphens.
 
 ## Subsections
 
