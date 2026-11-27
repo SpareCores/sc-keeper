@@ -1,506 +1,481 @@
 ## November 2026
 
-New feature(s):
+New features:
 
-- Upgrade to `sparecores-crawler` 0.12.0, adding `Server.retirement_date`,
-  `Database.retirement_date`, the bundled disk speeds of servers
-  (`storage_read_iops_max`, `storage_write_iops_max`, `storage_read_throughput_max`,
-  `storage_write_throughput_max`) and the same per-disk speeds in `Server.storages`.
+- `/snapshot/{hash}/...` endpoints (API key required): every table pinned to a database
+  hash, tables that reference a vendor split by vendor (scores by vendor and benchmark),
+  with available records only, prices in USD and every column except `observed_at`, as
+  gzipped columnar JSON. `/snapshot/{hash}` lists the files with checksums. Snapshots
+  are built once per hash and shared between instances through S3 (`SNAPSHOT_S3_URI`)
+  (#111)
+- `/ping` liveness check that answers as long as the process does, without the database
+  or the thread pool shared by the other endpoints (unlike `/healthcheck`) (#111)
+- `/table/currency` table dump of the `Currency` table (#117)
+
+Improvements:
+
+- New `Server.retirement_date` and `Database.retirement_date` fields, bundled disk
+  speeds of servers (`storage_read_iops_max`, `storage_write_iops_max`,
+  `storage_read_throughput_max`, `storage_write_throughput_max`) and the same per-disk
+  speeds in `Server.storages`
+  ([`sparecores-crawler` 0.12.0](https://docs.sparecores.com/crawler/news#v0120-november-21-2026))
+  (#120)
 - Records with the new `ARCHIVED` status (replaced or deliberately dropped records, e.g.
-  the old Hetzner datacenter regions) are never returned by any endpoint, including
-  `/regions`, the `/table/...` endpoints and `only_orderable=false` or `only_active=false`
-  queries; there is no parameter to include them.
-- Every response has `SC-Data-Hash` and `SC-Data-Published-At` headers: the hash and the
-  publication time of the database it was built from.
-- Add `/snapshot/{hash}/...` endpoints (API key required): every table pinned to a
-  database hash, tables that reference a vendor split by vendor (scores by vendor and
-  benchmark), with available records only, prices in USD and every column except
-  `observed_at`, as gzipped columnar JSON. `/snapshot/{hash}` lists the files with
-  checksums. Snapshots are built once per hash and shared between instances through S3
-  (`SNAPSHOT_S3_URI`).
+  the old Hetzner datacenter regions) left out of every endpoint, including `/regions`,
+  the `/table/...` endpoints and `only_orderable=false` or `only_active=false` queries;
+  there is no parameter to include them (#114)
+- New `SC-Data-Hash` and `SC-Data-Published-At` headers in every response: the hash and
+  the publication time of the database it was built from (#111)
 - `/healthcheck` lists the database hashes with snapshots on the instance in
   `snapshot_hashes`, and returns the publication time of the database in
-  `database_published_at`.
-- Add `/ping`, a liveness check that answers as long as the process does, without the
-  database or the thread pool shared by the other endpoints (unlike `/healthcheck`).
+  `database_published_at` (#111)
+- New enum value descriptions in the OpenAPI schema (#115)
 
-Fix(es):
+Fixes:
 
 - The `family` method of `/server/{vendor}/{server}/similar_servers/{by}/{num}` returns
-  the servers of the same series (e.g. `t2d`), and falls back to the same family (a broad
-  category at most vendors, e.g. "General Purpose") only when the series is unknown or
-  has fewer than 3 other servers.
+  the servers of the same series (e.g. `t2d`), and falls back to the same family (a
+  broad category at most vendors, e.g. "General Purpose") only when the series is
+  unknown or has fewer than 3 other servers (#113, #116)
 
 ## October 2026
 
-Breaking change(s):
+Breaking changes:
 
-- Upgrade to `sparecores-crawler` 0.10.0: `Server.gpu_*` / `gpus` renamed to
-  `accelerator_*` / `accelerators` in responses and `order_by` (`gpu_*` query params
-  keep their names).
-- `/servers` `gpu_*` filters now match only `accelerator_type=GPU`, except
-  `gpu_max`, which also matches servers with non-GPU accelerators;
-  `gpu_manufacturer` / `gpu_family` values are GPU-only on `/servers` and
-  `/server_prices`. Use the new `accelerator_*` filters for all accelerator types.
-- The `regions` and `vendor_regions` filter values only include active regions;
-  inactive ones are rejected with 422.
+- `Server.gpu_*` and `gpus` fields renamed to `accelerator_*` and `accelerators` in
+  responses and `order_by`
+  ([`sparecores-crawler` 0.10.0](https://docs.sparecores.com/crawler/news#v0100-october-8-2026));
+  the `gpu_*` query parameters keep their names (#104)
+- `/servers` `gpu_*` filters match only `accelerator_type=GPU`, except `gpu_max`, which
+  also matches servers with non-GPU accelerators; `gpu_manufacturer` and `gpu_family`
+  values are GPU-only on `/servers` and `/server_prices`. The new `accelerator_*`
+  filters cover all accelerator types (#108)
+- `regions` and `vendor_regions` filter values include only active regions; inactive
+  ones are rejected with 422 (#108)
 
-New feature(s):
+New features:
 
-- Expose `Server.accelerator_type`, `series`, `api_reference_object`, and
-  `compatible_storage_ids` in `/table/server/meta`.
-- Return benchmark `subcategory` in `/benchmark_configs`; order configs and server /
-  database benchmarks by the new categories, then subcategory and `benchmark_id`.
-- Add `accelerator_type`, `accelerator_min`, `accelerator_max`,
-  `accelerator_memory_min`, and `accelerator_memory_total` filters to `/servers` (any
-  accelerator type) under a new `accelerator` filter category.
-- Add `asic_min`, `asic_max`, `asic_memory_min`, `asic_memory_total`,
-  `asic_manufacturer`, `asic_family`, and `asic_model` filters to `/servers` under a new
-  `asic` filter category, matching all non-GPU accelerators (ASICs, e.g. Google TPUs);
-  `asic_max` also matches servers with GPUs or no accelerators.
-- Add `memory_max`, `memory_per_vcpu_min`, `memory_per_vcpu_max`, `gpu_max`, `price_max`,
-  `benchmark_score_max`, and `benchmark_score_per_vcpu_min` filters to `/servers`.
-- Add `/inspector/task_block_reason_codes` and
-  `/inspector/server/{vendor}/{server}/task_block_reason_codes` endpoints to look up why
-  inspector tasks are blocked.
-- Add `Retry-After` header to 429 responses and expose it, along with the `X-RateLimit-*`
-  headers, to browsers via CORS.
-- Add `only_active` filter to `/server/{vendor}/{server}/prices` endpoint to enable querying inactive server prices.
+- `accelerator_type`, `accelerator_min`, `accelerator_max`, `accelerator_memory_min` and
+  `accelerator_memory_total` filters on `/servers` (any accelerator type), under a new
+  `accelerator` filter category (#108)
+- `asic_min`, `asic_max`, `asic_memory_min`, `asic_memory_total`, `asic_manufacturer`,
+  `asic_family` and `asic_model` filters on `/servers`, under a new `asic` filter
+  category, matching all non-GPU accelerators (ASICs, e.g. Google TPUs); `asic_max` also
+  matches servers with GPUs or no accelerators (#108)
+- `memory_max`, `memory_per_vcpu_min`, `memory_per_vcpu_max`, `gpu_max`, `price_max`,
+  `benchmark_score_max` and `benchmark_score_per_vcpu_min` filters on `/servers` (#101)
+- `only_active` filter on `/server/{vendor}/{server}/prices`, to include inactive server
+  prices
+- `/inspector/task_block_reason_codes` and
+  `/inspector/server/{vendor}/{server}/task_block_reason_codes` endpoints that tell why
+  inspector tasks are blocked (#99, #103)
 
-Fix(es):
+Improvements:
 
-- Exclude TPUs from the `gpu_model` filter values based on the new
-  `Server.accelerator_type`, as the TPU model name patterns no longer matched the
-  normalized model names (e.g. `v5e`).
-- Fix inflated `X-Total-Count` header for `/servers` when using a non-default
-  `best_price_allocation` without filtering for orderable servers.
-- Include CORS headers in early 401 and 429 responses so that browsers can read them.
-- Do not charge rate-limit credits or verify tokens for CORS preflight requests.
-- Prevent caching of 429/401 and rejected preflight responses.
-
-Housekeeping:
-
-- Stop gzip compression at the origin and let CloudFront compress responses.
-- Version the package as `<year>.<month>+g<short commit sha>` (e.g. `2026.10+g5e02c8c`),
-  set at Docker build time and shown in the API docs and `/healthcheck`, instead of the
-  manually bumped (and long stale) `0.3.6`.
-- Use the most recent inspector rules from the sc-crawler GitHub repo at Docker build
+- New `Server.accelerator_type`, `series`, `api_reference_object` and
+  `compatible_storage_ids` fields in `/table/server/meta` (#104)
+- New benchmark `subcategory` field in `/benchmark_configs`; configs and server and
+  database benchmarks are ordered by the new categories, then subcategory and
+  `benchmark_id` (#104)
+- New `Retry-After` header in 429 responses, exposed to browsers via CORS along with the
+  `X-RateLimit-*` headers (#102)
+- Responses compressed by CloudFront instead of gzip at the origin (#100)
+- Package version `<year>.<month>+g<short commit sha>` (e.g. `2026.10+g5e02c8c`), set at
+  Docker build time and shown in the API docs and `/healthcheck`, instead of the
+  manually bumped (and long stale) `0.3.6` (#106)
+- The most recent inspector rules from the sc-crawler GitHub repo, used at Docker build
   time when its version matches the installed `sparecores-crawler`, so rule changes no
-  longer need a PyPI release. The source of the rules is shown in `/healthcheck` as
-  `inspector_rules`.
+  longer need a PyPI release. `/healthcheck` shows the source of the rules in
+  `inspector_rules` (#109)
+
+Fixes:
+
+- TPUs left out of the `gpu_model` filter values, based on the new
+  `Server.accelerator_type`, as the TPU model name patterns no longer matched the
+  normalized model names (e.g. `v5e`) (#104)
+- Correct `X-Total-Count` header for `/servers` with a non-default
+  `best_price_allocation` and no filter for orderable servers (#101)
+- CORS headers in early 401 and 429 responses, so browsers can read them (#102)
+- CORS preflight requests do not charge rate-limit credits or verify tokens
+  (#102)
+- 401, 429 and rejected preflight responses are not cached (#102)
 
 ## September 2026
 
-New feature(s):
+New features:
 
-- Add `architecture`, `cpu_allocation`, `network_speed_baseline_min`, `network_speed_max_min`,
-  `network_storage_speed_baseline_min`, and `network_storage_speed_max_min` filters to
-  `/databases` (matched via identified `Database.server_id`).
-- Add `cpu_flags` filter to `/servers`.
-- Add `cpu_hyperthreading` filter to `/servers` (vCPUs > CPU cores).
-- Add `/table/vendor_compliance_link` dump for vendor / compliance framework mapping.
-- Add `storage_count_min` filter to `/servers` for minimum bundled storage count.
+- `/table/vendor_compliance_link` table dump of the vendor and compliance framework
+  mapping (#97)
+- `architecture`, `cpu_allocation`, `network_speed_baseline_min`,
+  `network_speed_max_min`, `network_storage_speed_baseline_min` and
+  `network_storage_speed_max_min` filters on `/databases`, matched via the identified
+  `Database.server_id` (#97)
+- `cpu_flags` filter on `/servers` (#97)
+- `cpu_hyperthreading` filter on `/servers` (vCPUs > CPU cores) (#97)
+- `storage_count_min` filter on `/servers` for the minimum number of bundled storages
+  (#98)
+
+Improvements:
+
+- `Authorization` header allowed in CORS requests (#94)
+- Bearer tokens verified against several JWKS (#96)
 
 ## August 2026
 
-New feature(s):
+Breaking changes:
 
-- Add `/databases` benchmark filters (`benchmark_id` default `pgbench:heavy_read_only`,
+- `/databases` drops the `engine` and `wire_protocol` filters, and replaces the
+  `engine_versions` filter with `engine_version`, which takes one required major engine
+  version (#90)
+
+New features:
+
+- `/ai/assist_database_filters` for natural-language database filter extraction (#90)
+- Bearer tokens verified as JWTs (by JWKS) or static tokens, besides token
+  introspection (#93)
+- `/databases` benchmark filters (`benchmark_id`, by default `pgbench:heavy_read_only`,
   `benchmark_config`, `benchmark_score_min`, `benchmark_score_per_price_min`) and
-  `selected_benchmark_score*` ordering.
-- Add `/ai/assist_database_filters` for natural-language database filter extraction.
-- Refactor `/databases` endpoint: drop `engine` and `wire_protocol` filters and modify 
-  `engine_versions` filter to `engine_version` (supports only one required major engine version).
+  `selected_benchmark_score*` ordering (#90)
+
+Fixes:
+
+- `/benchmark_score_stats` counts server benchmark scores only, not database scores
+  (#91)
 
 ## July 2026
 
-New feature(s):
+New features:
 
-- Add `/databases`, `/database/{vendor}/{database}`, `/database/{vendor}/{database}/prices`, and
-  `/database_storage_prices` endpoints to support the newly implemented DBaaS data from `sparecores-crawler`.
-- Add `/table/database`, `/table/database_price`, and `/table/database_storage` table dump endpoints.
-- Add `/databases` filters for new `sparecores-crawler` v0.8.5 fields (`wire_protocol`,
-  `max_read_replicas`, monitoring, `connection_pool`, `disk_encryption`, `security_features`,
-  `autotuning_apply`, `ha_strategy`, and related capabilities).
-- Treat `ha` / `ha_strategy` as `database_price` primary keys (min price = cheapest HA row).
-- Use `BestDatabasePriceAllocation` for `/databases` (no `SPOT_ONLY`; schema rejects it).
+- `/databases`, `/database/{vendor}/{database}`, `/database/{vendor}/{database}/prices`
+  and `/database_storage_prices` endpoints for the managed database (DBaaS) data of
+  `sparecores-crawler` (#89)
+- `/table/database`, `/table/database_price` and `/table/database_storage` table dump
+  endpoints (#89)
+- `/databases` filters for the new fields of
+  [`sparecores-crawler` 0.8.5](https://docs.sparecores.com/crawler/news#v085-july-31-2026)
+  (`wire_protocol`, `max_read_replicas`, monitoring, `connection_pool`,
+  `disk_encryption`, `security_features`, `autotuning_apply`, `ha_strategy`, and related
+  capabilities) (#89)
+- `ha` and `ha_strategy` as `database_price` primary keys: the minimum price is the
+  cheapest HA row (#89)
+- `BestDatabasePriceAllocation` for `/databases`, without `SPOT_ONLY`, which the schema
+  rejects (#89)
 
 ## June 2026
 
-New feature(s):
+Breaking changes:
 
-- Update database to `sparecores-crawler` v0.6.0 to expose new `vendor` (`stopped_server_charged`, `billing_increment_seconds`,  `minimum_billing_seconds` and `billing_comment`) and `server` (`ecpus`, `scalability`, `hw_virt`, `memory_amount_actual`, `network_speed_max`, `network_storage_speed_baseline`, `network_storage_speed_max`, and `average_time_to_start`) fields.
-- Add `hw_virt` filter to `/servers` and `/server_prices`.
-- Add `network_speed_max_min`, `network_storage_speed_baseline_min` and `network_storage_speed_max_min` filters to `/servers`.
-- Update parameter titles and descriptions.
-- Add `/server/{vendor}/{server}/descriptions` endpoint returning the `ServerDescription` of a single server.
+- `Server.network_speed` renamed to `network_speed_baseline`
+  ([`sparecores-crawler` 0.6.0](https://docs.sparecores.com/crawler/news#v060-june-3-2026))
+- `network_speed_min` filter on `/servers` renamed to `network_speed_baseline_min` (#84)
 
-‼ Breaking changes:
+New features:
 
-- Renamed `network_speed` to `network_speed_baseline` in the `Server` table.
-- Renamed `network_speed_min` filter on the `/servers` endpoint to `network_speed_baseline_min`.
+- `/server/{vendor}/{server}/descriptions` endpoint that returns the
+  `ServerDescription` of a single server (#86)
+- `hw_virt` filter on `/servers` and `/server_prices` (#84)
+- `network_speed_max_min`, `network_storage_speed_baseline_min` and
+  `network_storage_speed_max_min` filters on `/servers` (#84)
+
+Improvements:
+
+- New `Vendor` fields (`stopped_server_charged`, `billing_increment_seconds`,
+  `minimum_billing_seconds` and `billing_comment`) and `Server` fields (`ecpus`,
+  `scalability`, `hw_virt`, `memory_amount_actual`, `network_speed_max`,
+  `network_storage_speed_baseline`, `network_storage_speed_max` and
+  `average_time_to_start`)
+  ([`sparecores-crawler` 0.6.0](https://docs.sparecores.com/crawler/news#v060-june-3-2026))
+  (#80)
+- Clearer parameter titles and descriptions
+
+Fixes:
+
+- `/table/server/meta` categories for the new server columns (#82)
 
 ## May 2026
 
-Fix(es):
+Fixes:
 
-- Explicit request error when trying to order a table by a relation instead of an actual column.
+- Explicit request error when a table is ordered by a relation instead of a column
 
 ## April 2026
 
-New feature(s):
+New features:
 
-- Add new `/table/server/select` endpoint to allow selecting specific Server `columns` in the response.
-- Add `extra_storage_size`, `extra_storage_type`, `monthly_inbound_traffic`, and `monthly_outbound_traffic` query
-  parameters to the `/servers` endpoint. All `min_price` fields and the always-present `price_breakdown` response
-  object now include traffic and storage cost components, with tiered pricing and built-in server storage deducted from
-  `extra_storage_size`.
+- `/table/server/select` endpoint that returns only the selected `Server` `columns`
+  (#74)
+- `extra_storage_size`, `extra_storage_type`, `monthly_inbound_traffic` and
+  `monthly_outbound_traffic` query parameters on `/servers`. All `min_price` fields and
+  the always present `price_breakdown` object include the traffic and storage costs,
+  with tiered pricing, and with the built-in server storage deducted from
+  `extra_storage_size` (#76)
 
-Fix(es):
+Fixes:
 
-- `Benchmark` `category` is now sourced from the database instead of being hardcoded.
+- `Benchmark` `category` from the database instead of a hardcoded value (#77)
+- `order_by` fields that match more than one column no longer rejected with 400 (#75)
 
 ## March 2026
 
-New feature(s):
+New features:
 
-- New endpoint `/benchmark_score_stats` for querying benchmark config and score statistics.
-- Add optional `countries` and `vendor_regions` query filters for the `/server/{vendor}/{server}/prices` and
-  `/server/{vendor}/{server}/similar_servers/{by}/{num}` endpoints.
-- Add `benchmark_score` and `benchmark_score_per_price` ordering options to
-  `/server/{vendor}/{server}/similar_servers/{by}/{num}` endpoint.
-- Add optional `currency`, `benchmark_id`, `benchmark_config`, `server_region` and `best_price_allocation` query
-  parameters for the `/server/{vendor}/{server}/similar_servers/{by}/{num}` endpoint.
-- Added `network_speed_min`, `cpu_speed_min`, `cpu_l1d_cache_min`, `cpu_l1d_cache_total_min`, `cpu_l1i_cache_min`,
-  `cpu_l1i_cache_total_min`, `cpu_l2_cache_min`, `cpu_l2_cache_total_min`, `cpu_l3_cache_min`, and
-  `cpu_l3_cache_total_min` filters for the `/servers` with predefined ranges for filtering.
+- `/benchmark_score_stats` endpoint for benchmark config and score statistics (#66)
+- `countries` and `vendor_regions` filters on `/server/{vendor}/{server}/prices` and
+  `/server/{vendor}/{server}/similar_servers/{by}/{num}` (#62)
+- `benchmark_score` and `benchmark_score_per_price` ordering options on
+  `/server/{vendor}/{server}/similar_servers/{by}/{num}` (#62)
+- `currency`, `benchmark_id`, `benchmark_config`, `server_region` and
+  `best_price_allocation` query parameters on
+  `/server/{vendor}/{server}/similar_servers/{by}/{num}` (#62)
+- `network_speed_min`, `cpu_speed_min`, `cpu_l1d_cache_min`, `cpu_l1d_cache_total_min`,
+  `cpu_l1i_cache_min`, `cpu_l1i_cache_total_min`, `cpu_l2_cache_min`,
+  `cpu_l2_cache_total_min`, `cpu_l3_cache_min` and `cpu_l3_cache_total_min` filters on
+  `/servers`, with predefined ranges (#63)
 
-Performance improvements:
+Improvements:
 
-- Aggressive content caching with multi-layer CDN.
-- Fallback to stale cached content
+- Content cached by a multi-layer CDN
+- Stale cached content served while it is revalidated in the background, and on
+  temporary origin errors
 
-    - while revalidating in the background,
-    - on temporarily origin errors.
+Fixes:
 
-Fix(es):
-
-- Background thread to clean-up expired in-memory rate-limit keys.
-- Disable content caching for error responses.
-- Add sorting to `/server/{vendor}/{server}/benchmarks` endpoint.
+- Expired in-memory rate-limit keys cleaned up by a background thread (#65)
+- Error responses are not cached (#71)
+- Sorted `/server/{vendor}/{server}/benchmarks` results (#69)
+- `/table/server/meta` units for the new CPU cache columns (#67)
 
 ## February 2026
 
-New feature(s):
+Breaking changes:
 
-- Monthly pricing calculations for on-demand servers with optional capping.
-- Support for float GPU count values for fractional GPU allocation.
-- New endpoint `/stats` for querying database table statistics with optional vendor and only_active filters.
-- New endpoint `/debug` for querying debug information about the availability of benchmark scores for servers.
-- Include monthly price caps (calculated from tiered prices) in server and server price search results.
-- Add optional country/region filter for the servers endpoint.
-- Add optional `vendor_regions` filter for all endpoints already supporting the `regions` filter for more precise
-  filtering.
-- Add optional `best_price_allocation` configuration parameter for the search servers endpoint to control how the
-  server's "best price" is computed (e.g. use any price, spot only, or on-demand only).
-- Add optional `currency` configuration parameter for the search servers endpoint to convert the prices to a requested
-  currency.
+- Python 3.11 or later required, up from 3.8 (#52)
 
-Fix(es):
+New features:
 
-- Upgrade FastAPI from 0.115.13 to 0.128.8.
-- Fix macOS compatibility issue with `iowait` CPU metric logging (not available on Darwin systems).
-- Convert tiered prices to requested currency in the server price search results.
-- Fix `X-Total-Count` header for server search when ordered by price-derived fields and not filtering for active
-  servers.
-- Filter out server prices without a related server score when ordering by score or score_per_price.
-- Fix `price_max` calculation and currency checking in `/server_prices` endpoint.
+- `/stats` endpoint for database table statistics, with optional `vendor` and
+  `only_active` filters (#53)
+- `/debug` endpoint that shows which servers have benchmark scores (#54)
+- Country and region filter on `/servers` (#56)
+- `vendor_regions` filter on all endpoints that support the `regions` filter, for more
+  precise filtering (#56)
+- `best_price_allocation` parameter on `/servers`, to control how the server's "best
+  price" is computed (e.g. any price, spot only or on-demand only) (#58)
+- `currency` parameter on `/servers`, to convert prices to the requested currency (#58)
 
-‼ Breaking changes:
+Improvements:
 
-- Minimum required Python version upgraded from 3.8 to 3.11.
+- New monthly prices for on-demand servers, with optional capping (#51, #55)
+- Float GPU counts, for fractional GPU allocation
+- New monthly price caps (calculated from tiered prices) in server and server price
+  search results (#55)
+
+Fixes:
+
+- Tiered prices converted to the requested currency in `/server_prices` results (#55)
+- Correct `X-Total-Count` header for `/servers` when ordered by price-derived fields
+  without filtering for active servers (#56)
+- Server prices without a related server score left out when ordering by score or
+  `score_per_price` (#56, #57)
+- Correct `price_max` calculation and currency check on `/server_prices` (#60)
 
 ## January 2026
 
-New feature(s):
+New features:
 
-- OAuth2 Bearer token authentication support with configurable security schemes.
-- Token introspection for OAuth2 authentication.
-- Rate limiting with Redis backend and in-memory fallback.
-- Credit-based rate limiting with configurable penalties for different response codes.
-- Custom CEL (Common Expression Language) expressions for token validation and claim extraction.
-- User authentication tracking and token source monitoring.
-- Optional authentication requirements for specific endpoints.
-- Server prices table dump endpoint with filters and authentication protection.
+- OAuth2 Bearer token authentication with configurable security schemes (#50)
+- Token introspection for OAuth2 authentication (#50)
+- Rate limiting with a Redis backend and an in-memory fallback (#50)
+- Credit-based rate limiting, with configurable penalties for different response codes
+  (#50)
+- CEL (Common Expression Language) expressions for token validation and claim
+  extraction
+- User authentication and token source tracking
+- Optional authentication for specific endpoints (#50)
+- `/table/server_prices` table dump with filters, which requires authentication (#49)
 
-Fix(es):
+Improvements:
 
-- Redis connection error logging and graceful fallback handling.
-- Token active status validation in all authentication flows.
-- Self-reference issues in authentication middleware.
-- Rate limit middleware properly applies 401 penalties.
-- Currency code validation with HTTP 400 on invalid codes.
-- Price currency handling in conversion operations.
-- Middleware execution order for proper auth and rate limiting.
-- Exclude low-frequency and potentially incorrect GPU models.
+- No caching of endpoints that require authentication (#50)
+- Inactive server types left out of API responses
 
-Housekeeping:
+Fixes:
 
-- Authentication and rate limiting middleware order optimization.
-- Cache control to skip caching endpoints requiring authentication.
-- Async HTTP client migration from `requests` to `httpx`.
-- Logger namespace standardization across all modules.
-- Currency conversion optimized to run only when needed.
-- Excluded inactive server types from API responses.
-- Test coverage for authentication and rate limiting features.
-- Thread-safe in-memory credit consumption tracking.
-- Move rate-limit logic to Redis for atomic updates.
-- Log client application ID when available.
-- Pin ReDoc version for stability.
-
-## December 2025
-
-Housekeeping:
-
-- Bump `sparecores-crawler` and `sparecores-data` dependencies to 0.3.2.
+- Redis connection errors logged, with a fallback when Redis is unavailable (#50)
+- Token active status checked in all authentication flows (#49)
+- Self-reference issues in the authentication middleware (#50)
+- 401 penalties applied by the rate-limit middleware (#49, #50)
+- HTTP 400 for invalid currency codes (#49)
+- Correct price currency in conversions (#49)
+- Middleware order for authentication and rate limiting (#49, #50)
+- Low-frequency and possibly incorrect GPU models left out
 
 ## October 2024
 
-New feature(s):
+Breaking changes:
 
-- Support for CPU allocation filtering (shared vs dedicated).
-- Materialized views for minimum server prices for improved performance.
-- Background thread for currency rate updates from ECB.
-- Currency table with live exchange rates.
-- Server minimum prices included in Server objects.
-- Similar servers by score per price endpoint.
-- Min `$Core` (score per price) filter for server searches.
+- v1 server details endpoint removed; use the v2 server details endpoints (#47)
 
-Fix(es):
+New features:
 
-- Consider servers without price as inactive.
-- Descending order on computed columns.
-- Hide servers without values when filtering by related columns.
-- Green energy definition synchronized with crawler.
+- Currency table with live exchange rates (#38)
+- Similar servers by score per price (#47)
+- CPU allocation filter (shared or dedicated)
+- Minimum `$Core` (score per price) filter in server searches (#47)
 
-Housekeeping:
+Improvements:
 
-- Bump version to match `sparecores-crawler` for `Disk` description support.
-- Drop v1 server details endpoint.
-- Drop dead `min_server_price` code.
-- Index optimization for server prices.
-- Round `score_per_price` to 4 digits.
-- Code review with automated linting improvements using `ruff`.
+- Exchange rates updated from the ECB by a background thread (#38)
+- New minimum server prices in `Server` objects (#47)
+- `score_per_price` rounded to 4 digits (#47)
+
+Fixes:
+
+- Servers without a price treated as inactive (#47)
+- Descending order on computed columns
+- Servers without values hidden when filtering by related columns (#47)
+- Green energy definition in sync with the crawler
 
 ## September 2024
 
-New feature(s):
+New features:
 
-- Storage prices endpoint with comprehensive filtering options.
-- Traffic prices endpoint with monthly pricing calculations.
-- Tiered pricing support for traffic costs with proper tier calculation.
-- Integration tests for all major API endpoints.
-- Similar servers endpoint based on hardware specifications.
-- Currency conversion support for storage and traffic prices.
-- Parametrized test suite for comprehensive coverage.
-- Server details v2 endpoints with improved data structure.
+- Storage prices endpoint with filters (#39)
+- Traffic prices endpoint with monthly prices (#42)
+- Similar servers endpoint based on hardware specifications (#33, #35)
+- Server details v2 endpoints (#35)
 
-Fix(es):
+Improvements:
 
-- Duplicate rows from many-to-many relationships eliminated.
-- Slow full-row lookups optimized.
-- Active price filtering consistency across endpoints.
-- Correct tiered price calculation (only apply delta per tier).
-- Default to outbound traffic prices.
-- Function name conflicts resolved.
+- Tiered traffic prices (#42)
+- Storage and traffic prices converted to the requested currency (#40, #42)
+- Faster full-row lookups (#35)
 
-Housekeeping:
+Fixes:
 
-- Indexed SQLite for better full-row lookup performance.
-- Efficient count queries to avoid N+1 problems.
-- Pre-query optimization for compliance framework lookups.
-- Eager loading strategies for relationships to reduce query count.
-- Optimized query performance with strategic JOINs.
-- Test performance monitoring (flag queries >250ms).
-- Require latest version of crawler and data packages.
-- Code organization: split routers into separate files.
+- Many-to-many relationships do not duplicate rows
+- Consistent active price filtering across endpoints
+- Tiered price calculation applies only the delta of each tier (#42)
+- Outbound traffic prices by default (#43)
 
 ## August 2024
 
-New feature(s):
+Improvements:
 
-- Cache control headers for client-side caching.
-- Sentry integration for error tracking and monitoring.
-- System resource logging (CPU, memory, I/O, iowait).
-- Request/response logging with unique request IDs.
-- Sentry release tracking with environment context.
-- Allow Sentry headers in CORS configuration.
-- Experimental DuckDB integration for faster queries.
-
-Fix(es):
-
-- Thread-safe database operations with proper locking.
-- Proper connection handling and cleanup for database operations.
-- Self-locking issues in database update operations resolved.
-- Fall back to SQLite when DuckDB is unavailable.
-- IO counters handling on unsupported platform.
-
-Housekeeping:
-
-- Async database operations with proper locking mechanisms.
-- Database updates moved to background threads.
-- Increased page size limits for server prices (from 50 to higher limits).
-- Later reduced default page size for performance.
-- Server list reloading every 10 minutes.
-- Production infrastructure moved to EU.
-- Background database update at initialization.
-- Search support for 200+ CPUs.
-- Limit page size of server price queries.
-- Install Sentry SDK as optional dependency.
+- New cache control headers for client-side caching
+- Sentry headers allowed in CORS requests
+- Page size limit on server price queries, with a lower default page size (#33, #44)
+- Server data reloaded every 10 minutes
+- Search for servers with over 200 CPUs (#33)
 
 ## June 2024
 
-New feature(s):
+Breaking changes:
 
-- Benchmark scores endpoint with full benchmark data.
-- Benchmark table dump for all available benchmarks.
-- API reference queries for servers using api_reference parameter.
-- Human-friendly column names with category information.
-- Support for `SCore` (Spare Cores Score) metric in API responses.
-- Price per `SCore` (`$Core`) calculations and filtering.
-- GPU total memory search and filtering capabilities.
-- `Score` and `$Core` added to individual server lookups.
+- Datacenter renamed to Region across the API (#22)
+- Server `memory` field renamed to `memory_amount` (#22)
+- Path parameters renamed from generic IDs to descriptive names (e.g. `vendor_id`,
+  `server_id`) (#22)
 
-Fix(es):
+New features:
 
-- Example JSON on `/benchmark_scores` endpoint corrected.
-- Server ID references in subqueries fixed.
-- Handling of missing `SCore` values in calculations.
-- Division by zero errors in price per score calculations.
-- Missing `KeyValue` errors for lowest prices.
-- Price information handling when unavailable.
+- Benchmark scores endpoint with full benchmark data (#22)
+- Benchmark table dump of all available benchmarks (#22)
+- `SCore` (Spare Cores Score) in API responses (#26)
+- Price per `SCore` (`$Core`), with filtering (#26)
+- Server queries by the `api_reference` parameter (#22)
+- GPU total memory filter (#26)
 
-Housekeeping:
+Improvements:
 
-- Renamed Datacenter to Region across the entire API.
-- Updated field descriptions for improved clarity.
-- Server memory field renamed to `memory_amount`.
-- Path parameters changed from generic IDs to descriptive names (e.g., `vendor_id`, `server_id`).
-- Locked `sparecores-data` and `sparecores-crawler` versions for the SQLModel schema versions.
+- Human-friendly column names with categories (#22)
+- New `SCore` and `$Core` fields in single server lookups (#26, #27)
+- Clearer field descriptions (#22)
+
+Fixes:
+
+- Correct example JSON on `/benchmark_scores` (#22)
+- Correct server ID references in subqueries (#22)
+- Missing `SCore` values handled in calculations (#26, #27)
+- Price per score calculations avoid division by zero (#26)
+- Lowest prices do not raise `KeyValue` errors (#26)
+- Missing price information handled (#28)
 
 ## May 2024
 
-New feature(s):
+Breaking changes:
 
-- `/servers` endpoint for server listings without price information.
-- `/server_prices` endpoint (renamed from previous `/servers`).
-- AI assistant endpoints for natural language queries via OpenAI integration.
-- Currency parameter for server and price queries with automatic conversion.
-- Freetext search on server IDs and names.
-- Unit of measurement display in API responses.
-- Table metadata endpoints for data exploration.
-- Endpoint categories and organization for better API navigation.
-- Healthcheck endpoint with database validation.
-- `X-Total-Count` header for pagination support.
-- Request ID tracking in custom headers.
-- Compliance framework filtering by multiple frameworks.
-- Country-based filtering for regions/datacenters.
-- Vendor ID enumeration for better type safety.
-- Optional total count parameter to improve performance.
-- Comprehensive filter options:
-    - Vendor, CPU, memory, storage, GPU filters.
-    - Green energy availability filtering.
-    - Compliance framework filtering (HIPAA, SOC2, etc.).
-    - Architecture filtering (x86_64, arm64, etc.).
-    - Storage type filtering.
-    - GPU manufacturer, family, and model filters.
-    - Total GPU memory filtering.
-- Server similarity endpoints based on hardware specifications.
-- Similar servers by family endpoint.
+- `/servers` lists servers without price information; the previous `/servers` endpoint
+  is now `/server_prices` (#21)
 
-Fix(es):
+New features:
 
-- Don't key enum values by name to avoid serialization issues.
-- Filter conditions properly enforced in count queries.
-- CORS header exposure for `X-Total-Count`.
-- Duplicate server entries in filtered results.
-- Filter enforcement in count queries.
-- Distinct query optimization when joining compliance frameworks.
-- Fix OpenAPI/Swagger syntax error due to dict vs array confusion.
+- AI assistant endpoints for natural-language queries, via OpenAI
+- Table metadata endpoints for data exploration (#13)
+- Healthcheck endpoint with a database check
+- Similar servers endpoints, by hardware specifications and by family
+- Currency parameter for server and price queries, with automatic conversion
+- Freetext search on server IDs and names (#23)
+- Compliance framework filter with multiple frameworks (#11)
+- Country filter for regions (#14)
+- Optional total count, for faster queries (#11, #12)
+- Server filters: vendor, CPU, memory, storage, GPU, green energy, compliance frameworks
+  (e.g. HIPAA, SOC2), architecture (e.g. `x86_64`, `arm64`), storage type, GPU
+  manufacturer, family and model, and total GPU memory
 
-Housekeeping:
+Improvements:
 
-- Separated AI endpoints to dedicated module file.
-- Query parameter details moved to helpers module for DRY code.
-- Standardized lookups across all endpoints.
-- File restructuring for better code organization.
-- API restructured into logical modules with routers.
-- Moved healthcheck, tables, and metadata to separate files.
-- Router-based organization with OpenAPI tags.
-- Filter descriptions moved to DRY helpers.
-- Restructured main API file for readability.
-- Consistent examples across all endpoints.
-- Load examples into a dictionary for reusability.
+- New units of measurement in API responses (#24)
+- New endpoint categories in the API docs (#13)
+- New `X-Total-Count` header for pagination (#11)
+- New request IDs in a custom header (#11, #12)
+- Vendor IDs as an enum (#11)
+- Consistent examples across all endpoints (#18)
+
+Fixes:
+
+- Enum values not keyed by name, to avoid serialization issues (#20)
+- Filter conditions enforced in count queries
+- `X-Total-Count` header exposed via CORS (#11)
+- Filtered results contain no duplicate servers (#11)
+- OpenAPI (Swagger) syntax uses an array instead of a dict (#18)
 
 ## April 2024
 
-New feature(s):
+New features:
 
-- CORS support for cross-origin requests.
-- Nested data structure for vendor relationships.
-- Currency conversion support via ECB rates.
-- Green energy filter option.
-- Server listing query support with multiple filters.
-- Query parameter metadata for frontend filtering.
-- Architecture filter option.
+- CORS support for cross-origin requests (#5, #7)
+- Currency conversion with ECB rates (#7)
+- Server listing with multiple filters (#11)
+- Green energy filter (#11)
+- Architecture filter (#11)
 
-Fix(es):
+Improvements:
 
-- Database session caching issues resolved.
-- Join operations on overlapping compound foreign keys.
-- Last updated date tracking fixed.
-- SQL query logging disabled by default for performance.
-- Coerce filter values to proper boolean type.
-- Status filter properly applied.
+- Nested vendor data in responses (#6, #7)
+- Query parameter metadata for frontend filters (#8)
+- Response compression (#3)
 
-Housekeeping:
+Fixes:
 
-- Response compression enabled via middleware.
-- Session handling improvements to avoid caching.
-- Moved `main.py` to `api.py` for clarity.
-- Move source code under `src/` directory.
-- Package dependencies updated (`sc` to `sparecores` naming).
-- Reflect `sc-crawler` schema updates.
-- Request/response logging middleware using structured JSON output.
-- Logging configuration with custom formatters.
-- Initialize linting and testing framework.
-- Docker build configuration improvements.
-- GitHub Actions workflow for automated deployment.
+- Database session caching issues (#7)
+- Joins on overlapping compound foreign keys
+- Last updated date tracking
+- Filter values coerced to booleans (#8)
+- Status filter applied (#8)
 
 ## March 2024
 
-Fix(es):
+Fixes:
 
-- Schema name updates to match recent `sc-crawler` changes.
-
-Housekeeping:
-
-- Cross-platform path handling for Windows compatibility using `os.path`.
-- Package distribution name updated to `sparecores`.
+- Schema names in line with recent `sparecores-crawler` changes
 
 ## February 2024
 
-Initial release:
+New features:
 
-- FastAPI application structure and foundation.
-- SQLite database file integration via `sc_data` package.
-- Database hot-reload on updates.
-- Response model annotations using type hints.
-- Set example values for Swagger documentation.
-- Annotated example inputs for API documentation.
-
-API endpoints:
-
-- Server instance lookup endpoint by vendor and API ID.
-- Server search endpoint by CPU/RAM specifications.
-- Swagger/OpenAPI documentation with examples.
+- First release: a FastAPI application on the SQLite database of the `sc_data` package
+- Database reloaded when the data is updated (#1)
+- Server lookup by vendor and API ID
+- Server search by CPU and memory
+- Swagger (OpenAPI) documentation with examples and response models

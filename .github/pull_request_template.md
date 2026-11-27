@@ -17,7 +17,7 @@ PR status:
 
 Versioning, changelog, and documentation:
 
-- [ ] New features, bugfixes etc are tracked in `CHANGELOG.md`
+- [ ] New features, bugfixes etc are tracked in `CHANGELOG.md`, following `.agents/changelog.md`
 - [ ] New fields added to existing models are documented in the schemas and related examples added in `api.py`
 - [ ] Major updates are also reflected in the `app.description` of `api.py`
 
