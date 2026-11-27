@@ -51,22 +51,23 @@ response fields and data they depend on.
   State the cause and what clients should use instead. An endpoint or parameter that
   keeps working through a redirect or alias is not breaking; list it under
   `Improvements:`.
-- New response fields are `Improvements:` or `New features:`, depending on the scope of
-  the change: a field added to an existing response is an improvement, a new endpoint
-  or a new capability is a feature.
+- A new endpoint, query parameter or filter is a feature, even when it joins an existing
+  filter category, and so is any other new capability. A field or header added to an
+  existing response is an improvement.
 
 ## Entries
 
 - Describe what API users get now, not how it was implemented. Write each entry as a
   noun phrase or in the present tense; do not start it with a verb in any tense (`Add`,
-  `Added`, `Fix`, `Fixed`, `Upgrade`, `Expose`, `Return`).
+  `Added`, `Fix`, `Fixed`, `Upgrade`, `Expose`, `Return`). Under `Improvements:`, start
+  an entry for something added with "New", so readers can tell it is new.
   - Breaking change: `` `Server.gpu_*` and `gpus` fields renamed to `accelerator_*` and
     `accelerators` in responses and `order_by` (`sparecores-crawler` 0.10.0); the
     `gpu_*` query parameters keep their names ``
   - New feature: `` `/ping` liveness check that answers as long as the process runs,
     without the database or the thread pool shared by the other endpoints ``
-  - Improvement: `` `Retry-After` header in 429 responses, exposed to browsers via CORS
-    along with the `X-RateLimit-*` headers ``
+  - Improvement: `` New `Retry-After` header in 429 responses, exposed to browsers via
+    CORS along with the `X-RateLimit-*` headers ``
   - Fix: `` The `family` method of `/server/{vendor}/{server}/similar_servers/{by}/{num}`
     returns the servers of the same series ``, not `Fix the family method …`
 - Be specific: name the endpoints, parameters, fields and headers in backticks, and give
