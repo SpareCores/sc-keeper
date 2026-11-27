@@ -71,6 +71,7 @@ def _get_name(server_column_name: str) -> str:
     name = name.replace("Cpu ", "CPU ")
     name = name.replace(" Ecc", " ECC")
     name = name.replace(" Ids", " IDs")
+    name = name.replace(" Iops", " IOPS")
     return name
 
 
